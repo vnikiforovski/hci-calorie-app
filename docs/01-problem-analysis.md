@@ -187,6 +187,7 @@ Each implication is traced back to the PACT findings above.
 | D12 | **Progressive disclosure.** A simple summary comes first, with macro details on tap. Learning tips are optional, depending on experience. | P: social |
 | D13 | **Graceful failure.** If the AI fails or isn't sure, the app asks the user or falls back to text or manual entry, and never hits a dead end. | T: communication |
 | D14 | **Two display modes, chosen per profile.** *Standard* shows calorie ranges and macro grams. *Numbers-light* shows a short description ("a filling, balanced lunch") and macro proportions without grams, with exact numbers one tap away. Standard is the default for every new user; numbers-light is a display preference in the profile settings that can be switched anytime. | P: psychological, assignment (guilt) |
+| D15 | **Photo plus an optional note.** The user can add a short note to a photo ("cooked in butter", "I ate half"). The photo shows what and how much; the note adds what a photo can't show. Both are analyzed together as one input. | T, section 2 (complementary input, fusion) |
 
 ### 1.6 Scope decisions
 
@@ -199,6 +200,7 @@ Each implication is traced back to the PACT findings above.
 - Recent and favorite meals (D8)
 - Optional, gentle healthier-alternative suggestions (D7)
 - Standard and numbers-light display modes, chosen per profile (D14)
+- Optional note on a photo, analyzed together with it (D15)
 - Accessibility basics (D9)
 - Responsive layout for phone and laptop
 
@@ -246,3 +248,83 @@ Each implication is traced back to the PACT findings above.
 - **App name?** **Zalak** (залак, "a bite"). Forkcast was the runner-up.
 
 **Still open**
+- How users who would benefit from numbers-light discover the setting (e.g. a one-time hint, or a link near the totals). To be tested with users.
+
+## 2. Multimodal interaction
+
+This section applies lecture 010 to the input and output channels chosen in 1.4. The channels themselves were already decided by the PACT analysis; here we explain how they work together and what can go wrong.
+
+### 2.1 Modality, medium and device
+
+A message is encoded in a **medium**, sent through a **device**, and perceived through a **modality** (lecture 010).
+
+| Direction | Channel | Modality (sense) | Medium | Device |
+|---|---|---|---|---|
+| Input | Photo | sight (user frames the plate) | image | phone camera, file upload |
+| Input | Text | sight + touch | text | keyboard, touchscreen |
+| Input | Voice | speech / hearing | sound → text | microphone |
+| Input | Corrections | touch | direct manipulation | touchscreen, mouse |
+| Output | Estimate and journal | sight | text, numbers, simple graphics, photos | screen |
+| Output | Confirmation (optional) | hearing, touch | short sound, vibration | speaker, vibration motor (Android) |
+
+### 2.2 How the modalities are combined
+
+The lecture's key idea is that the value of a multimodal system lies in how modalities are combined, not in how many there are. Of the four types in the lecture, Zalak uses three:
+
+- **Sequential:** one modality follows another.
+  - Voice → check: the user speaks the meal, then reads and edits the transcript by sight and touch before sending.
+  - Photo → correction: the AI interprets the photo, then the user corrects items by touch.
+- **Complementary:** different modalities give different parts of the information.
+  - Photo + note (D15): the photo shows *what* and *how much*; a short typed or spoken note adds what a photo cannot show: the cooking method, hidden ingredients (oil, butter, sugar), or "I only ate half".
+- **Redundant:** the same information through more than one channel, in the output.
+  - Uncertain items are marked with an icon *and* a text reason, never by color alone.
+  - "Saved" is shown visually; a sound or vibration can be enabled as an extra.
+- **Simultaneous** (e.g. speaking while pointing) is not used. It adds complexity without helping the core task.
+
+The three input channels are also **alternatives**: each one alone can log a meal, so the user picks whichever fits the context (photo at home, text with friends, voice while cooking).
+
+### 2.3 Fusion
+
+Fusion combines information from several modalities so the system understands the user's intent more accurately (lecture 010).
+
+- Zalak uses **late fusion**: the photo and the note are each already interpretable (an image and a text), and they are sent together to the AI in one request, which produces a single interpretation.
+- Fusion **reduces ambiguity**: a photo of a white sauce could be yogurt or mayonnaise; the note "garlic yogurt sauce" resolves it.
+- Voice is not fused separately: it is converted to text first and then treated exactly like typed text, so there is only one pipeline (D1).
+
+**Time alignment** (matching inputs that arrive at different times) is handled simply: the photo and note belong to the same draft until the user taps Analyze, so it doesn't matter which is added first. A note can also be added later to a draft (D2).
+
+### 2.4 Challenges and how Zalak handles them
+
+| Challenge (lecture 010) | In Zalak | Response |
+|---|---|---|
+| Ambiguity | Similar-looking dishes; unclear portions | Uncertain items marked (D4), one clarifying question (FR16), easy correction (D5) |
+| Noise | Dim restaurant light (photo); background noise (voice) | Photo tips and "can't analyze" messages (FR30, FR31); editable transcript (FR7) |
+| Latency | AI analysis takes several seconds | Immediate "analyzing" state, option to leave (D6, NFR2) |
+| Complexity | Three inputs, one AI service | One shared pipeline and review screen for all inputs (D1) |
+| Differences between users | Experience, abilities, language | Several alternative inputs; accessibility (D9) |
+| Environment and device | Noise, light, one hand busy; voice not supported in every browser | Every input has a fallback; text always available (NFR16) |
+
+### 2.5 Speech input
+
+The lecture describes speech as natural, fast and good for accessibility and hands-free use, but sensitive to accents, pronunciation and noise, and working best as part of a multimodal system. For Zalak this means:
+
+- **Useful when:** cooking with dirty hands, holding a plate, or for users who find typing hard.
+- **Risks specific to Zalak:**
+  - Users will speak English with a Macedonian accent.
+  - Local dish names ("tavče gravče", "pastrmajlija") are likely to be misrecognized by English speech recognition.
+  - Speaking aloud in public is socially awkward (1.3 Social).
+- **Response:** voice is never the only way. The transcript is always shown and editable before sending, and typing is one tap away.
+
+### 2.6 Output
+
+- **Visual output is the main channel**, as the lecture says it is the most powerful one: estimates, ranges, item lists, photos and simple charts.
+- **Audio output** is limited to an optional short confirmation sound (an earcon), off by default because of the social context (D10). No speech output: it adds little for short results and would be awkward in public.
+- **Tactile output** (vibration) is an optional extra on Android only, never the only feedback (1.4).
+
+### 2.7 Multimodal vs multimedia
+
+The lecture distinguishes the two:
+- **Multimodality** is about *interaction*: Zalak's photo, text, voice and touch inputs.
+- **Multimedia** is about *presentation*: Zalak's history, which combines photos, text and numbers.
+
+Zalak uses both, but the multimodal part is what serves the assignment's first core problem, the easiest way to enter a meal.

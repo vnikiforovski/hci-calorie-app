@@ -160,6 +160,7 @@ Each requirement has an ID, a priority, and the insight (I) or design implicatio
 - **FR9** (Should) The user can save a meal as a draft and complete it later. *(I1, D2)*
 - **FR10** (Should) The user can log a recent or favorite meal again in one tap. *(I1, D8)*
 - **FR11** (Should) The user can log only their share of a shared dish (½, ⅓, ¼). *(I5)*
+- **FR35** (Should) The user can add a short optional note to a photo (e.g. "cooked in butter", "I ate half"), and the photo and note are analyzed together. *(D15; added after the multimodal analysis)*
 
 **Estimate**
 - **FR12** (Must) The system returns a list of recognized foods, each with a portion, a calorie range and macronutrients (protein, carbohydrates, fat). *(D4)*
@@ -171,7 +172,7 @@ Each requirement has an ID, a priority, and the insight (I) or design implicatio
 
 **Correction**
 - **FR18** (Must) The user can rename or replace a recognized item. *(I6)*
-- **FR19** (Must) The user can change a portion with a stepper or preset sizes (small, medium, large), or in grams. *(I6)*
+- **FR19** (Must) The user can change a portion with a stepper, preset sizes (small, medium, large), household measures (bowl, slice, spoon, piece), or grams. *(I6; household measures added after the task analysis)*
 - **FR20** (Must) The user can add a missing item by typing it. *(I6)*
 - **FR21** (Must) The user can remove an item. *(I6)*
 - **FR22** (Must) Totals update immediately after every change. *(D5)*
@@ -190,6 +191,7 @@ Each requirement has an ID, a priority, and the insight (I) or design implicatio
 - **FR31** (Should) Before the first photo, the system shows two or three short tips for a good food photo. *(I7, I8)*
 - **FR32** (Should) After the first few meals, a one-time hint mentions Numbers-light mode. *(D14)*
 - **FR33** (Must) The estimate screen and sign-up state that values are estimates, not medical advice. *(D11)*
+- **FR34** (Should) The user can check a meal's estimate and discard it with "Just checking", without saving it. *(added after the task analysis: checking before eating)*
 
 ### 5.2 Non-functional requirements
 
@@ -234,8 +236,8 @@ Each requirement has an ID, a priority, and the insight (I) or design implicatio
 Scalability is not a goal: this is a course prototype used by a small number of test users.
 
 ### 5.3 Traceability to the assignment
-- **Input** → FR5–FR11, NFR6, NFR15–NFR16
-- **Uncertainty** → FR12–FR16, NFR9
+- **Input** → FR5–FR11, FR35, NFR6, NFR15–NFR16
+- **Uncertainty** → FR12–FR16, FR34, NFR9
 - **Correction** → FR18–FR22, NFR4, NFR7
 - **Wellbeing and simplicity** → FR2, FR15, FR17, FR32–FR33, NFR23–NFR24
 
