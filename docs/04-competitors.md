@@ -1,6 +1,6 @@
 # Zalak: Competitor Analysis
 
-A short review of 20 calorie and nutrition apps: what they offer, what works, what doesn't, and what Zalak takes from them. The focus is on the calorie-checking flow (input → result → correction); the rest of each app is noted briefly. Screenshots of the parts we liked are in `img/`.
+A short review of 20 calorie and nutrition apps: what they offer, what works, what doesn't, and what Zalak takes from them. The focus is on the calorie-checking flow (input → result → correction); the rest of each app is noted briefly. Screenshots of the parts we liked are in `competitor screenshots`.
 
 ## Apps
 
