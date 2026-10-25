@@ -2,7 +2,7 @@
 
 Zalak ("a bite" in Macedonian) is an AI meal calorie checker: the user photographs, types or dictates a meal, the AI estimates calories and macros as ranges, the user corrects anything wrong and logs it. It is the project for the HCI course ДИЧК (Design of Human-Computer Interaction) at FINKI, Skopje. It is graded mostly on the working app and its interaction design, not on nutritional accuracy.
 
-Hard deadline: **15 November 2026**. Scope to what can be built and tested well by then.
+**Target: finish by Sunday 1 November 2026 and demo to the professor on 4 or 5 November.** The hard deadline is 15 November; the days after the demo are a buffer for the professor's feedback and leftover Should features. Scope to what can be built and tested well by the target.
 
 ## How I want to work (most important)
 
@@ -49,9 +49,9 @@ Read the relevant doc before building a screen. The research docs win over the m
 
 ## Priorities
 
-1. **Core checker flow** (Must): text input, photo + note input, Analyzing state, Result with items and ranges, Edit item, Log / Just checking, errors.
+1. **Core checker flow** (Must): text input, voice input (FR7), photo + note input, Analyzing state, Result with items and ranges, Edit item, Log / Just checking, errors.
 2. **Accounts and Home** (Must): sign up, sign in, Home with week strip, dashboards and meal slots; edit/delete a logged meal.
-3. **Should**: voice input, Diary, Your meals (favorites, custom meals), drafts, uncertainty preference, profile preferences.
+3. **Should**: Diary, Your meals (favorites, custom meals), drafts, uncertainty preference, profile preferences.
 4. **Could**: water, statistics, lighter-idea card, dark mode, book-style diary.
 
 Build the core flow well before widening.
