@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+
+<section class="py-5 bg-success text-white text-center mt-5">
+    <div class="container">
+        <h1 class="display-5 fw-bold">Our Trusted Doctors</h1>
+        <p class="lead">
+            Browse our external collaborators by specialty. Learn more about their medical background, and view their current and upcoming appointments.
+        </p>
+    </div>
+</section>
+
+<section class="py-5 bg-light">
+    <div class="container">
+
+        <h2 class="text-center mb-5 text-success">Cardiologists</h2>
+        <div class="row">
+            {% for doctor in cardiologists %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm text-center">
+                    <img src="{{ doctor.image.url }}" class="rounded-circle mx-auto mt-4" style="width: 150px; height: 150px; object-fit: cover;">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ doctor.full_name }}</h5>
+                        <span class="badge bg-success mb-2">{{ doctor.get_specialty_display }}</span>
+                        <p class="mb-1"><strong>Institution:</strong> {{ doctor.institution }}</p>
+                        <p class="mb-1"><strong>Email:</strong> {{ doctor.email }}</p>
+                        <p class="mb-2"><strong>Phone:</strong> {{ doctor.phone }}</p>
+                        <a href="{% url 'doctor_detail' doctor.id %}" class="btn btn-outline-success btn-sm mt-2">View Profile</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h2 class="text-center my-5 text-success">Dermatologists</h2>
+        <div class="row">
+            {% for doctor in dermatologists %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm text-center">
+                    <img src="{{ doctor.image.url }}" class="rounded-circle mx-auto mt-4" style="width: 150px; height: 150px; object-fit: cover;">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ doctor.full_name }}</h5>
+                        <span class="badge bg-success mb-2">{{ doctor.get_specialty_display }}</span>
+                        <p class="mb-1"><strong>Institution:</strong> {{ doctor.institution }}</p>
+                        <p class="mb-1"><strong>Email:</strong> {{ doctor.email }}</p>
+                        <p class="mb-2"><strong>Phone:</strong> {{ doctor.phone }}</p>
+                        <a href="{% url 'doctor_detail' doctor.id %}" class="btn btn-outline-success btn-sm mt-2">View Profile</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <h2 class="text-center my-5 text-success">Neurologists</h2>
+        <div class="row">
+            {% for doctor in neurologists %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100 shadow-sm text-center">
+                    <img src="{{ doctor.image.url }}" class="rounded-circle mx-auto mt-4" style="width: 150px; height: 150px; object-fit: cover;">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ doctor.full_name }}</h5>
+                        <span class="badge bg-success mb-2">{{ doctor.get_specialty_display }}</span>
+                        <p class="mb-1"><strong>Institution:</strong> {{ doctor.institution }}</p>
+                        <p class="mb-1"><strong>Email:</strong> {{ doctor.email }}</p>
+                        <p class="mb-2"><strong>Phone:</strong> {{ doctor.phone }}</p>
+                        <a href="{% url 'doctor_detail' doctor.id %}" class="btn btn-outline-success btn-sm mt-2">View Profile</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+    </div>
+</section>
+
+{% endblock %}
