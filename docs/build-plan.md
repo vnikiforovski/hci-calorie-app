@@ -221,28 +221,33 @@ class MealItem(models.Model):
   - Files: `views.py`, `templates/meals/statistics.html`
   - Pattern: loops over querysets
   - Test: the numbers match the logged meals by hand.
-- [ ] **18. 390 / 1440 + accessibility pass** (2 Nov)
+- [ ] **18. Small Profile page** (2 Nov)
+  - Work: personal details (name, height, weight, activity) via a ProfileForm with `instance`; the "When Zalak is unsure" switch (Ask me / Best guess) saved to `Profile.uncertainty`, and Result's inline question follows it (guests always get Ask me); a red Sign out button; "Estimate, not medical advice". The Profile link in the nav opens it.
+  - Files: `forms.py`, `views.py`, `urls.py`, `templates/meals/profile.html`, `templates/meals/_item_card.html`
+  - Pattern: ModelForm with `instance`, `@login_required`, PRG
+  - Test: switch to Best guess → a new analysis shows no question on the unsure item; switch back; edit the weight; sign out.
+- [ ] **19. 390 / 1440 + accessibility pass** (2 Nov)
   - Work: the desktop two-column Result and Home; keyboard use; 44 px targets; contrast; WAVE with no errors.
   - Files: templates, `zalak.css`
   - Test: WAVE on Home, Result and Edit item; tab through the checker.
-- [ ] **19. Demo data + demo script** (3 Nov)
-  - Work: a fixture with a demo user and a week of logged meals (built-in `loaddata`); `docs/demo-script.md` with a 5-minute walkthrough: guest check → Log → sign-up, photo + correction, voice, Home, Diary, Statistics, an error case.
+- [ ] **20. Demo data + demo script** (3 Nov)
+  - Work: a fixture with a demo user and a week of logged meals (built-in `loaddata`); `docs/demo-script.md` with a 5-minute walkthrough: guest check → Log → sign-up, photo + correction, voice, Home, Diary, Statistics, Profile (Best guess), an error case.
   - Files: `meals/fixtures/demo.json`, `docs/demo-script.md`
   - Test: run the whole script on a fresh DB.
 
-> **═══ DEMO SCOPE LINE (4/5 Nov) ═══** Chunks 0–19 must work at the demo: the full checker (text, voice, photo + note, Analyzing, Result, Edit / add / remove / re-estimate, Log / Just checking, errors), accounts, the guest flow, Home, meal detail, a simple Diary, Statistics, a responsive and accessible layout, and the demo data. Everything below can wait until after the demo.
+> **═══ DEMO SCOPE LINE (4/5 Nov) ═══** Chunks 0–20 must work at the demo: the full checker (text, voice, photo + note, Analyzing, Result, Edit / add / remove / re-estimate, Log / Just checking, errors), accounts, the guest flow, Home, meal detail, a simple Diary, Statistics, a small Profile page, a responsive and accessible layout, and the demo data. Everything below can wait until after the demo.
 
 ### Phase D: after the demo (6–15 Nov, buffer)
 
-- [ ] **20. Professor's feedback**: fixes from the demo, planned once we have it.
-- [ ] **21. Your meals**: a favorite heart, Your meals + Recent in the Add meal sheet, and "Log again" copies a meal (≤2 taps, NFR8).
-- [ ] **22. Profile + preferences**: personal details; "When Zalak is unsure" (Ask me / Best guess); food preferences sent to the AI; sign out; "Estimate, not medical advice".
-- [ ] **23. Drafts "To finish" + Tell Zalak**: Cancel during Analyzing keeps a To finish draft on Home; the correction text re-analyzes the meal.
-- [ ] **24. Photo tips + lighter idea**: swipeable Tips cards with "Don't show again" (FR31); the dismissible lighter-idea card when Just checking (FR17).
+- [ ] **21. Professor's feedback**: fixes from the demo, planned once we have it.
+- [ ] **22. Your meals**: a favorite heart, Your meals + Recent in the Add meal sheet, and "Log again" copies a meal (≤2 taps, NFR8).
+- [ ] **23. Food preferences**: food preferences in Profile · Preferences, sent to the AI (FR38).
+- [ ] **24. Drafts "To finish" + Tell Zalak**: Cancel during Analyzing keeps a To finish draft on Home; the correction text re-analyzes the meal.
+- [ ] **25. Photo tips + lighter idea**: swipeable Tips cards with "Don't show again" (FR31); the dismissible lighter-idea card when Just checking (FR17).
 
 ### Cut order if we fall behind
 - **Before the demo:** reduce Statistics (17) to the average kcal range only. Phases A and B and the Diary are never cut.
-- **After the demo:** cut 23 first, then 24, then the remaining Statistics details.
+- **After the demo:** cut 24 first, then 25, then the remaining Statistics details.
 
 ## Every chunk ends with
 - `python manage.py check`, plus `makemigrations` / `migrate` if the models changed
