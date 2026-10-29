@@ -71,7 +71,7 @@ class MealItem(models.Model):
     meal = models.ForeignKey(Meal, on_delete=models.CASCADE, related_name='items')
     name = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=6, decimal_places=2, default=1)
-    unit = models.CharField(max_length=20)           # choices from units.py
+    unit = models.CharField(max_length=20)           # choices from units.py; bowl S/M/L = bowl_s / bowl_m / bowl_l
     grams = models.PositiveIntegerField()
     kcal_min_100g / kcal_max_100g                    # PositiveIntegerField
     protein_min_100g / protein_max_100g / carbs_… / fat_…   # DecimalField(5,1)
@@ -80,7 +80,7 @@ class MealItem(models.Model):
     question = models.CharField(max_length=150, blank=True)
     edited_by_user = models.BooleanField(default=False)
     position = models.PositiveSmallIntegerField(default=0)
-    # @property kcal_min = round to 10 of kcal_min_100g * grams / 100, same for macros
+    # @property kcal_min = round to 10 of kcal_min_100g * grams / 100; macros the same but round to 1 g
 ```
 
 **Where the course patterns are practiced:**
