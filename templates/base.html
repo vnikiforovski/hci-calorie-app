@@ -1,16 +1,105 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Zalak{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>{% block title %}Zalak{% endblock %} · Zalak</title>
+    <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/zalak.css' %}">
 </head>
-<body>
-<main>
+{% with page=request.resolver_match.url_name %}
+<body class="{% if user.is_authenticated %}has-sidebar has-bottombar{% endif %}">
+
+{% if user.is_authenticated %}
+    {# Desktop: left sidebar #}
+    <nav class="z-sidebar" aria-label="Main">
+        <a class="z-logo" href="{% url 'home' %}">
+            <img src="{% static 'img/logo.svg' %}" alt="">zalak
+        </a>
+        <a class="z-sidelink {% if page == 'home' %}active{% endif %}" href="{% url 'home' %}"
+           {% if page == 'home' %}aria-current="page"{% endif %}>
+            <i class="bi bi-house" aria-hidden="true"></i> Home
+        </a>
+        <a class="z-sidelink {% if page == 'diary' %}active{% endif %}" href="{% url 'diary' %}"
+           {% if page == 'diary' %}aria-current="page"{% endif %}>
+            <i class="bi bi-journal" aria-hidden="true"></i> Diary
+        </a>
+        <a class="z-sidelink {% if page == 'statistics' %}active{% endif %}" href="{% url 'statistics' %}"
+           {% if page == 'statistics' %}aria-current="page"{% endif %}>
+            <i class="bi bi-bar-chart" aria-hidden="true"></i> Statistics
+        </a>
+        <div class="z-sidebar-bottom">
+            <a class="btn btn-primary btn-lg" href="{% url 'add_meal' %}">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a meal
+            </a>
+            <a class="z-profile-row {% if page == 'profile' %}active{% endif %}" href="{% url 'profile' %}"
+               {% if page == 'profile' %}aria-current="page"{% endif %}>
+                <span class="z-avatar" aria-hidden="true">{{ user.first_name|default:user.username|first|upper }}</span>
+                <span>
+                    {{ user.first_name|default:user.username }}<br>
+                    <span class="z-small text-body-secondary">Profile and settings</span>
+                </span>
+            </a>
+        </div>
+    </nav>
+
+    {# Mobile: top header. Pages like Result override this block with a back button. #}
+    {% block header %}
+        <header class="z-header z-mobile-only">
+            <a class="z-logo" href="{% url 'home' %}">
+                <img src="{% static 'img/logo.svg' %}" alt="">zalak
+            </a>
+            <a class="z-icon-btn" href="{% url 'profile' %}" aria-label="Profile">
+                <i class="bi bi-person" aria-hidden="true"></i>
+            </a>
+        </header>
+    {% endblock %}
+{% else %}
+    {# Guest: logo and a small Sign in link, no bottom bar (docs/05) #}
+    <header class="z-header">
+        <a class="z-logo" href="{% url 'home' %}">
+            <img src="{% static 'img/logo.svg' %}" alt="">zalak
+        </a>
+        {# Temporary: the admin login until chunk 12 adds Sign in #}
+        <a class="z-small fw-semibold" href="{% url 'admin:login' %}?next={{ request.path }}">Sign in</a>
+    </header>
+{% endif %}
+
+<main class="z-main">
     {% block content %}
         <h1>Zalak</h1>
         <p>Zalak is being built.</p>
     {% endblock %}
 </main>
+
+{% if user.is_authenticated %}
+    {# Mobile: bottom bar + raised "+". Checker screens empty this block. #}
+    {% block bottom_nav %}
+        <nav class="z-bottombar" aria-label="Main">
+            <a class="z-navlink {% if page == 'home' %}active{% endif %}" href="{% url 'home' %}"
+               {% if page == 'home' %}aria-current="page"{% endif %}>
+                <i class="bi bi-house" aria-hidden="true"></i> Home
+            </a>
+            <a class="z-navlink {% if page == 'diary' %}active{% endif %}" href="{% url 'diary' %}"
+               {% if page == 'diary' %}aria-current="page"{% endif %}>
+                <i class="bi bi-journal" aria-hidden="true"></i> Diary
+            </a>
+            <a class="z-navlink {% if page == 'statistics' %}active{% endif %}" href="{% url 'statistics' %}"
+               {% if page == 'statistics' %}aria-current="page"{% endif %}>
+                <i class="bi bi-bar-chart" aria-hidden="true"></i> Statistics
+            </a>
+        </nav>
+        <a class="z-fab" href="{% url 'add_meal' %}" aria-label="Add a meal">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+        </a>
+    {% endblock %}
+{% endif %}
+
+<script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+{% block scripts %}{% endblock %}
 </body>
+{% endwith %}
 </html>

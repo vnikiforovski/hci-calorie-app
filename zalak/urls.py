@@ -23,5 +23,10 @@ from meals import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.placeholder, name='placeholder'),
+    path('', views.home, name='home'),
+    path('diary/', views.diary, name='diary'),
+    path('statistics/', views.statistics, name='statistics'),
+    path('profile/', views.profile, name='profile'),
+    path('add/', views.add_meal, name='add_meal'),
+    path('style/', views.style, name='style'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{# Temporary style page to check the theme. Remove in chunk 19. #}
+
+{% block title %}Style{% endblock %}
+
+{% block content %}
+    <h1>Style page</h1>
+    <p class="text-body-secondary">Temporary: checks the Sage &amp; caramel theme.</p>
+
+    <h2 class="mt-4">Colors</h2>
+    <div class="d-flex flex-wrap gap-2">
+        {% for name in swatches %}
+            <div class="text-center z-caption">
+                <div style="width:56px;height:56px;border-radius:12px;border:1px solid var(--z-line);background:var(--z-{{ name }})"></div>
+                {{ name }}
+            </div>
+        {% endfor %}
+    </div>
+
+    <h2 class="mt-4">Type</h2>
+    <div class="card">
+        <div class="card-body">
+            <p class="z-label mb-1">Eaten today</p>
+            <p class="z-num z-total mb-2">650–850 <span class="fs-6 fw-normal">kcal</span></p>
+            <h1>Screen title 24 px</h1>
+            <h2>Section 18 px</h2>
+            <p class="mb-1">Body 16 px: Tavče gravče with bread and shopska salad.</p>
+            <p class="z-small mb-1">Small 14 px: 1 bowl · 300 g</p>
+            <p class="z-caption mb-0 text-body-secondary">Caption 12 px: Estimate, not medical advice</p>
+        </div>
+    </div>
+
+    <h2 class="mt-4">Buttons</h2>
+    <div class="d-flex flex-wrap gap-2">
+        <button class="btn btn-primary btn-lg">Log to lunch</button>
+        <button class="btn btn-outline-secondary btn-lg">Just checking</button>
+        <button class="btn btn-dark btn-lg">Continue</button>
+        <button class="btn btn-danger">Delete meal</button>
+        <button class="btn btn-primary" disabled>Analyze</button>
+        <a class="z-icon-btn" href="#" aria-label="Edit"><i class="bi bi-pencil" aria-hidden="true"></i></a>
+        <a class="z-icon-btn" href="#" aria-label="Add"><i class="bi bi-plus-lg" aria-hidden="true"></i></a>
+    </div>
+
+    <h2 class="mt-4">Food item card</h2>
+    <div class="card">
+        <div class="card-body d-flex justify-content-between align-items-start">
+            <div>
+                <p class="fw-semibold mb-0">Cooking oil</p>
+                <p class="z-small text-body-secondary mb-2">about 1 tbsp · 10 g</p>
+                <span class="z-badge z-badge-unsure"><i class="bi bi-question-circle" aria-hidden="true"></i> Unsure</span>
+            </div>
+            <span class="z-small fw-semibold z-tabular">20–60 kcal</span>
+        </div>
+    </div>
+
+    <h2 class="mt-4">Confidence badges</h2>
+    <div class="d-flex gap-2">
+        <span class="z-badge z-badge-sure"><i class="bi bi-check-circle" aria-hidden="true"></i> Sure</span>
+        <span class="z-badge z-badge-likely"><i class="bi bi-dash-circle" aria-hidden="true"></i> Likely</span>
+        <span class="z-badge z-badge-unsure"><i class="bi bi-question-circle" aria-hidden="true"></i> Unsure</span>
+    </div>
+
+    <h2 class="mt-4">Chips</h2>
+    <div class="d-flex flex-wrap gap-2">
+        <button class="z-chip" type="button">A little</button>
+        <button class="z-chip" type="button" aria-pressed="true">About that</button>
+        <button class="z-chip" type="button">A lot</button>
+    </div>
+
+    <h2 class="mt-4">Input</h2>
+    <label class="form-label" for="demo-input">What did you eat?</label>
+    <input class="form-control" id="demo-input" placeholder="e.g. tavče gravče, bread, shopska salad">
+{% endblock %}
