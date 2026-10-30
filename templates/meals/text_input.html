@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Describe your meal{% endblock %}
+
+{# Checker screen: own back row, no bottom bar #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-back-row">
+        <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Back to Home">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+        </a>
+        <span class="fw-medium">Add to {{ slot }}</span>
+    </div>
+
+    <h1 class="mt-3 mb-3">Describe your meal</h1>
+
+    <form method="post" action="{% url 'text_input' %}" id="textMealForm" class="z-with-actions" novalidate>
+        {% csrf_token %}
+        {{ form.slot }}
+
+        {% for error in form.non_field_errors %}
+            <div class="z-notice mb-3" role="alert">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <p class="mb-0">{{ error }}</p>
+            </div>
+        {% endfor %}
+
+        {{ form.text }}
+        {% for error in form.text.errors %}
+            <p class="z-small mt-2 mb-0" role="alert">{{ error }}</p>
+        {% endfor %}
+
+        <p class="z-small text-body-secondary mt-3 mb-2">Add details if you know them</p>
+        <div class="z-chip-row">
+            <button type="button" class="z-chip" data-insert="portion: "><i class="bi bi-plus-lg" aria-hidden="true"></i> Portion size</button>
+            <button type="button" class="z-chip" data-insert="cooked: "><i class="bi bi-plus-lg" aria-hidden="true"></i> How it was cooked</button>
+            <button type="button" class="z-chip" data-insert="drink: "><i class="bi bi-plus-lg" aria-hidden="true"></i> Drink</button>
+            <button type="button" class="z-chip" data-insert="brand: "><i class="bi bi-plus-lg" aria-hidden="true"></i> Brand</button>
+        </div>
+
+        {# The microphone comes in chunk 7 (voice) #}
+
+        <div class="z-actions">
+            <div class="z-actions-buttons z-actions-one">
+                <button type="submit" class="btn btn-primary btn-lg" id="analyzeButton">Analyze</button>
+            </div>
+        </div>
+    </form>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/chips.js' %}"></script>
+{% endblock %}

@@ -28,6 +28,7 @@ urlpatterns = [
     path('statistics/', views.statistics, name='statistics'),
     path('profile/', views.profile, name='profile'),
     path('add/', views.add_meal, name='add_meal'),
+    path('add/text/', views.text_input, name='text_input'),
     path('meal/<int:meal_id>/', views.result, name='result'),
     path('style/', views.style, name='style'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

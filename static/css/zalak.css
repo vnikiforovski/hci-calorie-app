@@ -684,3 +684,40 @@ h3 { font-size: 1rem; }
 
     .has-sidebar .z-actions { left: var(--z-sidebar-width); }
 }
+
+/* ---------- Text input (chunk 4) ---------- */
+
+.z-back-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.z-meal-text {
+    min-height: 160px;
+    padding: 1rem;
+    border-radius: 18px;
+    resize: vertical;
+}
+
+/* Detail chips under the field */
+.z-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+button.z-chip { cursor: pointer; }
+button.z-chip:hover { background: var(--z-tint); }
+
+/* Calm notice (AI failure, no food): butter box, never red */
+.z-notice {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    background: var(--z-butter);
+}
+
+/* Room for the fixed action bar; a bar with one button */
+.z-with-actions { padding-bottom: 7rem; }
+.z-actions-one { grid-template-columns: 1fr; }
