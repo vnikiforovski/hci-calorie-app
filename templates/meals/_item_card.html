@@ -1,0 +1,47 @@
+{# One food item on Result. Expects `item` (a MealItem, with kcal_min_pct / kcal_max_pct from Meal.items_with_bars). #}
+<article class="card z-item z-item-{{ item.confidence }}">
+    <div class="card-body">
+        <div class="d-flex justify-content-between gap-3">
+            <div>
+                <h3 class="z-item-name mb-1">{{ item.name }}</h3>
+                <p class="z-small text-body-secondary mb-2">{{ item.portion }}</p>
+                <span class="z-badge z-badge-{{ item.confidence }}">
+                    {% if item.confidence == 'sure' %}
+                        <i class="bi bi-check-circle" aria-hidden="true"></i>
+                    {% elif item.confidence == 'likely' %}
+                        <i class="bi bi-dash-circle" aria-hidden="true"></i>
+                    {% else %}
+                        <i class="bi bi-question-circle" aria-hidden="true"></i>
+                    {% endif %}
+                    {{ item.get_confidence_display }}
+                    {# Certainty meter: Sure 3 dots, Likely 2, Unsure 1 #}
+                    <span class="z-meter" aria-hidden="true">
+                        <span class="on"></span>
+                        <span {% if item.confidence != 'unsure' %}class="on"{% endif %}></span>
+                        <span {% if item.confidence == 'sure' %}class="on"{% endif %}></span>
+                    </span>
+                </span>
+            </div>
+            <div class="d-flex flex-column align-items-end justify-content-between gap-2">
+                <span class="z-small fw-semibold z-tabular text-nowrap">{{ item.kcal_min }}–{{ item.kcal_max }} kcal</span>
+                {# Edit item opens in chunk 10 #}
+                <button type="button" class="z-icon-btn" aria-label="Edit {{ item.name }}" disabled>
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+
+        {# Share of the meal: solid up to the min, faded up to the max, sized against the biggest item #}
+        <span class="z-range-track z-range-thin mt-3" aria-hidden="true">
+            <span class="z-range-band z-bg-kcal" style="width: {{ item.kcal_max_pct }}%"></span>
+            <span class="z-range-fill z-bg-kcal" style="width: {{ item.kcal_min_pct }}%"></span>
+        </span>
+
+        {% if item.confidence == 'unsure' and item.reason %}
+            <div class="z-reason mt-3">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <p class="mb-0">{{ item.reason }}{% if item.question %} {{ item.question }}{% endif %}</p>
+            </div>
+        {% endif %}
+    </div>
+</article>

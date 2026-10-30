@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ meal.title|default:'Result' }}{% endblock %}
+
+{# Checker screen: the back button lives in the hero, and there is no bottom bar #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <section class="z-hero">
+        <div class="z-hero-top">
+            <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Back to Home">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+            <span class="z-chip"><i class="bi bi-stars" aria-hidden="true"></i> AI estimate</span>
+        </div>
+        {% if meal.photo %}
+            {# The photo sits on a soft "plate" ring #}
+            <div class="z-plate">
+                <img class="z-hero-photo" src="{{ meal.photo.url }}" alt="Photo of {{ meal.title|default:'the meal' }}">
+            </div>
+        {% else %}
+            <div class="z-hero-icon" aria-hidden="true"><i class="bi bi-fork-knife"></i></div>
+            {% if meal.text %}
+                <p class="z-hero-text">{{ meal.text }}</p>
+            {% endif %}
+        {% endif %}
+    </section>
+
+    <div class="z-result">
+        {# Slot dropdown: the hidden input is what chunk 9's Log form will submit #}
+        <div class="dropdown z-slot">
+            <input type="hidden" name="slot" id="slotInput" value="{{ slot }}">
+            <button type="button" class="z-slot-pill" data-bs-toggle="dropdown" aria-expanded="false">
+                <i id="slotIcon" class="bi {{ slot_icon }}" aria-hidden="true"></i>
+                <span class="visually-hidden">Meal slot:</span>
+                <span id="slotLabel">{{ slot|capfirst }}</span>
+                <i class="bi bi-chevron-down z-slot-chevron" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu z-slot-menu">
+                {% for value, label, icon in slot_options %}
+                    <li>
+                        <button type="button" class="dropdown-item z-slot-option {% if value == slot %}active{% endif %}"
+                                data-value="{{ value }}" data-label="{{ label }}" data-icon="{{ icon }}"
+                                {% if value == slot %}aria-current="true"{% endif %}>
+                            <span class="z-slot-option-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+                            {{ label }}
+                            <i class="bi bi-check-lg z-slot-check" aria-hidden="true"></i>
+                        </button>
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <section class="card z-summary mt-3">
+            <div class="card-body">
+                <h1 class="mb-2">{{ meal.title|default:'Your meal' }}</h1>
+                <p class="mb-1">
+                    <span class="z-num z-total">{{ meal.kcal_min }}–{{ meal.kcal_max }}</span>
+                    <span class="text-body-secondary">kcal</span>
+                </p>
+                {% if meal.description %}
+                    <p class="text-body-secondary mb-0">{{ meal.description }}</p>
+                {% endif %}
+
+                {# Each bar: solid up to the min, faded up to the max, sized against the largest macro #}
+                <ul class="z-macro-rows">
+                    {% for row in meal.macro_rows %}
+                        <li class="z-macro-row">
+                            <span class="z-macro-name"><span class="z-dot z-bg-{{ row.key }}" aria-hidden="true"></span>{{ row.name }}</span>
+                            <span class="z-range-track" aria-hidden="true">
+                                <span class="z-range-band z-bg-{{ row.key }}" style="width: {{ row.max_pct }}%"></span>
+                                <span class="z-range-fill z-bg-{{ row.key }}" style="width: {{ row.min_pct }}%"></span>
+                            </span>
+                            <span class="z-macro-value z-tabular">{{ row.min }}–{{ row.max }} g</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </section>
+
+        <div class="d-flex justify-content-between align-items-baseline mt-4 mb-2">
+            <h2 class="mb-0">What Zalak saw</h2>
+            <span class="z-small text-body-secondary">{{ items|length }} item{{ items|length|pluralize }}</span>
+        </div>
+        {% for item in items %}
+            {% include 'meals/_item_card.html' %}
+        {% endfor %}
+    </div>
+
+    {# Log and Just checking start working in chunk 9 #}
+    <div class="z-actions">
+        <div class="z-actions-buttons">
+            <button type="button" class="btn btn-outline-secondary btn-lg" disabled>Just checking</button>
+            <button type="button" class="btn btn-primary btn-lg" disabled>Log to <span id="logSlotLabel">{{ slot }}</span></button>
+        </div>
+        <p class="z-caption text-body-secondary text-center mb-0">Estimate, not medical advice</p>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/slot_select.js' %}"></script>
+{% endblock %}

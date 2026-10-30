@@ -5,6 +5,20 @@ from django.utils import timezone
 from .units import UNIT_CHOICES, round_to
 
 
+def slot_for_time(dt):
+    """Suggest a meal slot from the local time (FR8), with the hours from the Figma slot sheet.
+    Also used by the signal in chunk 9."""
+    local = timezone.localtime(dt)
+    minutes = local.hour * 60 + local.minute
+    if minutes < 10 * 60 + 30:
+        return 'breakfast'
+    if minutes < 15 * 60:
+        return 'lunch'
+    if minutes < 17 * 60 + 30:
+        return 'snack'
+    return 'dinner'
+
+
 class Profile(models.Model):
     ACTIVITY_CHOICES = [
         ('low', 'Low'),
@@ -75,6 +89,31 @@ class Meal(models.Model):
         return sum(getattr(item, name) for item in self.items.all())
 
     @property
+    def macro_rows(self):
+        """One row per macro for the Result bars: solid up to min_pct, faded up to max_pct."""
+        rows = [
+            {'key': 'protein', 'name': 'Protein', 'min': self.protein_min, 'max': self.protein_max},
+            {'key': 'carbs', 'name': 'Carbs', 'min': self.carbs_min, 'max': self.carbs_max},
+            {'key': 'fat', 'name': 'Fat', 'min': self.fat_min, 'max': self.fat_max},
+        ]
+        # Scale against the largest max, so that macro's bar fills the whole width
+        largest = max(row['max'] for row in rows)
+        for row in rows:
+            row['min_pct'] = round(row['min'] / largest * 100) if largest else 0
+            row['max_pct'] = round(row['max'] / largest * 100) if largest else 0
+        return rows
+
+    @property
+    def items_with_bars(self):
+        """The items, each with the widths of its kcal bar, sized against the biggest item."""
+        items = list(self.items.all())
+        largest = max((item.kcal_max for item in items), default=0)
+        for item in items:
+            item.kcal_min_pct = round(item.kcal_min / largest * 100) if largest else 0
+            item.kcal_max_pct = round(item.kcal_max / largest * 100) if largest else 0
+        return items
+
+    @property
     def kcal_min(self):
         return self._total('kcal_min')
 
@@ -138,6 +177,18 @@ class MealItem(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.grams} g)"
+
+    @property
+    def portion(self):
+        """'1 bowl · 300 g', '2 slices · 60 g', 'about 1 tbsp · 10 g' or just '300 g'."""
+        if self.unit == 'g':
+            return f"{self.grams} g"
+        amount = f"{self.amount.normalize():f}"  # 1.00 -> 1, 0.50 -> 0.5
+        label = self.get_unit_display()
+        if self.amount > 1 and self.unit not in ('kg', 'oz', 'lb', 'ml', 'l', 'fl_oz'):
+            label += 'es' if label.endswith('ch') else 's'
+        about = 'about ' if self.confidence == 'unsure' else ''
+        return f"{about}{amount} {label} · {self.grams} g"
 
     def _scale(self, per_100g, step):
         return round_to(per_100g * self.grams / 100, step)

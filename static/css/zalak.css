@@ -294,8 +294,8 @@ h3 { font-size: 1rem; }
     color: var(--z-ink);
     background: var(--z-tint);
 }
-.z-badge-sure,
-.z-badge-likely { background: var(--z-tint); }
+.z-badge-sure { background: var(--z-tint); }
+.z-badge-likely { background: var(--z-sky); }
 .z-badge-unsure { background: var(--z-butter); }
 
 /* ---------- Layout shell ---------- */
@@ -455,3 +455,232 @@ h3 { font-size: 1rem; }
 }
 .z-profile-row:hover,
 .z-profile-row.active { background: var(--z-tint); color: var(--z-ink); }
+
+/* ---------- Result (chunk 3) ---------- */
+
+/* Sage band with a soft white glow behind the plate, plus back and "AI estimate" */
+.z-hero {
+    margin: -1rem -1rem 0;
+    padding: 1rem 1rem 2.5rem;
+    background:
+        radial-gradient(circle at 50% 60%, rgba(255, 255, 255, 0.75) 0, rgba(255, 255, 255, 0) 60%),
+        var(--z-tint);
+}
+.z-hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+/* Photo: a big circle on a translucent white "plate" ring */
+.z-plate {
+    width: fit-content;
+    margin: 0 auto;
+    padding: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: 0 10px 30px rgba(30, 58, 48, 0.12);
+}
+.z-hero-photo {
+    display: block;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    border: 4px solid var(--z-card);
+    object-fit: cover;
+}
+
+/* No photo: an icon tile and the typed text */
+.z-hero-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 112px;
+    height: 112px;
+    margin: 0 auto 1rem;
+    border-radius: 50%;
+    border: 6px solid var(--z-card);
+    background: var(--z-peach);
+    color: var(--z-ink);
+    font-size: 2.75rem;
+}
+.z-hero-text {
+    max-width: 480px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+/* Content panel that slides up over the band or the photo */
+.z-result {
+    position: relative;
+    margin: -1.5rem -1rem 0;
+    padding: 1.25rem 1rem 10rem;          /* room for the fixed action bar */
+    border-radius: 24px 24px 0 0;
+    background: var(--z-bg);
+}
+
+/* Slot dropdown: a white pill that opens a rounded menu with icons */
+.z-slot-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--z-line);
+    border-radius: 50rem;
+    background: var(--z-card);
+    color: var(--z-ink);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(30, 58, 48, 0.08);
+}
+.z-slot-pill:hover { border-color: var(--z-ink); }
+.z-slot-chevron { font-size: 0.8rem; transition: transform 0.15s; }
+.z-slot-pill[aria-expanded="true"] .z-slot-chevron { transform: rotate(180deg); }
+
+.z-slot-menu {
+    --bs-dropdown-min-width: 14rem;
+    --bs-dropdown-padding-x: 0.5rem;
+    --bs-dropdown-padding-y: 0.5rem;
+    --bs-dropdown-border-color: var(--z-line);
+    --bs-dropdown-border-radius: 18px;
+    --bs-dropdown-item-padding-x: 0.5rem;
+    --bs-dropdown-item-padding-y: 0.375rem;
+    --bs-dropdown-item-border-radius: 12px;
+    --bs-dropdown-link-color: var(--z-ink);
+    --bs-dropdown-link-hover-color: var(--z-ink);
+    --bs-dropdown-link-hover-bg: var(--z-bg);
+    --bs-dropdown-link-active-color: var(--z-ink);
+    --bs-dropdown-link-active-bg: var(--z-tint);
+    box-shadow: 0 12px 32px rgba(30, 58, 48, 0.16);
+}
+.z-slot-option {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 48px;
+    font-weight: 500;
+}
+.z-slot-option-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--z-tint);
+    font-size: 1.125rem;
+}
+.z-slot-option.active .z-slot-option-icon { background: var(--z-card); }
+.z-slot-check { margin-left: auto; visibility: hidden; }
+.z-slot-option.active .z-slot-check { visibility: visible; }
+
+/* Macro rows: name | bar | grams */
+.z-macro-rows {
+    margin: 1.25rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+.z-macro-row {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr 5.5rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.3rem 0;
+    font-size: 0.875rem;
+}
+.z-macro-name { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 500; }
+.z-macro-value { text-align: right; font-weight: 600; }
+
+/* Range bar (macros and items): solid up to the min, faded up to the max */
+.z-range-track {
+    position: relative;
+    display: block;
+    height: 10px;
+    border-radius: 50rem;
+    background: rgba(30, 58, 48, 0.07);
+    overflow: hidden;
+}
+.z-range-thin { height: 6px; }
+.z-range-band,
+.z-range-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-radius: 50rem;
+}
+.z-range-band { opacity: 0.35; }
+
+.z-dot { width: 8px; height: 8px; border-radius: 50%; }
+.z-bg-protein { background: var(--z-protein); }
+.z-bg-carbs { background: var(--z-carbs); }
+.z-bg-fat { background: var(--z-fat); }
+.z-bg-kcal { background: var(--z-muted); }
+
+/* Item cards: Sure / Likely differ by badge color; Unsure gets a caramel border */
+.z-item { margin-bottom: 0.75rem; }
+.z-item-unsure {
+    --bs-card-border-color: var(--z-accent);
+    border-width: 2px;
+}
+.z-item-name {
+    font-family: var(--z-font-body);
+    font-size: 1rem;
+    font-weight: 600;
+}
+.z-reason {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem;
+    border-radius: 12px;
+    background: var(--z-butter);
+    font-size: 0.875rem;
+}
+.z-icon-btn:disabled { opacity: 0.5; }
+
+/* Certainty meter inside the badge: filled dots = how sure */
+.z-meter { display: inline-flex; gap: 3px; margin-left: 0.25rem; }
+.z-meter span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--z-ink);
+}
+.z-meter span.on { background: var(--z-ink); }
+
+/* Fixed bottom bar: Just checking / Log, always in the same place */
+.z-actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1030;
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--z-line);
+    background: var(--z-bg);
+}
+.z-actions-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    max-width: 640px;
+    margin: 0 auto 0.5rem;
+}
+
+@media (min-width: 992px) {
+    /* Centered column until the two-column desktop Result (chunk 19) */
+    .z-hero,
+    .z-result {
+        max-width: 640px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .z-hero { margin-top: 0; border-radius: 24px; }
+
+    /* The band is its own card, the content sits below it */
+    .z-result { margin-top: 1rem; padding: 0 0 10rem; border-radius: 0; background: none; }
+    .z-hero-photo { width: 340px; height: 340px; }
+
+    .has-sidebar .z-actions { left: var(--z-sidebar-width); }
+}
