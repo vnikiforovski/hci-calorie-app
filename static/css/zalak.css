@@ -713,6 +713,157 @@ button.z-chip:hover { background: var(--z-tint); }
 .z-with-actions { padding-bottom: 7rem; }
 .z-actions-one { grid-template-columns: 1fr; }
 
+/* ---------- Voice (chunk 7, Figma "Text and voice · Empty / Listening") ---------- */
+
+/* While listening the field gets a dark border and the live line sits at its bottom */
+.z-voice-field { position: relative; }
+.z-voice-field.is-listening .z-meal-text {
+    border-color: var(--z-ink);
+    padding-bottom: 2.75rem;
+}
+.z-voice-live {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.4rem 1rem 0.75rem;
+    border-radius: 0 0 18px 18px;
+    background: var(--z-card);      /* text scrolling behind it stays readable */
+    color: var(--z-muted);
+    font-size: 0.8125rem;
+    pointer-events: none;           /* clicks go to the field */
+}
+.z-voice-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--z-accent);
+}
+
+.z-voice {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 2.25rem;
+    text-align: center;
+}
+
+/* One button: the 136 px pulse area, the 80 px disk and the label under it
+   (smaller than Figma's 160 / 96 px, which felt too big next to the field) */
+.z-mic {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--z-muted);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+.z-mic:focus-visible { outline: none; }
+.z-mic:focus-visible .z-mic-disk { outline: 3px solid var(--z-ink); outline-offset: 4px; }
+
+.z-mic-circle {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 136px;
+    height: 136px;
+}
+.z-mic-circle::before,
+.z-mic-circle::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    background: var(--z-accent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.z-mic-circle::before { inset: 0; }
+.z-mic-circle::after { inset: 14px; }
+
+.z-mic-disk {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--z-ink);
+    color: #FFFFFF;
+    font-size: 1.875rem;            /* the 30 px icon */
+    transition: background-color 0.2s;
+}
+.z-mic-disk .bi { grid-area: 1 / 1; line-height: 1; }
+.z-mic:hover .z-mic-disk { background: var(--z-ink-pressed); }
+.z-mic-icon-stop { display: none; }
+
+/* Listening: caramel disk with a stop icon, two pulsing rings, the waveform */
+.z-voice.is-listening .z-mic-disk { background: var(--z-accent); color: var(--z-ink); }
+.z-voice.is-listening .z-mic:hover .z-mic-disk { background: var(--z-accent-pressed); }
+.z-voice.is-listening .z-mic-icon-idle { display: none; }
+.z-voice.is-listening .z-mic-icon-stop { display: block; }
+.z-voice.is-listening .z-mic-circle::before { opacity: 0.15; animation: z-pulse 1.6s ease-in-out infinite; }
+.z-voice.is-listening .z-mic-circle::after { opacity: 0.25; animation: z-pulse 1.6s ease-in-out 0.2s infinite; }
+
+@keyframes z-pulse {
+    0%, 100% { transform: scale(0.9); }
+    50% { transform: scale(1); }
+}
+
+/* Decorative: Web Speech gives no sound level, so the bars only show "listening" */
+.z-wave {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    height: 30px;
+    margin-top: 0.75rem;
+}
+.z-voice.is-listening .z-wave { display: flex; }
+.z-wave span {
+    width: 4px;
+    border-radius: 2px;
+    background: var(--z-accent);
+    animation: z-wave 0.9s ease-in-out infinite alternate;
+}
+/* Bar heights from the Figma frame, each starting at a different moment */
+.z-wave span:nth-child(1) { height: 10px; animation-delay: -0.1s; }
+.z-wave span:nth-child(2) { height: 22px; animation-delay: -0.5s; }
+.z-wave span:nth-child(3) { height: 14px; animation-delay: -0.3s; }
+.z-wave span:nth-child(4) { height: 30px; animation-delay: -0.7s; }
+.z-wave span:nth-child(5) { height: 18px; animation-delay: -0.2s; }
+.z-wave span:nth-child(6) { height: 26px; animation-delay: -0.6s; }
+.z-wave span:nth-child(7) { height: 12px; animation-delay: -0.4s; }
+.z-wave span:nth-child(8) { height: 20px; animation-delay: -0.8s; }
+.z-wave span:nth-child(9) { height: 8px; animation-delay: 0s; }
+
+@keyframes z-wave {
+    from { transform: scaleY(0.4); }
+    to { transform: scaleY(1); }
+}
+
+.z-voice-status {
+    max-width: 20rem;
+    margin: 0.75rem 0 0;
+    color: var(--z-ink);
+}
+.z-voice-status:empty { margin: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+    /* The rings and bars stay still, as in the Figma frame */
+    .z-voice.is-listening .z-mic-circle::before,
+    .z-voice.is-listening .z-mic-circle::after,
+    .z-wave span { animation: none; }
+}
+
 /* ---------- Analyzing overlay (chunk 6) ---------- */
 
 /* Covers the page on phones; on desktop the content stays a centered column */

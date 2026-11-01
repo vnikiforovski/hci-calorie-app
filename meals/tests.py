@@ -83,6 +83,7 @@ class StaticVersionTests(TestCase):
         self.assertIn('css/zalak.css?v=42', html)
         self.assertIn('js/chips.js?v=42', html)
         self.assertIn('js/analyzing.js?v=42', html)
+        self.assertIn('js/voice.js?v=42', html)
 
 
 class FakeAITests(TestCase):
@@ -147,6 +148,46 @@ class TextInputViewTests(TestCase):
         self.client.cookies.clear()   # a different guest
         response = self.client.get(reverse('result', args=[meal.id]))
         self.assertEqual(response.status_code, 404)
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class VoiceInputTests(TestCase):
+    """Chunk 7: dictated text goes the same way as typed text, only input_method differs."""
+    url = reverse('text_input')
+
+    def post(self, **extra):
+        data = {'text': 'two eggs and toast', 'slot': 'breakfast', **extra}
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            return self.client.post(self.url, data)
+
+    def test_dictated_meal_is_saved_as_voice(self):
+        response = self.post(input_method='voice')
+        meal = Meal.objects.get()
+        self.assertRedirects(response, reverse('result', args=[meal.id]))
+        self.assertEqual(meal.input_method, 'voice')
+
+    def test_typed_meal_is_saved_as_text(self):
+        self.post()
+        self.assertEqual(Meal.objects.get().input_method, 'text')
+
+    def test_other_values_count_as_text(self):
+        # This page makes only text and voice meals; an odd value never blocks the form
+        for value in ['photo', 'junk']:
+            response = self.post(input_method=value)
+            self.assertEqual(response.status_code, 302)
+        self.assertEqual(set(Meal.objects.values_list('input_method', flat=True)), {'text'})
+
+    def test_edit_the_text_keeps_voice(self):
+        self.post(input_method='voice')
+        meal = Meal.objects.get()
+        page = self.client.get(reverse('edit_text', args=[meal.id]))
+        self.assertContains(page, 'name="input_method" value="voice"')
+
+    def test_mic_is_hidden_until_the_browser_supports_it(self):
+        page = self.client.get(self.url)
+        self.assertContains(page, '<div class="z-voice" id="voice" hidden>', html=False)
+        self.assertContains(page, 'id="micButton"')
+        self.assertContains(page, 'js/voice.js?v=')
 
 
 NO_FOOD = {'status': 'no_food', 'no_food_reason': 'That looks like a shoe.',

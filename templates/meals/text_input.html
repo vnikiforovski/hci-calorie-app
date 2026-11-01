@@ -21,8 +21,16 @@
     <form method="post" action="{{ request.path }}" id="textMealForm" class="z-with-actions" novalidate data-analyzing>
         {% csrf_token %}
         {{ form.slot }}
+        {{ form.input_method }}
 
-        {{ form.text }}
+        {# The field and, while listening, the live line inside it (Figma "Text and voice · Listening") #}
+        <div class="z-voice-field" id="voiceField">
+            {{ form.text }}
+            <p class="z-voice-live" id="voiceLive" hidden>
+                <span class="z-voice-dot" aria-hidden="true"></span>
+                Listening… you can edit the text anytime
+            </p>
+        </div>
         {% for error in form.text.errors %}
             <p class="z-small mt-2 mb-0" role="alert">{{ error }}</p>
         {% endfor %}
@@ -35,7 +43,23 @@
             <button type="button" class="z-chip" data-insert="brand: "><i class="bi bi-plus-lg" aria-hidden="true"></i> Brand</button>
         </div>
 
-        {# The microphone comes in chunk 7 (voice) #}
+        {# Voice (FR7): hidden until voice.js finds speech recognition, so Firefox simply has no mic (NFR16) #}
+        <div class="z-voice" id="voice" hidden>
+            <button type="button" class="z-mic" id="micButton" aria-pressed="false">
+                {# 136 px area for the two pulse rings, the 80 px disk in the middle #}
+                <span class="z-mic-circle" aria-hidden="true">
+                    <span class="z-mic-disk">
+                        <i class="bi bi-mic z-mic-icon-idle"></i>
+                        <i class="bi bi-stop z-mic-icon-stop"></i>
+                    </span>
+                </span>
+                <span class="z-mic-label" id="micLabel">Tap to speak</span>
+            </button>
+            <div class="z-wave" aria-hidden="true">
+                {% for bar in '123456789' %}<span></span>{% endfor %}
+            </div>
+            <p class="z-small z-voice-status" id="voiceStatus" role="status"></p>
+        </div>
 
         <div class="z-actions">
             <div class="z-actions-buttons z-actions-one">
@@ -49,5 +73,6 @@
 
 {% block scripts %}
     <script src="{% static 'js/chips.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/voice.js' %}?v={{ STATIC_VERSION }}"></script>
     <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
 {% endblock %}

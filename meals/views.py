@@ -135,8 +135,7 @@ def text_input(request, meal_id=None):
     if request.method == 'POST':
         form = TextMealForm(request.POST, instance=meal)
         if form.is_valid():
-            meal = form.save(commit=False)
-            meal.input_method = 'text'
+            meal = form.save(commit=False)   # input_method (text or voice) comes from the form
             if not meal.slot:
                 meal.slot = slot_for_time(timezone.now())
             if meal_id is None:
