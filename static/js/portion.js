@@ -114,7 +114,6 @@ function render() {
     document.getElementById('amountText').textContent = formatAmount(state.amount);
     document.getElementById('unitText').textContent = label;
     document.querySelector('.z-unit-chip').setAttribute('aria-label', 'Unit: ' + label + '. Change the unit');
-    document.getElementById('unitRowText').textContent = unitLabel(state.unit, 1);
 
     document.getElementById('gramsLine').hidden = state.unit === 'g';
     document.getElementById('gramsText').textContent = grams;
@@ -217,5 +216,19 @@ if (resetButton) {
         render();
     });
 }
+
+// ---------- Re-estimate: show that Zalak is working (one AI call, 1-2 s) ----------
+
+var reEstimateButton = document.getElementById('reEstimateButton');
+document.getElementById('itemForm').addEventListener('submit', function (event) {
+    if (event.submitter !== reEstimateButton) return;
+    // Disabled just after the submit has started, so the button's formaction still applies
+    setTimeout(function () {
+        document.querySelectorAll('#itemForm [type="submit"]').forEach(function (button) {
+            button.disabled = true;
+        });
+        reEstimateButton.innerHTML = '<span class="z-spinner" aria-hidden="true"></span> <span>Asking Zalak…</span>';
+    }, 0);
+});
 
 render();

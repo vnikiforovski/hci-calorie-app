@@ -87,6 +87,29 @@
         {% for item in items %}
             {% include 'meals/_item_card.html' %}
         {% endfor %}
+
+        {# "Add something Zalak missed" (FR20): one small AI call. A failure brings the name back with a message. #}
+        <form method="post" action="{% url 'add_item' meal.id %}" class="z-add-item" id="add-item">
+            {% csrf_token %}
+            <div class="z-add-row{% if add_item_error %} has-error{% endif %}">
+                <label class="visually-hidden" for="addItemName">Add something Zalak missed</label>
+                <input type="text" class="z-add-input" id="addItemName" name="name" maxlength="100" autocomplete="off"
+                       placeholder="Add something Zalak missed" value="{{ add_item_error.name|default:'' }}"
+                       {% if add_item_error %}aria-describedby="addItemError"{% endif %}>
+                {% if add_item_error %}
+                    <button type="submit" class="z-add-retry">Try again</button>
+                {% else %}
+                    <button type="submit" class="z-add-btn" aria-label="Add">
+                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                    </button>
+                {% endif %}
+            </div>
+            {% if add_item_error %}
+                <p class="z-add-error" id="addItemError" role="alert">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i> {{ add_item_error.message }}
+                </p>
+            {% endif %}
+        </form>
     </div>
 
     <div class="z-actions">
@@ -118,4 +141,5 @@
 
 {% block scripts %}
     <script src="{% static 'js/slot_select.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/add_item.js' %}?v={{ STATIC_VERSION }}"></script>
 {% endblock %}

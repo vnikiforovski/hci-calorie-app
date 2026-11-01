@@ -16,12 +16,17 @@
             <h1 class="mb-0">Edit item</h1>
             {# Reset fills in Zalak's estimate again; nothing is saved until Save changes #}
             {% if item.ai_estimate %}
-                <button type="button" class="z-link-btn" id="resetButton">Reset</button>
+                <button type="button" class="z-reset-btn" id="resetButton">
+                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Reset
+                </button>
             {% endif %}
         </div>
 
-        <form method="post" id="itemForm" novalidate>
+        {# The action is explicit: after a failed Re-estimate this page is shown at the re-estimate URL #}
+        <form method="post" action="{% url 'edit_item' meal.id item.id %}" id="itemForm" novalidate>
             {% csrf_token %}
+            {# Enter in the name field presses the first submit button: make that Save, not Re-estimate #}
+            <button type="submit" class="visually-hidden" tabindex="-1" aria-hidden="true">Save changes</button>
             {{ form.amount }}
             {{ form.unit }}
 
@@ -82,52 +87,43 @@
                 </div>
             </section>
 
-            <p class="z-field-label">Details</p>
-            <div class="card z-details">
-                <button type="button" class="z-detail-row" data-bs-toggle="offcanvas" data-bs-target="#unitSheet" aria-controls="unitSheet">
-                    <span class="z-detail-icon" aria-hidden="true"><i class="bi bi-speedometer2"></i></span>
-                    <span class="z-detail-name">Unit</span>
-                    <span class="z-small text-body-secondary" id="unitRowText">{{ unit_row_text }}</span>
-                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
-                </button>
-            </div>
-
-            {# Nutrition: collapsed to one line, opens to the three macros (Bootstrap collapse) #}
-            <div class="card z-nutrition mt-3">
-                <button type="button" class="z-nutrition-toggle collapsed" data-bs-toggle="collapse"
-                        data-bs-target="#nutritionMore" aria-expanded="false" aria-controls="nutritionMore">
-                    <span>
-                        <span class="d-block fw-semibold">Nutrition for this portion</span>
-                        <span class="z-small text-body-secondary z-nutrition-line">
-                            Protein <span data-macro="protein">{{ item.protein_min }}–{{ item.protein_max }}</span> g ·
-                            Carbs <span data-macro="carbs">{{ item.carbs_min }}–{{ item.carbs_max }}</span> g ·
-                            Fat <span data-macro="fat">{{ item.fat_min }}–{{ item.fat_max }}</span> g
-                        </span>
-                    </span>
-                    <i class="bi bi-chevron-down z-nutrition-chevron" aria-hidden="true"></i>
-                </button>
-                <div class="collapse" id="nutritionMore">
-                    <div class="z-macro-tiles">
-                        <div class="z-macro-tile z-tile-protein">
-                            <span class="z-tile-bar z-bg-protein" aria-hidden="true"></span>
-                            <span class="d-block z-small">Protein</span>
-                            <span class="fw-semibold"><span data-macro="protein">{{ item.protein_min }}–{{ item.protein_max }}</span> g</span>
-                        </div>
-                        <div class="z-macro-tile z-tile-carbs">
-                            <span class="z-tile-bar z-bg-carbs" aria-hidden="true"></span>
-                            <span class="d-block z-small">Carbs</span>
-                            <span class="fw-semibold"><span data-macro="carbs">{{ item.carbs_min }}–{{ item.carbs_max }}</span> g</span>
-                        </div>
-                        <div class="z-macro-tile z-tile-fat">
-                            <span class="z-tile-bar z-bg-fat" aria-hidden="true"></span>
-                            <span class="d-block z-small">Fat</span>
-                            <span class="fw-semibold"><span data-macro="fat">{{ item.fat_min }}–{{ item.fat_max }}</span> g</span>
-                        </div>
+            {# The unit is changed from the chip under the number, so there is no separate Unit row.  #}
+            {# Nutrition is always open: the macros follow the stepper live (both adapted from Figma). #}
+            <section class="card z-nutrition mt-3" aria-labelledby="nutritionTitle">
+                <h2 class="z-nutrition-title" id="nutritionTitle">Nutrition for this portion</h2>
+                <div class="z-macro-tiles">
+                    <div class="z-macro-tile z-tile-protein">
+                        <span class="z-tile-bar z-bg-protein" aria-hidden="true"></span>
+                        <span class="d-block z-small">Protein</span>
+                        <span class="fw-semibold"><span data-macro="protein">{{ item.protein_min }}–{{ item.protein_max }}</span> g</span>
+                    </div>
+                    <div class="z-macro-tile z-tile-carbs">
+                        <span class="z-tile-bar z-bg-carbs" aria-hidden="true"></span>
+                        <span class="d-block z-small">Carbs</span>
+                        <span class="fw-semibold"><span data-macro="carbs">{{ item.carbs_min }}–{{ item.carbs_max }}</span> g</span>
+                    </div>
+                    <div class="z-macro-tile z-tile-fat">
+                        <span class="z-tile-bar z-bg-fat" aria-hidden="true"></span>
+                        <span class="d-block z-small">Fat</span>
+                        <span class="fw-semibold"><span data-macro="fat">{{ item.fat_min }}–{{ item.fat_max }}</span> g</span>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">Save changes</button>
+            {% if problem %}
+                <p class="z-add-error mt-4 mb-0" role="alert">
+                    <i class="bi bi-info-circle" aria-hidden="true"></i> {{ problem }}
+                </p>
+            {% endif %}
+            {# Re-estimate | Save changes, like Just checking | Log on Result; Delete stays apart below #}
+            <div class="z-edit-actions">
+                {# New numbers from Zalak for the name, amount and unit on screen (not in Figma) #}
+                <button type="submit" class="btn btn-outline-secondary btn-lg" id="reEstimateButton"
+                        formaction="{% url 're_estimate_item' meal.id item.id %}">
+                    <i class="bi bi-stars" aria-hidden="true"></i> <span>Re-estimate</span>
+                </button>
+                <button type="submit" class="btn btn-primary btn-lg">Save changes</button>
+            </div>
         </form>
 
         {# Delete is its own small POST form; the last item can't go (Just checking drops the meal) #}

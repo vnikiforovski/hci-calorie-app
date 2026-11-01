@@ -1,5 +1,5 @@
 {# One food item on Result. Expects `item` (a MealItem, with kcal_min_pct / kcal_max_pct from Meal.items_with_bars). #}
-<article class="card z-item z-item-{{ item.confidence }}">
+<article class="card z-item z-item-{{ item.confidence }}" id="item-{{ item.id }}">
     <div class="card-body">
         <div class="d-flex justify-content-between gap-3">
             <div>
@@ -39,7 +39,20 @@
         {% if item.confidence == 'unsure' and item.reason %}
             <div class="z-reason mt-3">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
-                <p class="mb-0">{{ item.reason }}{% if item.question %} {{ item.question }}{% endif %}</p>
+                <div class="flex-grow-1">
+                    <p class="mb-0" id="question-{{ item.id }}">{{ item.reason }}{% if item.question %} {{ item.question }}{% endif %}</p>
+                    {% if item.can_ask %}
+                        {# The chips scale Zalak's portion x0.5 / x1 / x1.5. After a tap the item is "likely" #}
+                        {# and this box goes away; the amount can still be changed on Edit item.               #}
+                        <form method="post" action="{% url 'answer_question' item.meal_id item.id %}"
+                              class="z-answer-chips" role="group" aria-labelledby="question-{{ item.id }}">
+                            {% csrf_token %}
+                            {% for value, label, factor in item.ANSWERS %}
+                                <button type="submit" name="answer" value="{{ value }}" class="z-answer-chip">{{ label }}</button>
+                            {% endfor %}
+                        </form>
+                    {% endif %}
+                </div>
             </div>
         {% endif %}
     </div>

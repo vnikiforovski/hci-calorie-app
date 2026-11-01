@@ -116,6 +116,43 @@ FAKE_RESPONSE = {
 }
 
 
+ITEM_PROMPT = f"""You are Zalak, a calm meal calorie checker. The user is correcting a meal and
+gives you ONE food item to estimate: something you missed, or an item they renamed.
+
+If the message gives an amount and unit, that portion is fixed: keep the same amount and unit and estimate
+the grams for it. If it gives none, assume a normal portion and pick a fitting amount and unit.
+The meal it belongs to is given for context only (e.g. butter in a cooked dish); estimate only the one item.
+
+Give, like for a whole meal:
+- name: short and plain, e.g. "Coffee with milk".
+- amount and unit: unit is one of {', '.join(GRAMS_PER_UNIT)}. bowl_s, bowl_m and bowl_l are a small, normal and large bowl.
+- grams: the weight of that portion.
+- kcal, protein, carbs and fat (grams) as a min-max range for the whole portion, not per 100 g.
+- confidence: "sure", "likely" or "unsure"; reason and question only when unsure (the question can be answered
+  with "a little", "about that" or "a lot").
+Never call a food good, bad, healthy or unhealthy, give no advice, and make no allergen claims. Answer in English.
+
+If the text is not a food or drink, answer status "no_food" with a kind one-sentence no_food_reason
+(e.g. "That doesn't sound like something to eat.") and any item (it is ignored). Otherwise status "ok"."""
+
+ITEM_RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'status': {'type': 'string', 'enum': ['ok', 'no_food']},
+        'no_food_reason': {'type': 'string'},
+        'item': _item_schema(),
+    },
+    'required': ['status', 'no_food_reason', 'item'],
+    'additionalProperties': False,
+}
+
+# The fake answer for one item (ZALAK_AI_FAKE=1): the name stays what the user typed
+FAKE_ITEM = {'amount': 1, 'unit': 'serving', 'grams': 150,
+             'kcal_min': 120, 'kcal_max': 160, 'protein_min': 4, 'protein_max': 6,
+             'carbs_min': 15, 'carbs_max': 20, 'fat_min': 3, 'fat_max': 6,
+             'confidence': 'likely', 'reason': '', 'question': ''}
+
+
 def analyze_text(text):
     """Estimate a typed or dictated meal. Returns validated data (see validate)."""
     if settings.ZALAK_AI_FAKE:
@@ -142,15 +179,39 @@ def analyze_photo(image_bytes, note=''):
     return validate(_ask_model(content))
 
 
-def _fake_answer():
+def estimate_item(name, amount=None, unit=None, meal_title=''):
+    """Estimate ONE item: "Add something Zalak missed" (name only) or "Re-estimate with Zalak"
+    (name with the amount and unit the user set, which stay fixed).
+    Returns {'status': 'ok' | 'no_food', 'no_food_reason', 'item'}; raises AnalysisError."""
+    if settings.ZALAK_AI_FAKE:
+        _fake_delay()
+        item = dict(FAKE_ITEM, name=name)
+        if amount and unit:
+            item.update(amount=float(amount), unit=unit)
+        return validate_item_answer({'status': 'ok', 'no_food_reason': '', 'item': item})
+
+    lines = [f'Item: {name}']
+    if amount and unit:
+        lines.append(f'Portion (fixed): {amount} {unit}')
+    if meal_title:
+        lines.append(f'The meal: {meal_title}')
+    return validate_item_answer(_ask_model('\n'.join(lines), system=ITEM_PROMPT, schema=ITEM_RESPONSE_SCHEMA))
+
+
+def _fake_delay():
     if settings.ZALAK_AI_FAKE_DELAY > 0:
         time.sleep(settings.ZALAK_AI_FAKE_DELAY)   # act like a real call, so the overlay shows
+
+
+def _fake_answer():
+    _fake_delay()
     return validate(FAKE_RESPONSE)
 
 
-def _ask_model(user_content):
+def _ask_model(user_content, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA):
     """One call to Claude. Returns the parsed JSON answer or raises AnalysisError.
-    user_content is the message content: the meal text, or an image block + the note for photos."""
+    user_content is the message content: the meal text, or an image block + the note for photos.
+    estimate_item passes its own system prompt and schema."""
     if not os.environ.get('ANTHROPIC_API_KEY'):
         # Without a key the SDK raises TypeError, not APIError, so check it ourselves
         logger.warning('ANTHROPIC_API_KEY is not set in .env')
@@ -161,10 +222,10 @@ def _ask_model(user_content):
         response = client.messages.create(
             model=settings.ZALAK_AI_MODEL,
             max_tokens=4000,
-            system=SYSTEM_PROMPT,
+            system=system,
             output_config={
                 'effort': 'low',
-                'format': {'type': 'json_schema', 'schema': RESPONSE_SCHEMA},
+                'format': {'type': 'json_schema', 'schema': schema},
             },
             messages=[{'role': 'user', 'content': user_content}],
         )
@@ -215,6 +276,19 @@ def validate(data):
         'description': _text(data.get('description'), 200),
         'items': [_validate_item(item) for item in items],
     }
+
+
+def validate_item_answer(data):
+    """Check estimate_item's answer: {'status', 'no_food_reason', 'item'}, the item by the same
+    rules as a meal's items. A 'no_food' answer has no item."""
+    if not isinstance(data, dict):
+        raise AnalysisError('The answer is not an object.')
+    status = data.get('status')
+    if status == 'no_food':
+        return {'status': 'no_food', 'no_food_reason': _text(data.get('no_food_reason'), 200), 'item': None}
+    if status != 'ok':
+        raise AnalysisError(f'Unknown status: {status!r}')
+    return {'status': 'ok', 'no_food_reason': '', 'item': _validate_item(data.get('item'))}
 
 
 def _validate_item(item):

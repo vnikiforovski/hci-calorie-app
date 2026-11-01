@@ -19,7 +19,8 @@ from django.utils import timezone
 
 from .admin import MealAdmin
 from .models import Meal, Profile
-from .services.ai import FAKE_RESPONSE, AnalysisError, analyze_text, validate
+from .services.ai import (FAKE_RESPONSE, ITEM_RESPONSE_SCHEMA, AnalysisError, analyze_text, estimate_item,
+                          validate)
 from .units import format_amount, grams_for, stepper_label
 from zalak.settings import env_list
 
@@ -785,15 +786,24 @@ class EditItemTests(TestCase):
         self.assertNotContains(page, 'id="resetButton"')      # no AI answer behind this item
         self.assertContains(page, 'This is the only item.')   # so no Delete
 
+    def test_nutrition_is_open_and_there_is_no_unit_row(self):
+        page = self.client.get(self.url())
+        self.assertContains(page, 'Nutrition for this portion')
+        self.assertContains(page, '42–47')                    # protein for 150 g, visible at once
+        self.assertNotContains(page, 'data-bs-toggle="collapse"')
+        self.assertNotContains(page, 'id="unitRowText"')      # the chip under the number changes the unit
+        self.assertContains(page, 'data-bs-target="#unitSheet"', count=1)
+
     def test_more_chicken_updates_result(self):
         # The chunk's test: 150 g -> 200 g, protein follows (T2)
         response = self.save(amount='200')
-        self.assertRedirects(response, reverse('result', args=[self.meal.id]), fetch_redirect_response=False)
+        result_url = reverse('result', args=[self.meal.id])
+        self.assertRedirects(response, f'{result_url}#item-{self.item.id}', fetch_redirect_response=False)
         self.item.refresh_from_db()
         self.assertEqual(self.item.grams, 200)
         self.assertTrue(self.item.edited_by_user)
 
-        result = self.client.get(reverse('result', args=[self.meal.id]))
+        result = self.client.get(result_url)
         self.assertContains(result, '300–340')     # kcal
         self.assertContains(result, '56–62 g')     # protein
         self.assertContains(result, 'Changes saved')
@@ -940,6 +950,12 @@ class UndoRemoveItemTests(TestCase):
         self.assertEqual(self.client.get(self.undo_url).status_code, 405)
         self.assertFalse(self.meal.items.filter(name='Bread').exists())
 
+    def test_result_cards_have_no_delete_button(self):
+        # Removing an item stays one level down, on Edit item (Figma's card has only the pencil)
+        page = self.client.get(reverse('result', args=[self.meal.id]))
+        self.assertNotContains(page, reverse('delete_item', args=[self.meal.id, self.bread.id]))
+        self.assertContains(page, 'aria-label="Edit Bread"')
+
 
 @override_settings(ZALAK_AI_FAKE=False)
 class EditAIItemTests(TestCase):
@@ -977,3 +993,326 @@ class EditAIItemTests(TestCase):
         self.assertEqual(self.bread.grams, 40)
         self.client.cookies.clear()
         self.assertEqual(self.client.get(self.url).status_code, 404)
+
+
+ITEM_ANSWER = {'status': 'ok', 'no_food_reason': '', 'item': {
+    'name': 'Coffee with milk', 'amount': 1, 'unit': 'cup', 'grams': 250,
+    'kcal_min': 60, 'kcal_max': 90, 'protein_min': 3, 'protein_max': 4,
+    'carbs_min': 5, 'carbs_max': 7, 'fat_min': 3, 'fat_max': 5,
+    'confidence': 'likely', 'reason': '', 'question': ''}}
+
+
+def item_answer(**changes):
+    """estimate_item's raw answer for one item, with some fields changed."""
+    answer = copy.deepcopy(ITEM_ANSWER)
+    answer['item'].update(changes)
+    return answer
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class EstimateItemTests(TestCase):
+    """Chunk 11: one small AI call for one item (Add and Re-estimate)."""
+
+    @patch('meals.services.ai._ask_model')
+    def test_returns_a_validated_item(self, ask_model):
+        ask_model.return_value = item_answer(grams=252)
+        answer = estimate_item('coffee with milk')
+        self.assertEqual(answer['status'], 'ok')
+        self.assertEqual(answer['item']['grams'], 250)   # rounded to 5 like every item
+
+    @patch('meals.services.ai._ask_model')
+    def test_portion_and_meal_go_in_the_message(self, ask_model):
+        ask_model.return_value = item_answer()
+        estimate_item('Rye bread', Decimal('2'), 'slice', 'Tavče gravče with bread')
+        text = ask_model.call_args.args[0]
+        self.assertIn('Item: Rye bread', text)
+        self.assertIn('Portion (fixed): 2 slice', text)
+        self.assertIn('The meal: Tavče gravče with bread', text)
+        self.assertEqual(ask_model.call_args.kwargs['schema'], ITEM_RESPONSE_SCHEMA)
+
+    @patch('meals.services.ai._ask_model')
+    def test_name_only_has_no_portion(self, ask_model):
+        ask_model.return_value = item_answer()
+        estimate_item('coffee')
+        self.assertNotIn('Portion', ask_model.call_args.args[0])
+
+    @patch('meals.services.ai._ask_model')
+    def test_no_food(self, ask_model):
+        ask_model.return_value = {'status': 'no_food', 'no_food_reason': 'That is a shoe.', 'item': {}}
+        answer = estimate_item('my shoe')
+        self.assertEqual((answer['status'], answer['item']), ('no_food', None))
+        self.assertEqual(answer['no_food_reason'], 'That is a shoe.')
+
+    def test_bad_answers_raise(self):
+        bad_answers = [item_answer(confidence='maybe'), item_answer(kcal_min=200, kcal_max=100),
+                       item_answer(confidence='unsure', reason=''), {'status': 'ok'}, 'text']
+        for bad in bad_answers:
+            with self.subTest(bad=str(bad)[:50]), patch('meals.services.ai._ask_model', return_value=bad):
+                with self.assertRaises(AnalysisError):
+                    estimate_item('coffee')
+
+    @override_settings(ZALAK_AI_FAKE=True, ZALAK_AI_FAKE_DELAY=0)
+    def test_fake_keeps_the_name_and_portion(self):
+        item = estimate_item('Rye bread', Decimal('2'), 'slice')['item']
+        self.assertEqual((item['name'], item['amount'], item['unit']), ('Rye bread', 2.0, 'slice'))
+
+
+class AnalyzedMealMixin:
+    """A signed-in user with the fake meal analyzed: tavče gravče (0), bread (1), salad (2), oil (3)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče, bread, salad', 'slot': 'lunch'})
+        self.meal = Meal.objects.get()
+        self.result_url = reverse('result', args=[self.meal.id])
+
+    def card_url(self, item):
+        return f'{self.result_url}#item-{item.id}'
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class AddItemTests(AnalyzedMealMixin, TestCase):
+    """Chunk 11: "Add something Zalak missed"."""
+
+    def add(self, name='coffee with milk', answer=None, error=None, meal=None):
+        url = reverse('add_item', args=[(meal or self.meal).id])
+        with patch('meals.services.ai._ask_model', return_value=answer or item_answer(),
+                   side_effect=error) as ask_model:
+            response = self.client.post(url, {'name': name})
+        return response, ask_model
+
+    def test_result_has_the_add_row(self):
+        page = self.client.get(self.result_url)
+        self.assertContains(page, f'action="{reverse("add_item", args=[self.meal.id])}"')
+        self.assertContains(page, 'placeholder="Add something Zalak missed"')
+        self.assertContains(page, 'js/add_item.js?v=')
+
+    def test_added_at_the_end(self):
+        response, ask_model = self.add()
+        coffee = self.meal.items.get(name='Coffee with milk')
+        self.assertRedirects(response, self.card_url(coffee), fetch_redirect_response=False)
+        self.assertEqual(coffee.position, 4)
+        self.assertEqual((coffee.kcal_min, coffee.kcal_max), (60, 90))
+        self.assertIn('The meal: Tavče gravče with bread and salad', ask_model.call_args.args[0])
+
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.ai_response['items'][4]['name'], 'Coffee with milk')
+        self.assertEqual(coffee.ai_estimate['grams'], 250)   # so Reset works on it too
+
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'Coffee with milk added')
+        self.assertContains(page, '60–90 kcal')
+
+    def test_positions_stay_apart_after_a_removal(self):
+        bread = self.meal.items.get(name='White bread')
+        self.client.post(reverse('delete_item', args=[self.meal.id, bread.id]))
+        self.add()
+        self.assertEqual(self.meal.items.get(name='Coffee with milk').position, 4)
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.ai_response['items'][1]['name'], 'White bread')   # still there for Undo
+
+    def test_failure_keeps_the_name(self):
+        response, ask_model = self.add(error=AnalysisError('down'))
+        self.assertRedirects(response, f'{self.result_url}#add-item', fetch_redirect_response=False)
+        self.assertEqual(self.meal.items.count(), 4)
+
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'value="coffee with milk"')
+        self.assertContains(page, 'Try again')
+        self.assertContains(page, 'role="alert"')
+        self.assertContains(page, 'estimate that just now')
+
+        again = self.client.get(self.result_url)   # shown once
+        self.assertNotContains(again, 'Try again')
+
+    def test_connection_failure_says_so(self):
+        self.add(error=AnalysisError('offline', kind='connection'))
+        self.assertContains(self.client.get(self.result_url), 'Connection lost.')
+
+    def test_no_food_shows_the_reason(self):
+        self.add(name='my shoe', answer={'status': 'no_food', 'no_food_reason': 'That is a shoe.', 'item': {}})
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'That is a shoe.')
+        self.assertContains(page, 'value="my shoe"')
+        self.assertEqual(self.meal.items.count(), 4)
+
+    def test_empty_name_is_ignored(self):
+        response, ask_model = self.add(name='   ')
+        self.assertRedirects(response, self.result_url, fetch_redirect_response=False)
+        ask_model.assert_not_called()
+
+    def test_meal_without_an_ai_answer(self):
+        # An admin-made meal: chicken at position 0 and no ai_response
+        meal = make_draft(self.user)
+        self.add(meal=meal)
+        coffee = meal.items.get(name='Coffee with milk')
+        self.assertEqual(coffee.position, 1)
+        meal.refresh_from_db()
+        self.assertIsNone(meal.ai_response['items'][0])        # the chicken has no AI answer
+        self.assertIsNone(meal.items.get(name='Chicken breast').ai_estimate)
+        self.assertEqual(coffee.ai_estimate['name'], 'Coffee with milk')
+
+    def test_logged_meal_can_get_items(self):
+        self.meal.status = 'logged'
+        self.meal.save()
+        self.add()
+        self.assertTrue(self.meal.items.filter(name='Coffee with milk').exists())
+
+    def test_another_users_meal_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        response, ask_model = self.add(meal=make_draft(other))
+        self.assertEqual(response.status_code, 404)
+        ask_model.assert_not_called()
+
+    def test_needs_a_post(self):
+        self.assertEqual(self.client.get(reverse('add_item', args=[self.meal.id])).status_code, 405)
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class ReEstimateTests(AnalyzedMealMixin, TestCase):
+    """Chunk 11: "Re-estimate with Zalak" on Edit item (bread: 2 slices, 60 g)."""
+
+    def setUp(self):
+        super().setUp()
+        self.bread = self.meal.items.get(name='White bread')
+        self.url = reverse('re_estimate_item', args=[self.meal.id, self.bread.id])
+
+    def re_estimate(self, answer=None, error=None, **data):
+        data = {'name': 'Rye bread', 'amount': '3', 'unit': 'slice', **data}
+        answer = answer or item_answer(name='Rye bread', amount=2, unit='slice', grams=105,
+                                       kcal_min=230, kcal_max=270, confidence='sure')
+        with patch('meals.services.ai._ask_model', return_value=answer, side_effect=error) as ask_model:
+            response = self.client.post(self.url, data)
+        return response, ask_model
+
+    def test_edit_item_has_the_button_next_to_save(self):
+        page = self.client.get(reverse('edit_item', args=[self.meal.id, self.bread.id])).content.decode()
+        actions = page[page.index('class="z-edit-actions"'):]
+        self.assertIn(f'formaction="{self.url}"', actions)
+        self.assertLess(actions.index('Re-estimate'), actions.index('Save changes'))   # Re-estimate | Save
+        self.assertNotIn('Delete item', actions[:actions.index('</form>')])            # Delete stays apart
+
+    def test_reset_has_an_icon(self):
+        page = self.client.get(reverse('edit_item', args=[self.meal.id, self.bread.id]))
+        self.assertContains(page, 'class="z-reset-btn" id="resetButton"')
+        self.assertContains(page, 'bi-arrow-counterclockwise')
+
+    def test_new_numbers_keep_the_users_portion(self):
+        response, ask_model = self.re_estimate()
+        self.assertRedirects(response, self.card_url(self.bread), fetch_redirect_response=False)
+        self.assertIn('Portion (fixed): 3 slice', ask_model.call_args.args[0])
+
+        self.bread.refresh_from_db()
+        self.assertEqual((self.bread.name, self.bread.amount, self.bread.unit), ('Rye bread', 3, 'slice'))
+        self.assertEqual(self.bread.grams, 105)                  # Zalak's grams for 3 slices
+        self.assertEqual((self.bread.kcal_min, self.bread.kcal_max), (230, 270))
+        self.assertEqual(self.bread.confidence, 'sure')
+        self.assertFalse(self.bread.edited_by_user)
+        self.assertContains(self.client.get(self.result_url), 'Rye bread re-estimated')
+
+    def test_reset_follows_the_new_estimate(self):
+        self.re_estimate()
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.ai_response['items'][1]['name'], 'Rye bread')
+        page = self.client.get(reverse('edit_item', args=[self.meal.id, self.bread.id]))
+        self.assertContains(page, '"ai": {"name": "Rye bread", "amount": 3.0, "unit": "slice"}')
+
+    def test_failure_keeps_what_was_typed(self):
+        response, ask_model = self.re_estimate(error=AnalysisError('offline', kind='connection'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'value="Rye bread"')
+        self.assertContains(response, 'Connection lost.')
+        # Save changes from this page still goes to Edit item, not to re-estimate
+        self.assertContains(response, f'action="{reverse("edit_item", args=[self.meal.id, self.bread.id])}"')
+        self.bread.refresh_from_db()
+        self.assertEqual((self.bread.name, self.bread.grams), ('White bread', 60))
+
+    def test_no_food_says_why(self):
+        response, ask_model = self.re_estimate(
+            answer={'status': 'no_food', 'no_food_reason': 'That is a shoe.', 'item': {}}, name='shoe')
+        self.assertContains(response, 'That is a shoe.')
+        self.bread.refresh_from_db()
+        self.assertEqual(self.bread.name, 'White bread')
+
+    def test_bad_form_doesnt_ask_zalak(self):
+        response, ask_model = self.re_estimate(amount='0')
+        self.assertContains(response, 'The amount must be more than 0.')
+        ask_model.assert_not_called()
+
+    def test_another_visitor_gets_404(self):
+        self.client.logout()
+        response, ask_model = self.re_estimate()
+        self.assertEqual(response.status_code, 404)
+        ask_model.assert_not_called()
+
+    def test_needs_a_post(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+
+class AnswerQuestionTests(AnalyzedMealMixin, TestCase):
+    """Chunk 11: A little / About that / A lot on the unsure oil (Zalak: 1 tbsp, 10 g, 20–60 kcal)."""
+
+    def setUp(self):
+        with override_settings(ZALAK_AI_FAKE=False):
+            super().setUp()
+        self.oil = self.meal.items.get(name='Cooking oil')
+        self.url = reverse('answer_question', args=[self.meal.id, self.oil.id])
+
+    def answer(self, value):
+        response = self.client.post(self.url, {'answer': value})
+        self.oil.refresh_from_db()
+        return response
+
+    def test_chips_show_on_the_unsure_item_only(self):
+        page = self.client.get(self.result_url)
+        self.assertContains(page, f'action="{self.url}"')
+        self.assertContains(page, 'name="answer" value="lot"', count=1)
+
+    def test_a_lot(self):
+        response = self.answer('lot')
+        self.assertRedirects(response, self.card_url(self.oil), fetch_redirect_response=False)
+        self.assertEqual((self.oil.amount, self.oil.unit, self.oil.grams), (Decimal('1.5'), 'tbsp', 15))
+        self.assertEqual((self.oil.kcal_min, self.oil.kcal_max), (30, 90))
+
+    def test_answered_question_goes_away(self):
+        self.answer('lot')
+        self.assertEqual(self.oil.confidence, 'likely')   # the user answered Zalak's question
+        self.assertTrue(self.oil.edited_by_user)
+        self.assertFalse(self.oil.can_ask)
+
+        page = self.client.get(self.result_url)
+        self.assertNotContains(page, 'name="answer"')          # no chips left
+        self.assertNotContains(page, 'Oil is hard to see')     # no reason box either
+        self.assertContains(page, '1½ tbsp · 15 g')            # no "about" any more: not unsure
+
+    def test_a_little(self):
+        self.answer('little')
+        self.assertEqual((self.oil.amount, self.oil.grams), (Decimal('0.5'), 5))
+
+    def test_a_second_answer_is_404(self):
+        self.answer('lot')
+        response = self.client.post(self.url, {'answer': 'little'})
+        self.assertEqual(response.status_code, 404)
+        self.oil.refresh_from_db()
+        self.assertEqual(self.oil.grams, 15)
+
+    def test_amount_can_still_change_on_edit_item(self):
+        self.answer('lot')
+        self.client.post(reverse('edit_item', args=[self.meal.id, self.oil.id]),
+                         {'name': 'Cooking oil', 'amount': '2', 'unit': 'tbsp'})
+        self.oil.refresh_from_db()
+        self.assertEqual(self.oil.grams, 20)   # Zalak's 10 g per tbsp
+
+    def test_odd_answer_changes_nothing(self):
+        self.answer('huge')
+        self.assertEqual((self.oil.grams, self.oil.edited_by_user, self.oil.confidence), (10, False, 'unsure'))
+
+    def test_item_without_a_question_is_404(self):
+        bread = self.meal.items.get(name='White bread')
+        response = self.client.post(reverse('answer_question', args=[self.meal.id, bread.id]), {'answer': 'lot'})
+        self.assertEqual(response.status_code, 404)
+
+    def test_needs_a_post(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)

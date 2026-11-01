@@ -180,18 +180,21 @@ class MealItem(models.Model):
   - Files: `views.py`, `signals.py`, `apps.py`, `templates/meals/_toast.html`, a temporary `home.html` list
   - Pattern: signals.py + `ready()`
   - Test: log a meal → the counter goes up once (also when logged from the admin); Undo works; after Just checking the photo is gone from `media/`.
-- [ ] **10. Edit item: amount** (29 Oct)
+- [x] **10. Edit item: amount** (29 Oct)
   - Work: MealItemForm with the name, a stepper + quick fractions, the unit picker (offcanvas-bottom with 4 tabs), the "≈ g" line, a live kcal/macro preview, and Save changes / Reset / Delete item.
   - Adapted from Figma (agreed 1 Nov): the stepper walks the fractions itself (¼ ½ ¾ 1 1½ 2 2½ 3, then whole numbers; measured units step evenly), no separate chips; no "How it was cooked" row (Could), no fibre/salt, no name suggestions; Delete works now (Undo in chunk 11) but not on the last item; logged meals' items can be edited too (reused in chunk 15). Same unit → scale by the item's own grams per unit; a new unit → the `units.py` table.
+  - Changed 2 Nov (after review, also adapted from Figma): no Details card / Unit row (the chip under the number opens the Unit sheet); Nutrition is always open (three tiles, no toggle); Reset is a tinted pill with an icon; the buttons are Re-estimate | Save changes in one row, with Delete item on its own below.
   - Files: `units.py`, `models.py`, `forms.py`, `views.py`, `urls.py`, `templates/meals/edit_item.html`, `_unit_sheet.html`, `_item_card.html`, `static/js/portion.js`, `zalak.css`
   - Pattern: ModelForm with `instance`
   - Test: chicken 150 g → 200 g, and protein updates live and on Result (T2, NFR7).
-- [ ] **11. Add / remove / re-estimate / inline question** (29 Oct)
+- [x] **11. Add / remove / re-estimate / inline question** (29 Oct)
   - Work: "Add something Zalak missed" and "Re-estimate" via `estimate_item`; remove with Undo; the A little / About that / A lot chips on unsure items.
   - Done early (1 Nov, with chunk 10): remove with Undo. Delete item keeps a copy of the item in the session; Undo in the toast recreates it with its numbers and position (no soft delete, so no `meal.items` filtering).
-  - Files: `views.py`, `services/ai.py`, `templates/meals/result.html`, `templates/meals/_item_card.html`
+  - Add item works on logged meals too (Meal detail reuses the item list in chunk 15). If `estimate_item` fails (decided 1 Nov): keep the typed name and show a calm message inline on Result, the button becomes "Try again". No typing calories by hand.
+  - Decided 1 Nov: "Re-estimate" is a button on Edit item (not in Figma); it keeps the user's amount and unit. `item.position` is the item's index in `ai_response['items']`, so Reset and the chips always find Zalak's estimate.
+  - Changed 2 Nov: Re-estimate sits next to Save changes (see chunk 10). An answered question disappears: the item becomes "likely" (an unsure item always shows its reason), and the amount can still be changed on Edit item. Replaces the 1 Nov "chip stays pressed".  - Files: `services/ai.py`, `models.py`, `views.py`, `urls.py`, `templates/meals/result.html`, `_item_card.html`, `edit_item.html`, `static/js/add_item.js`, `portion.js`, `zalak.css`
   - Pattern: POST + redirect
-  - Test: add "coffee with milk", remove the bread + Undo, tap "A lot" on the oil.
+  - Test: add "coffee with milk", remove the bread + Undo, tap "A lot" on the oil; with a wrong API key, Add shows the error with the name kept, and Retry works.
 
 ### Phase B: accounts, guest flow, Home, meal detail, Diary (30 Oct – 1 Nov)
 
@@ -211,10 +214,12 @@ class MealItem(models.Model):
   - Pattern: index grouped by specialty, `__date` lookups
   - Test: log 3 meals in different slots; switch days; check a new account's empty state.
 - [ ] **15. Meal detail: edit + delete with Undo** (31 Oct)
-  - Work: change the slot and time; edit items (reusing Edit item); soft delete + Undo toast.
+  - Work: change the slot and time; rename the meal title; add, replace or remove the photo; edit items (reusing Edit item); soft delete + Undo toast.
+  - Title (adaptation beyond Figma, decided 1 Nov): a small field in the same ModelForm as slot and time, saved with Save changes; an emptied title falls back to the AI's (`ai_response['title']`), so a meal is never untitled. The description line stays the AI's.
+  - Photo (adaptation beyond Figma, decided 1 Nov): add a photo to a typed meal, replace it, or remove it, without asking the AI again (the numbers stay). Reuses `shrink_photo` from `forms.py`; the old file is deleted from `media/` on replace and remove.
   - Files: `views.py`, `forms.py`, `templates/meals/meal_detail.html`
-  - Pattern: `has_delete_permission`, PRG
-  - Test: change the time, then delete + Undo (FR25).
+  - Pattern: `has_delete_permission`, PRG, ImageField + `request.FILES`
+  - Test: change the time, rename the title (shows on Meal detail and Home), add a photo to a typed meal, replace it (the old file is gone from `media/`), remove it, then delete + Undo (FR25).
 - [ ] **16. Simple Diary** (1 Nov)
   - Work: one page per day with meal photos, time, name and range, plus the day total; arrows and a date jump; meal → meal detail. Replaces the "Coming soon" page. No book animation.
   - Files: `views.py`, `templates/meals/diary.html`

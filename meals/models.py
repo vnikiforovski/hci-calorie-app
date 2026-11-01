@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
@@ -198,6 +200,25 @@ class MealItem(models.Model):
         if self.position < len(items):
             return items[self.position]
         return None
+
+    # The chips under an unsure item's question: value, label, how much of Zalak's portion
+    ANSWERS = [
+        ('little', 'A little', Decimal('0.5')),
+        ('about', 'About that', Decimal('1')),
+        ('lot', 'A lot', Decimal('1.5')),
+    ]
+
+    @property
+    def can_ask(self):
+        """Show the question chips: Zalak is unsure, asked something, and its portion is known."""
+        return self.confidence == 'unsure' and bool(self.question) and self.ai_estimate is not None
+
+    def answer_portion(self, factor):
+        """(amount, unit, grams) for a chip: always from Zalak's own portion, so taps don't add up."""
+        ai = self.ai_estimate
+        amount = (Decimal(str(ai['amount'])) * factor).quantize(Decimal('0.01'))
+        grams = max(round_to(Decimal(str(ai['grams'])) * factor, 5), 5)
+        return amount, ai['unit'], grams
 
     @property
     def known_portions(self):

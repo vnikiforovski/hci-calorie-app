@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from .forms import MealItemForm, PhotoMealForm, TextMealForm
 from .models import Meal, MealItem, Profile, slot_for_time
-from .services.ai import AnalysisError, analyze_photo, analyze_text
+from .services.ai import AnalysisError, analyze_photo, analyze_text, estimate_item
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
                     NO_PLURAL, UNIT_TABS, WEIGHT_UNITS, format_amount, stepper_label)
 
@@ -70,6 +70,8 @@ def result(request, meal_id):
         'slot': slot,
         'slot_icon': SLOT_ICONS[slot],
         'slot_options': SLOT_OPTIONS,
+        # Set by add_item when Zalak couldn't add the item: the name comes back with a message
+        'add_item_error': request.session.pop('add_item_error', None),
     }
     return render(request, 'meals/result.html', context)
 
@@ -84,36 +86,76 @@ def set_owner(request, meal):
         meal.session_key = request.session.session_key
 
 
+def item_fields(ai_item):
+    """The MealItem fields for one validated AI item. The AI gives totals for the portion;
+    we store them per 100 g (grams is the single source). Used by Analyze, Add and Re-estimate."""
+    grams = ai_item['grams']
+    return {
+        'name': ai_item['name'],
+        'amount': ai_item['amount'],
+        'unit': ai_item['unit'],
+        'grams': grams,
+        'kcal_min_100g': round(ai_item['kcal_min'] * 100 / grams),
+        'kcal_max_100g': round(ai_item['kcal_max'] * 100 / grams),
+        'protein_min_100g': round(ai_item['protein_min'] * 100 / grams, 1),
+        'protein_max_100g': round(ai_item['protein_max'] * 100 / grams, 1),
+        'carbs_min_100g': round(ai_item['carbs_min'] * 100 / grams, 1),
+        'carbs_max_100g': round(ai_item['carbs_max'] * 100 / grams, 1),
+        'fat_min_100g': round(ai_item['fat_min'] * 100 / grams, 1),
+        'fat_max_100g': round(ai_item['fat_max'] * 100 / grams, 1),
+        'confidence': ai_item['confidence'],
+        'reason': ai_item['reason'],
+        'question': ai_item['question'],
+    }
+
+
 def apply_analysis(meal, data):
-    """Save a validated AI answer on the draft: title, description and the items.
-    The AI gives totals for the portion; we store them per 100 g (grams is the single source)."""
+    """Save a validated AI answer on the draft: title, description and the items."""
     meal.title = data['title']
     meal.description = data['description']
     meal.ai_response = data
     meal.save()
 
     meal.items.all().delete()   # a Retry (chunk 6) replaces the old items
-    for position, item in enumerate(data['items']):
-        grams = item['grams']
-        MealItem.objects.create(
-            meal=meal,
-            position=position,
-            name=item['name'],
-            amount=item['amount'],
-            unit=item['unit'],
-            grams=grams,
-            kcal_min_100g=round(item['kcal_min'] * 100 / grams),
-            kcal_max_100g=round(item['kcal_max'] * 100 / grams),
-            protein_min_100g=round(item['protein_min'] * 100 / grams, 1),
-            protein_max_100g=round(item['protein_max'] * 100 / grams, 1),
-            carbs_min_100g=round(item['carbs_min'] * 100 / grams, 1),
-            carbs_max_100g=round(item['carbs_max'] * 100 / grams, 1),
-            fat_min_100g=round(item['fat_min'] * 100 / grams, 1),
-            fat_max_100g=round(item['fat_max'] * 100 / grams, 1),
-            confidence=item['confidence'],
-            reason=item['reason'],
-            question=item['question'],
-        )
+    for position, ai_item in enumerate(data['items']):
+        MealItem.objects.create(meal=meal, position=position, **item_fields(ai_item))
+
+
+def remember_ai_item(meal, position, ai_item):
+    """Keep Zalak's answer for an item in meal.ai_response['items'][position], where Reset and
+    the grams rule look for it (MealItem.ai_estimate). position is always the item's index there."""
+    answer = meal.ai_response if isinstance(meal.ai_response, dict) else {'status': 'ok'}
+    items = list(answer.get('items') or [])
+    while len(items) <= position:
+        items.append(None)   # a gap (e.g. items made in the admin) keeps the positions apart
+    items[position] = ai_item
+    answer['items'] = items
+    meal.ai_response = answer
+    meal.save(update_fields=['ai_response'])
+
+
+def next_position(meal):
+    """Where an added item goes: after every item and every AI answer, so nothing collides."""
+    last_item = max(meal.items.values_list('position', flat=True), default=-1)
+    ai_items = []
+    if isinstance(meal.ai_response, dict):
+        ai_items = meal.ai_response.get('items') or []
+    return max(last_item + 1, len(ai_items))
+
+
+def item_url(meal, item):
+    """Result, scrolled to one item's card (its id="item-<id>")."""
+    return reverse('result', args=[meal.id]) + f'#item-{item.id}'
+
+
+NO_FOOD_ITEM = "Zalak couldn't find a food or drink in that."
+
+
+def ai_problem(error):
+    """The calm words for an AI failure on Add or Re-estimate."""
+    if error.kind == 'connection':
+        return 'Connection lost. Check your internet and try again.'
+    return "Zalak couldn't estimate that just now. Try again."
 
 
 def analyze_meal(meal):
@@ -298,14 +340,19 @@ def edit_item(request, meal_id, item_id):
             item.edited_by_user = True
             item.save()
             request.session['toast'] = {'text': 'Changes saved'}
-            return redirect('result', meal_id=meal.id)
+            return redirect(item_url(meal, item))
     else:
         form = MealItemForm(instance=item)
+    return render_edit_item(request, meal, item, form, data)
 
+
+def render_edit_item(request, meal, item, form, data, problem=''):
+    """The Edit item page; also shown again by re_estimate_item when Zalak couldn't answer."""
     context = {
         'meal': meal,
         'item': item,
         'form': form,
+        'problem': problem,
         'portion_data': data,
         'unit_tabs': UNIT_TABS,
         'bowl_sizes': BOWL_SIZES,
@@ -313,7 +360,6 @@ def edit_item(request, meal_id, item_id):
         # The first paint, before portion.js takes over (it uses the same numbers)
         'amount_text': format_amount(data['saved']['amount']),
         'unit_text': stepper_label(item.unit, item.amount),
-        'unit_row_text': stepper_label(item.unit, 1),
     }
     return render(request, 'meals/edit_item.html', context)
 
@@ -359,6 +405,86 @@ def undo_remove_item(request, meal_id):
         del request.session['removed_item']
         MealItem.objects.create(meal=meal, **removed['fields'])
     return redirect('result', meal_id=meal.id)
+
+
+@require_POST
+def add_item(request, meal_id):
+    """"Add something Zalak missed" on Result (FR20): one small AI call for the typed item.
+    If Zalak can't answer, the name comes back on Result with a calm message and Try again."""
+    meal = get_own_meal(request, meal_id)
+    name = request.POST.get('name', '').strip()[:100]
+    if not name:
+        return redirect('result', meal_id=meal.id)
+
+    try:
+        answer = estimate_item(name, meal_title=meal.title)
+    except AnalysisError as error:
+        request.session['add_item_error'] = {'name': name, 'message': ai_problem(error)}
+        return redirect(reverse('result', args=[meal.id]) + '#add-item')
+
+    if answer['status'] == 'no_food':
+        message = answer['no_food_reason'] or NO_FOOD_ITEM
+        request.session['add_item_error'] = {'name': name, 'message': message}
+        return redirect(reverse('result', args=[meal.id]) + '#add-item')
+
+    position = next_position(meal)
+    item = MealItem.objects.create(meal=meal, position=position, **item_fields(answer['item']))
+    remember_ai_item(meal, position, answer['item'])
+    request.session['toast'] = {'text': f'{item.name} added'}
+    return redirect(item_url(meal, item))
+
+
+@require_POST
+def re_estimate_item(request, meal_id, item_id):
+    """"Re-estimate with Zalak" on Edit item: new numbers for the name, amount and unit on the
+    screen (e.g. after a rename). The user's amount and unit stay; Zalak gives the grams for them.
+    Zalak's answer replaces its old one, so Reset afterwards means this estimate."""
+    meal = get_own_meal(request, meal_id)
+    item = get_object_or_404(MealItem, id=item_id, meal=meal)
+    data = portion_data(item)
+    form = MealItemForm(request.POST, instance=item)
+    if not form.is_valid():
+        return render_edit_item(request, meal, item, form, data)
+
+    amount, unit = form.cleaned_data['amount'], form.cleaned_data['unit']
+    # If Zalak can't answer, nothing is saved: the page comes back with what the user typed
+    try:
+        answer = estimate_item(form.cleaned_data['name'], amount, unit, meal.title)
+    except AnalysisError as error:
+        return render_edit_item(request, meal, item, form, data, problem=ai_problem(error))
+    if answer['status'] == 'no_food':
+        problem = answer['no_food_reason'] or NO_FOOD_ITEM
+        return render_edit_item(request, meal, item, form, data, problem=problem)
+
+    ai_item = dict(answer['item'], amount=float(amount), unit=unit)   # the user's portion stays
+    fields = item_fields(ai_item)
+    for name, value in fields.items():
+        setattr(item, name, value)
+    item.amount = amount
+    item.edited_by_user = False   # the numbers are Zalak's again
+    item.save()
+    remember_ai_item(meal, item.position, ai_item)
+    request.session['toast'] = {'text': f'{item.name} re-estimated'}
+    return redirect(item_url(meal, item))
+
+
+@require_POST
+def answer_question(request, meal_id, item_id):
+    """A little / About that / A lot under an unsure item's question: Zalak's portion
+    ×0.5, ×1 or ×1.5, from Zalak's own portion. The user answered, so the item becomes "likely"
+    and the question goes (an unsure item always shows its reason). Edit item can still change it."""
+    meal = get_own_meal(request, meal_id)
+    item = get_object_or_404(MealItem, id=item_id, meal=meal)
+    if not item.can_ask:
+        raise Http404
+    factors = {value: factor for value, label, factor in MealItem.ANSWERS}
+    factor = factors.get(request.POST.get('answer'))
+    if factor is not None:
+        item.amount, item.unit, item.grams = item.answer_portion(factor)
+        item.confidence = 'likely'
+        item.edited_by_user = True
+        item.save()
+    return redirect(item_url(meal, item))
 
 
 @require_POST
