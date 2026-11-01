@@ -83,6 +83,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'meals.context_processors.static_version',
+                'meals.context_processors.toast',
             ],
         },
     },
@@ -144,7 +145,7 @@ STATICFILES_DIRS = [
 
 # Added as ?v= to our own CSS and JS links (meals/context_processors.py).
 # Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
-STATIC_VERSION = '7'
+STATIC_VERSION = '8'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

@@ -10,7 +10,13 @@ from .services.ai import AnalysisError, analyze_photo, analyze_text
 
 
 def home(request):
-    return render(request, 'base.html')
+    """Temporary Home (chunk 9): a plain list of the logged meals. Chunk 14 builds the real one."""
+    meals = []
+    if request.user.is_authenticated:
+        meals = (Meal.objects
+                 .filter(user=request.user, status='logged', deleted_at__isnull=True)
+                 .prefetch_related('items')[:20])
+    return render(request, 'meals/home.html', {'meals': meals})
 
 
 def get_own_meal(request, meal_id):
@@ -149,8 +155,7 @@ def text_input(request, meal_id=None):
             if meal.photo:
                 # "Describe it instead" on a photo draft: it becomes a text meal, still one draft
                 meal.photo.delete(save=False)
-            if not meal.slot:
-                meal.slot = slot_for_time(timezone.now())
+            # An empty slot is filled from the time by the pre_save signal (signals.py)
             if meal_id is None:
                 set_owner(request, meal)
             # The draft is saved first, so the input is kept even if the AI fails (FR29)
@@ -183,8 +188,7 @@ def photo_input(request, meal_id=None):
         if form.is_valid():
             meal = form.save(commit=False)
             meal.input_method = 'photo'
-            if not meal.slot:
-                meal.slot = slot_for_time(timezone.now())
+            # An empty slot is filled from the time by the pre_save signal (signals.py)
             if meal_id is None:
                 set_owner(request, meal)
             # Saved first, so the photo and note are kept even if the AI fails (FR29)
@@ -250,6 +254,48 @@ def analysis_error(request, meal_id):
         'steps': steps_for(meal),
     }
     return render(request, 'meals/error.html', context)
+
+
+@require_POST
+def log_meal(request, meal_id):
+    """Log on Result: the draft becomes a logged meal in the chosen slot (FR23).
+    The pre_save signal counts it in Profile.meals_logged."""
+    if not request.user.is_authenticated:
+        raise Http404   # until chunk 13, where a guest's Log opens "Keep this meal?"
+    meal = get_own_draft(request, meal_id)
+
+    slot = request.POST.get('slot')
+    if slot in SLOT_ICONS:
+        meal.slot = slot
+    meal.status = 'logged'
+    meal.save()
+
+    # Shown once on the next page by the toast context processor
+    request.session['toast'] = {
+        'text': f'Logged to {meal.slot}',
+        'undo_url': reverse('undo_log', args=[meal.id]),
+    }
+    return redirect('home')
+
+
+@require_POST
+def undo_log(request, meal_id):
+    """Undo in the "Logged to lunch" toast: the meal is a draft again, back on its Result."""
+    meal = get_own_meal(request, meal_id)
+    if meal.status != 'logged':
+        raise Http404
+    meal.status = 'draft'
+    meal.save()   # the signal takes the meal off the counter again
+    return redirect('result', meal_id=meal.id)
+
+
+@require_POST
+def just_checking(request, meal_id):
+    """Just checking on Result: the draft is thrown away (FR34). Nothing was logged.
+    The post_delete signal removes the photo file."""
+    meal = get_own_draft(request, meal_id)
+    meal.delete()
+    return redirect('home')
 
 
 def no_food(request, meal_id):

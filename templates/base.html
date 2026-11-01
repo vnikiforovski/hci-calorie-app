@@ -98,7 +98,10 @@
     {% endblock %}
 {% endif %}
 
+{% include 'meals/_toast.html' %}
+
 <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+{% if toast %}<script src="{% static 'js/toast.js' %}?v={{ STATIC_VERSION }}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 {% endwith %}

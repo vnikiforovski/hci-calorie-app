@@ -1,4 +1,5 @@
 import copy
+from datetime import datetime
 import shutil
 import tempfile
 from io import BytesIO
@@ -7,12 +8,15 @@ from unittest.mock import patch
 import anthropic
 import httpx2
 
+from django.contrib import admin
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from PIL import Image
 from django.urls import reverse
+from django.utils import timezone
 
+from .admin import MealAdmin
 from .models import Meal, Profile
 from .services.ai import FAKE_RESPONSE, AnalysisError, analyze_text, validate
 from zalak.settings import env_list
@@ -474,3 +478,223 @@ class EnvListTests(TestCase):
     def test_no_duplicates(self):
         with patch.dict('os.environ', {'HOSTS': 'localhost,127.0.0.1'}):
             self.assertEqual(env_list('HOSTS', ['localhost', '127.0.0.1']), ['localhost', '127.0.0.1'])
+
+
+def make_draft(user=None, session_key='', **fields):
+    """A draft with one item (chicken, 150 g), as an analysis would leave it."""
+    meal = Meal.objects.create(user=user, session_key=session_key, input_method='text',
+                               text='chicken', title='Chicken', **fields)
+    meal.items.create(name='Chicken breast', unit='g', grams=150,
+                      kcal_min_100g=150, kcal_max_100g=170,
+                      protein_min_100g=28, protein_max_100g=31,
+                      carbs_min_100g=0, carbs_max_100g=0,
+                      fat_min_100g=3, fat_max_100g=4, confidence='sure')
+    return meal
+
+
+def use_temp_media(test):
+    """Point MEDIA_ROOT to a temporary folder for one test, so photos don't land in media/."""
+    media = tempfile.mkdtemp()
+    test.addCleanup(shutil.rmtree, media, ignore_errors=True)
+    settings_override = override_settings(MEDIA_ROOT=media)
+    settings_override.enable()
+    test.addCleanup(settings_override.disable)
+
+
+class SignalTests(TestCase):
+    """Chunk 9: the slot from the time, the meals_logged counter and the photo cleanup."""
+
+    def setUp(self):
+        use_temp_media(self)
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+
+    def counter(self):
+        return Profile.objects.get(user=self.user).meals_logged
+
+    def test_empty_slot_is_filled_from_the_time(self):
+        eaten_at = timezone.make_aware(datetime(2026, 11, 1, 13, 0))
+        meal = make_draft(self.user, eaten_at=eaten_at)
+        self.assertEqual(meal.slot, 'lunch')
+
+    def test_chosen_slot_is_kept(self):
+        eaten_at = timezone.make_aware(datetime(2026, 11, 1, 13, 0))
+        meal = make_draft(self.user, eaten_at=eaten_at, slot='snack')
+        self.assertEqual(meal.slot, 'snack')
+
+    def test_logging_counts_once(self):
+        meal = make_draft(self.user)
+        meal.status = 'logged'
+        meal.save()
+        self.assertEqual(self.counter(), 1)
+
+        meal.title = 'Grilled chicken'   # saving a logged meal again doesn't count
+        meal.save()
+        self.assertEqual(self.counter(), 1)
+
+    def test_a_draft_does_not_count(self):
+        make_draft(self.user).save()
+        self.assertFalse(Profile.objects.filter(user=self.user, meals_logged__gt=0).exists())
+
+    def test_undo_takes_it_off_again(self):
+        meal = make_draft(self.user)
+        for status in ['logged', 'draft', 'logged']:   # log, undo, log
+            meal.status = status
+            meal.save()
+        self.assertEqual(self.counter(), 1)
+
+    def test_logging_from_the_admin_counts(self):
+        superuser = User.objects.create_superuser('admin', password='a-long-password')
+        request = RequestFactory().post('/admin/')
+        request.user = superuser
+
+        meal = make_draft(self.user)
+        meal.status = 'logged'
+        MealAdmin(Meal, admin.site).save_model(request, meal, form=None, change=True)
+        self.assertEqual(self.counter(), 1)
+
+    def test_a_guest_meal_has_no_counter(self):
+        meal = make_draft(session_key='guest-session')
+        meal.status = 'logged'
+        meal.save()
+        self.assertFalse(Profile.objects.exists())
+
+    def test_deleting_a_meal_removes_its_photo(self):
+        meal = make_draft(self.user, photo=jpeg())
+        path = meal.photo.name
+        self.assertTrue(meal.photo.storage.exists(path))
+        meal.delete()
+        self.assertFalse(meal.photo.storage.exists(path))
+
+    def test_bulk_delete_removes_photos_too(self):
+        # The admin's "Delete selected meals" deletes a queryset
+        meal = make_draft(self.user, photo=jpeg())
+        path = meal.photo.name
+        Meal.objects.filter(pk=meal.pk).delete()
+        self.assertFalse(meal.photo.storage.exists(path))
+
+
+class LogTests(TestCase):
+    """Chunk 9: Log, the toast with Undo, and Just checking."""
+
+    def setUp(self):
+        use_temp_media(self)
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, slot='lunch')
+
+    def log(self, **data):
+        return self.client.post(reverse('log_meal', args=[self.meal.id]), data)
+
+    def test_result_has_working_buttons(self):
+        page = self.client.get(reverse('result', args=[self.meal.id]))
+        self.assertContains(page, f'action="{reverse("log_meal", args=[self.meal.id])}"')
+        self.assertContains(page, f'action="{reverse("just_checking", args=[self.meal.id])}"')
+        self.assertContains(page, 'form="logForm"')
+        self.assertContains(page, 'id="logButton">')   # active, not disabled
+
+    def test_log_saves_and_goes_home(self):
+        response = self.log(slot='lunch')
+        self.assertRedirects(response, reverse('home'))
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.status, 'logged')
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)
+
+    def test_log_uses_the_chosen_slot(self):
+        self.log(slot='dinner')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.slot, 'dinner')
+
+    def test_an_odd_slot_keeps_the_old_one(self):
+        self.log(slot='brunch')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.slot, 'lunch')
+
+    def test_toast_shows_once_on_home(self):
+        home = self.client.get(self.log(slot='dinner').url)
+        self.assertContains(home, 'Logged to dinner')
+        self.assertContains(home, reverse('undo_log', args=[self.meal.id]))
+        self.assertContains(home, 'js/toast.js?v=')
+        self.assertContains(home, 'Chicken')   # the meal is in the temporary list
+
+        again = self.client.get(reverse('home'))
+        self.assertNotContains(again, 'Logged to dinner')
+        self.assertNotContains(again, 'js/toast.js')
+
+    def test_undo_makes_it_a_draft_again(self):
+        self.log(slot='lunch')
+        response = self.client.post(reverse('undo_log', args=[self.meal.id]))
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.status, 'draft')
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 0)
+
+    def test_undo_of_a_draft_is_404(self):
+        response = self.client.post(reverse('undo_log', args=[self.meal.id]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_logging_twice_is_404(self):
+        self.log(slot='lunch')
+        self.assertEqual(self.log(slot='lunch').status_code, 404)
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)
+
+    def test_logged_meal_result_has_no_log_button(self):
+        self.log(slot='lunch')
+        page = self.client.get(reverse('result', args=[self.meal.id]))
+        self.assertContains(page, 'Back to Home')
+        self.assertNotContains(page, reverse('log_meal', args=[self.meal.id]))
+
+    def test_only_posts_change_anything(self):
+        for name in ['log_meal', 'undo_log', 'just_checking']:
+            with self.subTest(name):
+                response = self.client.get(reverse(name, args=[self.meal.id]))
+                self.assertEqual(response.status_code, 405)
+
+    def test_another_users_meal_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        theirs = make_draft(other)
+        for name in ['log_meal', 'just_checking']:
+            with self.subTest(name):
+                response = self.client.post(reverse(name, args=[theirs.id]))
+                self.assertEqual(response.status_code, 404)
+        self.assertTrue(Meal.objects.filter(pk=theirs.pk, status='draft').exists())
+
+    def test_just_checking_deletes_the_draft_and_photo(self):
+        meal = make_draft(self.user, photo=jpeg())
+        path = meal.photo.name
+        response = self.client.post(reverse('just_checking', args=[meal.id]))
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(Meal.objects.filter(pk=meal.pk).exists())
+        self.assertFalse(meal.photo.storage.exists(path))
+
+    def test_just_checking_a_logged_meal_is_404(self):
+        self.log(slot='lunch')
+        response = self.client.post(reverse('just_checking', args=[self.meal.id]))
+        self.assertEqual(response.status_code, 404)
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class GuestLogTests(TestCase):
+    """Chunk 9: a guest can use Just checking; Log waits for the guest flow (chunk 13)."""
+
+    def setUp(self):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče', 'slot': 'lunch'})
+        self.meal = Meal.objects.get()
+
+    def test_log_is_inactive_for_a_guest(self):
+        page = self.client.get(reverse('result', args=[self.meal.id]))
+        self.assertContains(page, 'id="logButton" disabled')
+        response = self.client.post(reverse('log_meal', args=[self.meal.id]), {'slot': 'lunch'})
+        self.assertEqual(response.status_code, 404)
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.status, 'draft')
+
+    def test_guest_just_checking(self):
+        response = self.client.post(reverse('just_checking', args=[self.meal.id]))
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(Meal.objects.exists())
+
+    def test_another_guest_cannot_discard_it(self):
+        self.client.cookies.clear()
+        response = self.client.post(reverse('just_checking', args=[self.meal.id]))
+        self.assertEqual(response.status_code, 404)

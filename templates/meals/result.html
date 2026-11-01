@@ -29,9 +29,9 @@
     </section>
 
     <div class="z-result">
-        {# Slot dropdown: the hidden input is what chunk 9's Log form will submit #}
+        {# Slot dropdown: the hidden input belongs to the Log form below (form="logForm") #}
         <div class="dropdown z-slot">
-            <input type="hidden" name="slot" id="slotInput" value="{{ slot }}">
+            <input type="hidden" name="slot" id="slotInput" value="{{ slot }}" form="logForm">
             <button type="button" class="z-slot-pill" data-bs-toggle="dropdown" aria-expanded="false">
                 <i id="slotIcon" class="bi {{ slot_icon }}" aria-hidden="true"></i>
                 <span class="visually-hidden">Meal slot:</span>
@@ -89,12 +89,29 @@
         {% endfor %}
     </div>
 
-    {# Log and Just checking start working in chunk 9 #}
     <div class="z-actions">
-        <div class="z-actions-buttons">
-            <button type="button" class="btn btn-outline-secondary btn-lg" disabled>Just checking</button>
-            <button type="button" class="btn btn-primary btn-lg" disabled>Log to <span id="logSlotLabel">{{ slot }}</span></button>
-        </div>
+        {% if meal.status == 'draft' %}
+            <div class="z-actions-buttons">
+                {# Just checking throws the draft away; nothing is saved (FR34) #}
+                <form method="post" action="{% url 'just_checking' meal.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-secondary btn-lg w-100">Just checking</button>
+                </form>
+                {# Log saves it to the slot picked above (FR23) #}
+                <form method="post" action="{% url 'log_meal' meal.id %}" id="logForm">
+                    {% csrf_token %}
+                    {# A guest's Log opens "Keep this meal?" in chunk 13; until then it is inactive #}
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="logButton"{% if not user.is_authenticated %} disabled{% endif %}>
+                        Log to <span id="logSlotLabel">{{ slot }}</span>
+                    </button>
+                </form>
+            </div>
+        {% else %}
+            {# A logged meal (e.g. the browser's Back after Log): editing it comes with meal detail (chunk 15) #}
+            <div class="z-actions-buttons z-actions-one">
+                <a class="btn btn-outline-secondary btn-lg" href="{% url 'home' %}">Back to Home</a>
+            </div>
+        {% endif %}
         <p class="z-caption text-body-secondary text-center mb-0">Estimate, not medical advice</p>
     </div>
 {% endblock %}

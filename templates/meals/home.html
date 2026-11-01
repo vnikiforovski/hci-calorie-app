@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Home{% endblock %}
+
+{# Temporary Home (chunk 9), so a logged meal can be seen. Chunk 14 builds the real Home. #}
+{% block content %}
+    <h1>Home</h1>
+
+    {% if user.is_authenticated %}
+        {% if meals %}
+            <ul class="list-unstyled">
+                {% for meal in meals %}
+                    <li class="card mb-2">
+                        <a class="card-body d-flex justify-content-between align-items-center gap-3 text-reset text-decoration-none"
+                           href="{% url 'result' meal.id %}">
+                            <span>
+                                <span class="fw-semibold">{{ meal.title|default:'Meal' }}</span><br>
+                                <span class="z-small text-body-secondary">
+                                    {{ meal.get_slot_display }} · {{ meal.eaten_at|date:'D j M, H:i' }}
+                                </span>
+                            </span>
+                            <span class="z-tabular text-nowrap">{{ meal.kcal_min }}–{{ meal.kcal_max }} kcal</span>
+                        </a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="text-body-secondary">No meals logged yet. Tap + to add one.</p>
+        {% endif %}
+    {% else %}
+        {# Guests have no bottom bar, so the way back into the checker is here (Welcome comes in chunk 12) #}
+        <p class="text-body-secondary">Check a meal without an account.</p>
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-primary btn-lg" href="{% url 'text_input' %}">
+                <i class="bi bi-chat-text" aria-hidden="true"></i> Text and voice
+            </a>
+            <a class="btn btn-outline-secondary btn-lg" href="{% url 'photo_input' %}">
+                <i class="bi bi-camera" aria-hidden="true"></i> Photo
+            </a>
+        </div>
+    {% endif %}
+{% endblock %}

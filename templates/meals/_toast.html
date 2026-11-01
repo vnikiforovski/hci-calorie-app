@@ -1,0 +1,15 @@
+{# Toast (Figma "Home · Logged"): set by a view in request.session['toast'], shown once. #}
+{# role="status" lets screen readers announce it. toast.js closes it: 5 s with Undo, 2.5 s without. #}
+{% if toast %}
+    <div class="z-toast" id="toast" role="status" {% if toast.undo_url %}data-undo{% endif %}>
+        <i class="bi bi-check-circle z-toast-icon" aria-hidden="true"></i>
+        <span class="z-toast-text">{{ toast.text }}</span>
+        {% if toast.undo_url %}
+            {# Undo changes data, so it is a POST form, not a link #}
+            <form method="post" action="{{ toast.undo_url }}">
+                {% csrf_token %}
+                <button type="submit" class="z-toast-action">Undo</button>
+            </form>
+        {% endif %}
+    </div>
+{% endif %}
