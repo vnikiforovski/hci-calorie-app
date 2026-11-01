@@ -709,15 +709,248 @@ h3 { font-size: 1rem; }
 button.z-chip { cursor: pointer; }
 button.z-chip:hover { background: var(--z-tint); }
 
-/* Calm notice (AI failure, no food): butter box, never red */
-.z-notice {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    border-radius: 12px;
-    background: var(--z-butter);
-}
-
-/* Room for the fixed action bar; a bar with one button */
+/* Room for the fixed action bar; a bar with one button (or buttons stacked) */
 .z-with-actions { padding-bottom: 7rem; }
 .z-actions-one { grid-template-columns: 1fr; }
+
+/* ---------- Analyzing overlay (chunk 6) ---------- */
+
+/* Covers the page on phones; on desktop the content stays a centered column */
+.z-analyzing {
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 1rem calc(1.5rem + env(safe-area-inset-bottom));
+    background: var(--z-bg);
+}
+.z-analyzing[hidden] { display: none; }
+.z-no-scroll { overflow: hidden; }
+
+.z-analyzing-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+}
+.z-analyzing-body { width: 100%; margin: auto 0; }   /* vertically centered, Cancel at the bottom */
+.z-analyzing-title { font-size: 1.5rem; margin-bottom: 0.25rem; }
+.z-analyzing-cancel { min-width: 160px; }
+
+/* Figma "Cookie (bites = progress)": the cookie (inline SVG in _analyzing.html) loses one bite
+   per step. Bites are real holes cut by an SVG mask, so they work on any background.
+   analyzing.js sets data-stage = 1, 2, 3 on the overlay; nothing moves between bites. */
+.z-cookie {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    margin: 0 auto 2.5rem;
+}
+.z-cookie-svg {
+    display: block;
+    overflow: visible;
+    transform-origin: 50% 100%;   /* squash towards the "table" */
+}
+
+/* A bite (in the mask and its rim) is hidden until its stage, then snaps in */
+.z-bite {
+    display: none;
+    transform-box: fill-box;
+    transform-origin: center;
+}
+.z-analyzing[data-stage] .z-bite-1,
+.z-analyzing[data-stage="2"] .z-bite-a,
+.z-analyzing[data-stage="3"] .z-bite-a,
+.z-analyzing[data-stage="3"] .z-bite-b {
+    display: inline;
+    animation: z-snap 0.16s ease-out 0.08s both;   /* lands at the bottom of the chomp */
+}
+@keyframes z-snap {
+    0% { transform: scale(0); }
+    70% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+/* Chomp: on each new stage the cookie dips and squashes, then springs back. One animation name
+   per stage (same movement), because a new name is what makes CSS play it again. */
+.z-analyzing[data-stage="1"] .z-cookie-svg { animation: z-chomp-1 0.25s ease-out; }
+.z-analyzing[data-stage="2"] .z-cookie-svg { animation: z-chomp-2 0.25s ease-out; }
+.z-analyzing[data-stage="3"] .z-cookie-svg { animation: z-chomp-3 0.25s ease-out; }
+@keyframes z-chomp-1 { 35% { transform: translateY(4px) scale(1.03, 0.94); } }
+@keyframes z-chomp-2 { 35% { transform: translateY(4px) scale(1.03, 0.94); } }
+@keyframes z-chomp-3 { 35% { transform: translateY(4px) scale(1.03, 0.94); } }
+
+/* Crumbs: each is placed where it lands, starts at its bite (--fx, --fy) and falls in a
+   small arc. Two per bite stay on Figma's crumb spots; "fade" ones vanish on the way. */
+.z-crumb {
+    position: absolute;
+    display: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #E9B66A;   /* caramel, the cookie color */
+}
+.z-crumb-cocoa { background: #5A3A24; }   /* the chocolate chips */
+.z-crumb-small { width: 3px; height: 3px; }
+
+.z-analyzing[data-stage] .z-crumb-1,
+.z-analyzing[data-stage="2"] .z-crumb-2,
+.z-analyzing[data-stage="3"] .z-crumb-2,
+.z-analyzing[data-stage="3"] .z-crumb-3 {
+    display: block;
+    animation: z-fall 0.6s ease-in 0.1s both;
+}
+.z-analyzing[data-stage] .z-crumb-fade { animation-name: z-fall-fade; }
+
+@keyframes z-fall {
+    0% { opacity: 0; transform: translate(var(--fx), var(--fy)); }
+    10% { opacity: 1; }
+    35% { transform: translate(calc(var(--fx) * 0.6), calc(var(--fy) * 0.8 - 8px)); }   /* up and out */
+    100% { opacity: 1; transform: translate(0, 0); }
+}
+@keyframes z-fall-fade {
+    0% { opacity: 0; transform: translate(var(--fx), var(--fy)); }
+    10% { opacity: 1; }
+    35% { transform: translate(calc(var(--fx) * 0.6), calc(var(--fy) * 0.8 - 8px)); }
+    100% { opacity: 0; transform: translate(0, 0); }
+}
+
+/* Steps: icon + word. Waiting = empty circle, now = turning dashed caramel ring, done = ink check */
+.z-steps {
+    gap: 0.25rem;
+    margin: 1.5rem 0 1.25rem;
+    padding: 0.875rem 1.25rem;
+    list-style: none;
+    text-align: left;
+}
+.z-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 36px;
+    color: var(--z-muted);
+}
+.z-step-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--z-line);
+    border-radius: 50%;
+    color: transparent;
+    font-size: 0.875rem;
+}
+.z-step.is-now { color: var(--z-ink); font-weight: 600; }
+.z-step.is-now .z-step-icon {
+    border: 2px dashed var(--z-accent);
+    animation: z-turn 3s linear infinite;
+}
+.z-step.is-done { color: var(--z-ink); }
+.z-step.is-done .z-step-icon {
+    border-color: var(--z-ink);
+    background: var(--z-ink);
+    color: var(--z-card);
+}
+@keyframes z-turn { to { transform: rotate(360deg); } }
+
+.z-progress {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--z-tint);
+}
+.z-progress-bar {
+    width: 0;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--z-accent);
+    transition: width 0.5s ease-out;   /* keeps up with a step every 0.6 s */
+}
+
+@media (prefers-reduced-motion: reduce) {
+    /* Bites and the crumbs that stay simply appear; the fading crumbs are left out */
+    .z-analyzing[data-stage] .z-bite,
+    .z-analyzing[data-stage] .z-crumb,
+    .z-analyzing[data-stage] .z-cookie-svg,
+    .z-step.is-now .z-step-icon { animation: none; }
+    .z-analyzing[data-stage] .z-crumb-fade { display: none; }
+    .z-progress-bar { transition: none; }
+}
+
+/* ---------- Error and No food pages (chunk 6) ---------- */
+
+/* Calm tone (docs/06): ink text, an icon, soft caramel tint, never red */
+.z-state { text-align: center; }
+.z-state-top { display: flex; justify-content: flex-end; }
+.z-state h1 { margin: 1.75rem 0 0.75rem; }
+.z-state-text {
+    max-width: 30rem;
+    margin: 0 auto 1rem;
+    color: var(--z-muted);
+}
+.z-icon-btn-tint { background: var(--z-tint); }
+
+.z-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50rem;
+    background: var(--z-tint);
+    color: var(--z-ink);
+    font-weight: 600;
+}
+
+/* The kept input as a slightly tilted polaroid, with a chip on its bottom edge */
+.z-input-card {
+    position: relative;
+    width: 200px;
+    margin: 0.5rem auto 1rem;
+}
+.z-input-card-paper {
+    padding: 10px 10px 28px;
+    border-radius: 6px;
+    background: var(--z-card);
+    box-shadow: 0 6px 18px rgba(30, 58, 48, 0.12);
+    transform: rotate(-3deg);
+}
+.z-input-card-paper img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 4px;
+}
+.z-input-card-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    min-height: 150px;
+    margin: 0;
+    padding: 1rem;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    border-radius: 4px;
+    background: var(--z-butter);
+    font-family: var(--z-font-heading);
+    text-align: left;
+}
+.z-input-chip {
+    position: absolute;
+    left: 50%;
+    bottom: -14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.875rem;
+    border-radius: 50rem;
+    background: var(--z-card);
+    box-shadow: 0 2px 8px rgba(30, 58, 48, 0.15);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}

@@ -1,0 +1,86 @@
+{# Analyzing overlay (docs/05, Figma "Analyzing 1-3 of 3"). Hidden until analyzing.js shows it  #}
+{# the moment a form[data-analyzing] is sent. "steps" comes from the view (TEXT_STEPS).          #}
+<div class="z-analyzing" id="analyzing" role="dialog" aria-modal="true" aria-labelledby="analyzingTitle" hidden>
+    <div class="z-analyzing-inner">
+        <div class="z-analyzing-body">
+            {# Figma "Cookie (bites = progress)": every step takes one more bite and drops crumbs.  #}
+            {# Drawn as SVG on a 140 px grid. Each bite is a real hole (a mask), shaped like a      #}
+            {# human bite: a jaw curve with tooth notches, taken from the edge, with a darker rim.  #}
+            {# Bite 1 sits where the logo's bite is; A on the top edge, B on the right edge.         #}
+            <div class="z-cookie" aria-hidden="true">
+                <svg class="z-cookie-svg" viewBox="0 0 140 140" width="140" height="140">
+                    <defs>
+                        {# One bite: the jaw circle (r 20) and 6 tooth notches along its inner edge #}
+                        <symbol id="zBite" overflow="visible">
+                            <circle r="20"/>
+                            <circle cx="12.3" cy="15.8" r="3.0"/>
+                            <circle cx="8.5" cy="18.1" r="3.6"/>
+                            <circle cx="3.8" cy="19.6" r="4.2"/>
+                            <circle cx="-1.4" cy="20" r="4.3"/>
+                            <circle cx="-6.2" cy="19" r="3.7"/>
+                            <circle cx="-11.2" cy="16.6" r="3.1"/>
+                        </symbol>
+                        {# White keeps the cookie, black cuts it away #}
+                        <mask id="zCookieBites" maskUnits="userSpaceOnUse" x="0" y="0" width="140" height="140">
+                            <rect width="140" height="140" fill="#fff"/>
+                            <g fill="#000">
+                                <g transform="translate(123.2 16.8) rotate(45) scale(1.3)"><use class="z-bite z-bite-1" href="#zBite"/></g>
+                                <g transform="translate(86.8 -2.7) rotate(13) scale(1.15)"><use class="z-bite z-bite-a" href="#zBite"/></g>
+                                <g transform="translate(142.9 57.2) rotate(80)"><use class="z-bite z-bite-b" href="#zBite"/></g>
+                            </g>
+                        </mask>
+                        <clipPath id="zCookieShape"><circle cx="70" cy="70" r="70"/></clipPath>
+                    </defs>
+
+                    <g mask="url(#zCookieBites)">
+                        <circle cx="70" cy="70" r="70" fill="#E9B66A"/>
+                        <g fill="#5A3A24">
+                            <ellipse cx="43.3" cy="46.7" rx="8.3" ry="6.7"/>
+                            <ellipse cx="80" cy="80" rx="9.2" ry="7.5"/>
+                            <ellipse cx="36.7" cy="93.3" rx="7.5" ry="6.3"/>
+                            <ellipse cx="63.3" cy="113.3" rx="6.7" ry="5.7"/>
+                            <ellipse cx="106.7" cy="100" rx="7.5" ry="6"/>
+                        </g>
+                        {# The rim: the same bites a little bigger in darker caramel; the mask leaves a thin edge #}
+                        <g clip-path="url(#zCookieShape)" fill="#C98E48" stroke="#C98E48" stroke-width="3">
+                            <g transform="translate(123.2 16.8) rotate(45) scale(1.3)"><use class="z-bite z-bite-1" href="#zBite"/></g>
+                            <g transform="translate(86.8 -2.7) rotate(13) scale(1.15)"><use class="z-bite z-bite-a" href="#zBite"/></g>
+                            <g transform="translate(142.9 57.2) rotate(80)"><use class="z-bite z-bite-b" href="#zBite"/></g>
+                        </g>
+                    </g>
+                </svg>
+
+                {# Crumbs: 3 per bite. Each sits where it lands; --fx/--fy is where it starts (the bite). #}
+                {# "z-crumb-fade" ones fall and vanish; the others stay on Figma's crumb spots.           #}
+                <span class="z-crumb z-crumb-1 z-crumb-fade" style="left: 150px; top: 45px; --fx: -31px; --fy: -25px;"></span>
+                <span class="z-crumb z-crumb-1 z-crumb-fade z-crumb-cocoa" style="left: 140px; top: 72px; --fx: -21px; --fy: -52px;"></span>
+                <span class="z-crumb z-crumb-1 z-crumb-fade z-crumb-small" style="left: 128px; top: 40px; --fx: -9px; --fy: -20px;"></span>
+                <span class="z-crumb z-crumb-2" style="left: 145px; top: 50px; --fx: -63px; --fy: -49px;"></span>
+                <span class="z-crumb z-crumb-2 z-crumb-cocoa z-crumb-small" style="left: 160px; top: 75px; --fx: -78px; --fy: -74px;"></span>
+                <span class="z-crumb z-crumb-2 z-crumb-fade" style="left: 110px; top: 40px; --fx: -28px; --fy: -39px;"></span>
+                <span class="z-crumb z-crumb-3" style="left: 125px; top: 130px; --fx: 14px; --fy: -72px;"></span>
+                <span class="z-crumb z-crumb-3 z-crumb-cocoa z-crumb-small" style="left: 105px; top: 150px; --fx: 34px; --fy: -92px;"></span>
+                <span class="z-crumb z-crumb-3 z-crumb-fade" style="left: 150px; top: 105px; --fx: -11px; --fy: -47px;"></span>
+            </div>
+            <h2 class="z-analyzing-title" id="analyzingTitle">Zalak is taking a bite…</h2>
+            <p class="z-small text-body-secondary mb-0">This takes a few seconds</p>
+
+            {# Each step: an icon (dashed = now, check = done, empty = waiting) plus its word #}
+            <ol class="card z-steps">
+                {% for step in steps %}
+                    <li class="z-step">
+                        <span class="z-step-icon" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                        {{ step }}
+                    </li>
+                {% endfor %}
+            </ol>
+            <p class="visually-hidden" id="analyzingNow" aria-live="polite"></p>
+
+            <div class="z-progress" aria-hidden="true">
+                <div class="z-progress-bar" id="analyzingBar"></div>
+            </div>
+        </div>
+
+        <button type="button" class="btn btn-outline-secondary btn-lg z-analyzing-cancel" id="analyzingCancel">Cancel</button>
+    </div>
+</div>

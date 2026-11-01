@@ -28,7 +28,7 @@ Agreed 25 Oct 2026. **Finish by Sun 1 Nov, demo on 4 or 5 Nov**, hard deadline 1
 **Tech**
 - Django 5.2 LTS. Packages: Django, Pillow, anthropic, python-dotenv.
 - Bootstrap 5, Bootstrap Icons and the Fraunces/Figtree fonts are self-hosted in `static/`.
-- AI model: Claude Haiku 5.5 (`claude-haiku-5-5`, chosen in Chunk 5), set in settings as `ZALAK_AI_MODEL`. Structured output via `output_config` with a JSON schema (structured outputs; forced tool calls are no longer supported on newer models), then our own validation. `ZALAK_AI_FAKE=1` in `.env` uses a fixed fake answer.
+- AI model: Claude Haiku 5.5 (`claude-haiku-5-5`, chosen in Chunk 5), set in settings as `ZALAK_AI_MODEL`. Structured output via `output_config` with a JSON schema (structured outputs; forced tool calls are no longer supported on newer models), then our own validation. `ZALAK_AI_FAKE=1` in `.env` uses a fixed fake answer; `ZALAK_AI_FAKE_DELAY=4` makes it wait 4 s, to check the Analyzing overlay. The overlay's bites come at 0, 0.6 and 1.2 s to fit Haiku's 1–2 s answers.
 
 ## Data model (app `meals`)
 
@@ -151,13 +151,13 @@ class MealItem(models.Model):
   - Pattern: ModelForm + exclude, `commit=False`, PRG
   - Test: type a meal → Result with the fake items; Analyze is disabled while the field is empty.
 - [ ] **5. Real AI (text)** (27 Oct)
-  - Work: the model proposal, then an Anthropic call with a forced tool + JSON schema; the prompt (ranges, the three confidence words, calm tone, no allergen claims); full validation; `AnalysisError`.
+  - Work: the model proposal, then an Anthropic call with structured outputs (JSON schema); the prompt (ranges, the three confidence words, calm tone, no allergen claims); full validation; `AnalysisError`.
   - Files: `services/ai.py`, `settings.py`
   - Pattern: beyond the exam (a service module)
   - Test: "tavče gravče, bread, shopska salad" gives plausible ranges and an unsure item with a reason.
 - [ ] **6. Analyzing + errors** (28 Oct)
-  - Work: an overlay shown instantly on submit with step messages + Cancel (plain JS); the error page "Couldn't analyze this" with Retry (same draft) / Type it instead; the No food found page.
-  - Files: `templates/meals/_analyzing.html`, `static/js/analyzing.js`, `views.py`, `templates/meals/error.html`, `templates/meals/no_food.html`
+  - Work: an overlay shown instantly on submit with step messages + Cancel (plain JS), where the cookie loses a bite per step (Figma "Cookie (bites = progress)"); the error page "Couldn't analyze this" with Try again (same draft) / Edit the text; the No food found page. Figma has only the photo versions of the error pages, so the text versions are an adaptation; the exact Figma match is checked in chunk 19.
+  - Files: `templates/meals/_analyzing.html`, `templates/meals/_input_card.html`, `static/js/analyzing.js`, `views.py`, `urls.py`, `services/ai.py`, `templates/meals/error.html`, `templates/meals/no_food.html`, `zalak.css` (the cookie reuses `img/logo.svg`)
   - Pattern: PRG, `get_object_or_404`
   - Test: a wrong API key → error page with the input kept, and Retry works; "my shoe" → No food found.
 - [ ] **7. Voice input (FR7, Must)** (28 Oct)
@@ -227,7 +227,7 @@ class MealItem(models.Model):
   - Pattern: ModelForm with `instance`, `@login_required`, PRG
   - Test: switch to Best guess → a new analysis shows no question on the unsure item; switch back; edit the weight; sign out.
 - [ ] **19. 390 / 1440 + accessibility pass** (2 Nov)
-  - Work: the desktop two-column Result and Home; keyboard use; 44 px targets; contrast; WAVE with no errors.
+  - Work: the desktop two-column Result and Home; check the Analyzing, error and No food pages against their Figma frames (spacing, font and button sizes, desktop layout); keyboard use; 44 px targets; contrast; WAVE with no errors.
   - Files: templates, `zalak.css`
   - Test: WAVE on Home, Result and Edit item; tab through the checker.
 - [ ] **20. Demo data + demo script** (3 Nov)
@@ -251,5 +251,6 @@ class MealItem(models.Model):
 
 ## Every chunk ends with
 - `python manage.py check`, plus `makemigrations` / `migrate` if the models changed
+- bump `STATIC_VERSION` in `settings.py` if `zalak.css` or a file in `static/js/` changed
 - the browser test at 390 px and 1440 px, including the error path
 - a suggested commit message (I never commit)

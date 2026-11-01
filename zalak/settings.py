@@ -68,6 +68,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'meals.context_processors.static_version',
             ],
         },
     },
@@ -127,6 +128,10 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static'
 ]
 
+# Added as ?v= to our own CSS and JS links (meals/context_processors.py).
+# Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
+STATIC_VERSION = '2'
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -134,6 +139,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 ZALAK_AI_MODEL = 'claude-haiku-5-5'
 # ZALAK_AI_FAKE=1 in .env answers with a fixed fake meal: offline work, no cost.
 ZALAK_AI_FAKE = os.environ.get('ZALAK_AI_FAKE') == '1'
+# Seconds the fake AI waits before answering, to see the Analyzing overlay (e.g. 4). 0 = instant.
+ZALAK_AI_FAKE_DELAY = float(os.environ.get('ZALAK_AI_FAKE_DELAY', '0'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

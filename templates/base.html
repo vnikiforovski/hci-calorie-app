@@ -8,7 +8,7 @@
     <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
     <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/zalak.css' %}">
+    <link rel="stylesheet" href="{% static 'css/zalak.css' %}?v={{ STATIC_VERSION }}">
 </head>
 {% with page=request.resolver_match.url_name %}
 <body class="{% if user.is_authenticated %}has-sidebar has-bottombar{% endif %}">

@@ -1,0 +1,14 @@
+{# The kept input as a tilted "polaroid" with a chip under it (Figma: No food found, Offline). #}
+{# Needs: meal, chip (the words) and chip_icon (a Bootstrap Icons class).                    #}
+<figure class="z-input-card">
+    <div class="z-input-card-paper">
+        {% if meal.photo %}
+            <img src="{{ meal.photo.url }}" alt="Your photo of the meal">
+        {% else %}
+            <p class="z-input-card-text">{{ meal.text }}</p>
+        {% endif %}
+    </div>
+    <figcaption class="z-input-chip">
+        <i class="bi {{ chip_icon }}" aria-hidden="true"></i> {{ chip }}
+    </figcaption>
+</figure>

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{% if why == 'connection' %}Connection lost{% else %}Couldn't analyze this{% endif %}{% endblock %}
+
+{# Checker screen: no header or bottom bar, a close button instead #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-state z-with-actions">
+        <div class="z-state-top">
+            <a class="z-icon-btn z-icon-btn-tint" href="{% url 'home' %}" aria-label="Close and go to Home">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </a>
+        </div>
+
+        {# FR29: the input is kept and shown, the problem explained, and two ways forward #}
+        {% if why == 'connection' %}
+            {% include 'meals/_input_card.html' with chip='Saved as a draft' chip_icon='bi-wifi-off' %}
+            <h1>Connection lost</h1>
+            <p class="z-state-text">Zalak couldn't reach its AI just now. Your meal is saved as a draft, nothing is lost.</p>
+        {% else %}
+            {% include 'meals/_input_card.html' with chip='Saved as a draft' chip_icon='bi-exclamation-circle' %}
+            <h1>Couldn't analyze this</h1>
+            <p class="z-state-text">Something went wrong on Zalak's side. Your meal is saved as a draft, nothing is lost.</p>
+        {% endif %}
+
+        <p class="z-small">
+            <span class="text-body-secondary">Waiting:</span>
+            <span class="z-tag">{{ meal.get_slot_display }} · {{ meal.created_at|time:'H:i' }}</span>
+        </p>
+    </div>
+
+    <div class="z-actions">
+        <div class="z-actions-buttons z-actions-one">
+            {# A POST, because trying again makes a new AI call; the overlay shows while it runs #}
+            <form method="post" action="{% url 'retry' meal.id %}" data-analyzing>
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg w-100">Try again</button>
+            </form>
+            <a class="btn btn-outline-secondary btn-lg" href="{% url 'edit_text' meal.id %}">Edit the text</a>
+        </div>
+    </div>
+
+    {% include 'meals/_analyzing.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

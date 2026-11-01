@@ -7,6 +7,7 @@ validate() then checks the rules a schema can't express (min <= max, unsure need
 import json
 import logging
 import os
+import time
 
 import anthropic
 from django.conf import settings
@@ -20,7 +21,13 @@ RANGES = ('kcal', 'protein', 'carbs', 'fat')
 
 
 class AnalysisError(Exception):
-    """The AI failed or answered something we can't use."""
+    """The AI failed or answered something we can't use.
+    kind is 'connection' (the AI couldn't be reached) or 'failed' (anything else);
+    the error page words its message by it."""
+
+    def __init__(self, message, kind='failed'):
+        super().__init__(message)
+        self.kind = kind
 
 
 SYSTEM_PROMPT = f"""You are Zalak, a calm meal calorie checker. The user describes a meal they ate.
@@ -104,6 +111,8 @@ FAKE_RESPONSE = {
 def analyze_text(text):
     """Estimate a typed or dictated meal. Returns validated data (see validate)."""
     if settings.ZALAK_AI_FAKE:
+        if settings.ZALAK_AI_FAKE_DELAY > 0:
+            time.sleep(settings.ZALAK_AI_FAKE_DELAY)   # act like a real call, so the overlay shows
         return validate(FAKE_RESPONSE)
     return validate(_ask_model(text))
 
@@ -128,8 +137,12 @@ def _ask_model(user_content):
             },
             messages=[{'role': 'user', 'content': user_content}],
         )
+    except anthropic.APIConnectionError as error:
+        # No internet or a timeout (APITimeoutError is a kind of APIConnectionError)
+        logger.warning('AI not reachable: %s', error)
+        raise AnalysisError('The AI could not be reached.', kind='connection') from error
     except anthropic.APIError as error:
-        # Wrong key, no internet, rate limit, timeout...: the user sees the same calm message
+        # Wrong key, rate limit, server error...: the user sees the same calm message
         logger.warning('AI call failed: %s', error)
         raise AnalysisError('The AI call failed.') from error
 

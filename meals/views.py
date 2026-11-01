@@ -1,5 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404
+from django.urls import reverse
 from django.utils import timezone
 
 from .forms import TextMealForm
@@ -35,9 +36,17 @@ SLOT_OPTIONS = [
 ]
 SLOT_ICONS = {value: icon for value, label, icon in SLOT_OPTIONS}
 
+# The steps the Analyzing overlay shows for a typed meal (the photo has its own in chunk 8)
+TEXT_STEPS = ['Reading your meal', 'Finding the foods', 'Estimating portions']
+
 
 def result(request, meal_id):
     meal = get_own_meal(request, meal_id)
+    if meal.status == 'draft' and not meal.items.exists():
+        # A draft without items has no Result yet: show the way forward instead
+        if (meal.ai_response or {}).get('status') == 'no_food':
+            return redirect('no_food', meal_id=meal.id)
+        return redirect('analysis_error', meal_id=meal.id)
     slot = meal.slot or slot_for_time(meal.eaten_at)
     context = {
         'meal': meal,
@@ -91,28 +100,52 @@ def apply_analysis(meal, data):
         )
 
 
-def text_input(request):
+def analyze_meal(meal):
+    """Ask the AI about a saved draft and redirect to what comes next:
+    Result, No food found, or the error page. Used by Analyze and Try again."""
+    try:
+        data = analyze_text(meal.text)
+    except AnalysisError as error:
+        # The draft and its input stay saved, so nothing is lost (FR29)
+        return redirect(reverse('analysis_error', args=[meal.id]) + f'?why={error.kind}')
+
+    if data['status'] == 'no_food':
+        meal.ai_response = data
+        meal.save()
+        meal.items.all().delete()
+        return redirect('no_food', meal_id=meal.id)
+
+    apply_analysis(meal, data)
+    return redirect('result', meal_id=meal.id)
+
+
+def get_own_draft(request, meal_id):
+    """Like get_own_meal, but only a draft: logged meals are edited from meal detail (chunk 15)."""
+    meal = get_own_meal(request, meal_id)
+    if meal.status != 'draft':
+        raise Http404
+    return meal
+
+
+def text_input(request, meal_id=None):
+    """Text and voice. Without meal_id it starts a new draft; with one ("Edit the text")
+    it edits that draft, so a corrected meal doesn't leave a second draft behind."""
+    meal = get_own_draft(request, meal_id) if meal_id else None
+
     if request.method == 'POST':
-        form = TextMealForm(request.POST)
+        form = TextMealForm(request.POST, instance=meal)
         if form.is_valid():
             meal = form.save(commit=False)
             meal.input_method = 'text'
             if not meal.slot:
                 meal.slot = slot_for_time(timezone.now())
-            set_owner(request, meal)
-            meal.save()
-
+            if meal_id is None:
+                set_owner(request, meal)
             # The draft is saved first, so the input is kept even if the AI fails (FR29)
-            try:
-                data = analyze_text(meal.text)
-            except AnalysisError:
-                form.add_error(None, "Zalak couldn't analyze this right now. Your text is kept, so try again.")
-            else:
-                if data['status'] == 'no_food':
-                    form.add_error(None, data['no_food_reason'] or "Zalak couldn't find any food in this.")
-                else:
-                    apply_analysis(meal, data)
-                    return redirect('result', meal_id=meal.id)
+            meal.save()
+            return analyze_meal(meal)
+    elif meal:
+        form = TextMealForm(instance=meal)
     else:
         slot = request.GET.get('slot')
         if slot not in SLOT_ICONS:
@@ -122,8 +155,41 @@ def text_input(request):
     context = {
         'form': form,
         'slot': form['slot'].value(),
+        'steps': TEXT_STEPS,
     }
     return render(request, 'meals/text_input.html', context)
+
+
+def retry(request, meal_id):
+    """Try again on the error page: the same draft goes to the AI again."""
+    meal = get_own_draft(request, meal_id)
+    if request.method != 'POST':
+        # A retry costs an AI call, so only a button press (POST) starts one
+        return redirect('analysis_error', meal_id=meal.id)
+    return analyze_meal(meal)
+
+
+def analysis_error(request, meal_id):
+    meal = get_own_draft(request, meal_id)
+    why = request.GET.get('why')
+    if why != 'connection':
+        why = 'failed'
+    context = {
+        'meal': meal,
+        'why': why,
+        'steps': TEXT_STEPS,
+    }
+    return render(request, 'meals/error.html', context)
+
+
+def no_food(request, meal_id):
+    meal = get_own_draft(request, meal_id)
+    reason = (meal.ai_response or {}).get('no_food_reason', '')
+    context = {
+        'meal': meal,
+        'reason': reason,
+    }
+    return render(request, 'meals/no_food.html', context)
 
 
 # Placeholders until their chunk is built, so the navigation never breaks.

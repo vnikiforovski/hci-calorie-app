@@ -17,16 +17,10 @@
 
     <h1 class="mt-3 mb-3">Describe your meal</h1>
 
-    <form method="post" action="{% url 'text_input' %}" id="textMealForm" class="z-with-actions" novalidate>
+    {# The current URL: a new meal, or "Edit the text" of an existing draft (same page) #}
+    <form method="post" action="{{ request.path }}" id="textMealForm" class="z-with-actions" novalidate data-analyzing>
         {% csrf_token %}
         {{ form.slot }}
-
-        {% for error in form.non_field_errors %}
-            <div class="z-notice mb-3" role="alert">
-                <i class="bi bi-info-circle" aria-hidden="true"></i>
-                <p class="mb-0">{{ error }}</p>
-            </div>
-        {% endfor %}
 
         {{ form.text }}
         {% for error in form.text.errors %}
@@ -49,8 +43,11 @@
             </div>
         </div>
     </form>
+
+    {% include 'meals/_analyzing.html' %}
 {% endblock %}
 
 {% block scripts %}
-    <script src="{% static 'js/chips.js' %}"></script>
+    <script src="{% static 'js/chips.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
 {% endblock %}

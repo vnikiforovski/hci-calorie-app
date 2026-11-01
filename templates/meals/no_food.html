@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+
+{% block title %}No food found{% endblock %}
+
+{# Checker screen: no header or bottom bar, a close button instead #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-state z-with-actions">
+        <div class="z-state-top">
+            <a class="z-icon-btn z-icon-btn-tint" href="{% url 'home' %}" aria-label="Close and go to Home">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </a>
+        </div>
+
+        {% include 'meals/_input_card.html' with chip='No food found' chip_icon='bi-search' %}
+        <h1>Zalak couldn't find food here</h1>
+        <p class="z-state-text">Nothing was logged. {{ reason }}</p>
+    </div>
+
+    <div class="z-actions">
+        <div class="z-actions-buttons z-actions-one">
+            <a class="btn btn-primary btn-lg" href="{% url 'edit_text' meal.id %}">Describe it again</a>
+        </div>
+    </div>
+{% endblock %}
