@@ -130,6 +130,11 @@ STATICFILES_DIRS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# AI (meals/services/ai.py). The SDK reads ANTHROPIC_API_KEY from the environment itself.
+ZALAK_AI_MODEL = 'claude-haiku-5-5'
+# ZALAK_AI_FAKE=1 in .env answers with a fixed fake meal: offline work, no cost.
+ZALAK_AI_FAKE = os.environ.get('ZALAK_AI_FAKE') == '1'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

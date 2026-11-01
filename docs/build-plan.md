@@ -28,7 +28,7 @@ Agreed 25 Oct 2026. **Finish by Sun 1 Nov, demo on 4 or 5 Nov**, hard deadline 1
 **Tech**
 - Django 5.2 LTS. Packages: Django, Pillow, anthropic, python-dotenv.
 - Bootstrap 5, Bootstrap Icons and the Fraunces/Figtree fonts are self-hosted in `static/`.
-- AI model: proposed in Chunk 5 after checking the current SDK docs, and set in settings as `ZALAK_AI_MODEL`. Structured output via a forced tool call with a JSON schema, then our own validation.
+- AI model: Claude Haiku 5.5 (`claude-haiku-5-5`, chosen in Chunk 5), set in settings as `ZALAK_AI_MODEL`. Structured output via `output_config` with a JSON schema (structured outputs; forced tool calls are no longer supported on newer models), then our own validation. `ZALAK_AI_FAKE=1` in `.env` uses a fixed fake answer.
 
 ## Data model (app `meals`)
 

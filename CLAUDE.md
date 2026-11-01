@@ -6,11 +6,13 @@ Zalak ("a bite" in Macedonian) is an AI meal calorie checker: the user photograp
 
 ## How I want to work (most important)
 
-I am a student learning Django through this project. I must understand and approve every line.
+I am a student learning Django through this project. I approve every plan and review every chunk.
 
 - **One chunk at a time**, from `docs/build-plan.md`. Never start the next chunk on your own.
 - **Plan first.** Before editing, list the files you will touch and what changes in each. Wait for my approval.
-- **Small edits, one file at a time.** After each file, explain the change in 2-4 sentences: what it does, why it is needed, and which course pattern it uses (point to the matching file in `reference/hospital_exam/` when there is one).
+- **Whole chunk at once, after the plan is approved.** Implement all files of the chunk in one go, in Django order (models → admin → forms → views → urls → templates → static).
+- **Check your own work before handing over.** Run `python manage.py check`, `makemigrations --check` when models changed, and `python manage.py test meals`; request the chunk's pages with Django's test client; fix anything that fails. Add or update small tests for the chunk's logic (ownership 404s, signals, scaling maths).
+- **Then explain the chunk**: per file, 2-4 sentences on what it does, why, and which course pattern it uses (point to the matching file in `reference/hospital_exam/` when there is one). End with browser test steps at 390 and 1440 px and a suggested commit message.
 - **Course-minimum Django style.** Function-based views, `ModelForm`, admin customizations (`list_display`, `has_*_permission`, `save_model`, `get_queryset`), signals in `signals.py` imported in `apps.py ready()`, Django templates with `{% extends %}` and Bootstrap. Go beyond this only when the feature needs it, and tell me why first. No class-based views, DRF, React, HTMX or other frameworks unless I agree.
 - **JavaScript only where the interaction needs it** (voice input, live total updates while editing portions, bottom sheets). Plain JS, no build step.
 - **No new packages without asking.** Say what it is for and whether a built-in option exists.

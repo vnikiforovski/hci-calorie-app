@@ -1,9 +1,19 @@
 """The only place that talks to the AI. Views call analyze_text() and get back
 validated data, or an AnalysisError that they handle like any AI failure.
 
-Chunk 4: the answer is a fixed fake. Chunk 5 replaces it with the Anthropic call."""
+The model must answer JSON in the shape of RESPONSE_SCHEMA (structured outputs);
+validate() then checks the rules a schema can't express (min <= max, unsure needs a reason)."""
+
+import json
+import logging
+import os
+
+import anthropic
+from django.conf import settings
 
 from ..units import GRAMS_PER_UNIT, round_to
+
+logger = logging.getLogger(__name__)
 
 CONFIDENCES = ('sure', 'likely', 'unsure')
 RANGES = ('kcal', 'protein', 'carbs', 'fat')
@@ -11,6 +21,57 @@ RANGES = ('kcal', 'protein', 'carbs', 'fat')
 
 class AnalysisError(Exception):
     """The AI failed or answered something we can't use."""
+
+
+SYSTEM_PROMPT = f"""You are Zalak, a calm meal calorie checker. The user describes a meal they ate.
+Split it into food items and estimate each one for the portion eaten.
+
+For each item give:
+- name: short and plain, e.g. "White bread".
+- amount and unit: unit is one of {', '.join(GRAMS_PER_UNIT)}. bowl_s, bowl_m and bowl_l are a small, normal and large bowl. If the user gave no amount, assume a normal portion.
+- grams: the weight of that portion.
+- kcal, protein, carbs and fat (grams) as a min-max range for the whole portion, not per 100 g. Make the range wider when the portion size or recipe is unclear, narrower when it is clear.
+- confidence: "sure", "likely" or "unsure".
+- reason: empty unless unsure; then one short sentence on why, e.g. "Oil is hard to judge in a cooked dish."
+- question: empty unless unsure; then a short question the user can answer with "a little", "about that" or "a lot", e.g. "How much oil was there?"
+
+Add hidden fats (cooking oil, butter) as their own item, marked unsure, when the dish is usually cooked with them and the user did not mention them.
+You know Macedonian and Balkan dishes (tavče gravče, shopska salad, burek, ajvar, pastrmajlija...). Answer in English.
+
+title: a short name for the whole meal. description: one neutral sentence about the meal.
+Never call a food good, bad, healthy or unhealthy, give no advice, and make no allergen claims.
+
+If the text contains no food or drink, answer status "no_food" with a kind one-sentence no_food_reason and no items. Otherwise status "ok"."""
+
+
+def _item_schema():
+    numbers = {f'{key}_{end}': {'type': 'number'} for key in RANGES for end in ('min', 'max')}
+    properties = {
+        'name': {'type': 'string'},
+        'amount': {'type': 'number'},
+        'unit': {'type': 'string', 'enum': list(GRAMS_PER_UNIT)},
+        'grams': {'type': 'number'},
+        **numbers,
+        'confidence': {'type': 'string', 'enum': list(CONFIDENCES)},
+        'reason': {'type': 'string'},
+        'question': {'type': 'string'},
+    }
+    return {'type': 'object', 'properties': properties,
+            'required': list(properties), 'additionalProperties': False}
+
+
+RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'status': {'type': 'string', 'enum': ['ok', 'no_food']},
+        'no_food_reason': {'type': 'string'},
+        'title': {'type': 'string'},
+        'description': {'type': 'string'},
+        'items': {'type': 'array', 'items': _item_schema()},
+    },
+    'required': ['status', 'no_food_reason', 'title', 'description', 'items'],
+    'additionalProperties': False,
+}
 
 
 FAKE_RESPONSE = {
@@ -42,7 +103,46 @@ FAKE_RESPONSE = {
 
 def analyze_text(text):
     """Estimate a typed or dictated meal. Returns validated data (see validate)."""
-    return validate(FAKE_RESPONSE)
+    if settings.ZALAK_AI_FAKE:
+        return validate(FAKE_RESPONSE)
+    return validate(_ask_model(text))
+
+
+def _ask_model(user_content):
+    """One call to Claude. Returns the parsed JSON answer or raises AnalysisError.
+    user_content is the message content: the meal text now, text + image for photos (chunk 8)."""
+    if not os.environ.get('ANTHROPIC_API_KEY'):
+        # Without a key the SDK raises TypeError, not APIError, so check it ourselves
+        logger.warning('ANTHROPIC_API_KEY is not set in .env')
+        raise AnalysisError('No API key.')
+
+    client = anthropic.Anthropic(timeout=30, max_retries=1)
+    try:
+        response = client.messages.create(
+            model=settings.ZALAK_AI_MODEL,
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            output_config={
+                'effort': 'low',
+                'format': {'type': 'json_schema', 'schema': RESPONSE_SCHEMA},
+            },
+            messages=[{'role': 'user', 'content': user_content}],
+        )
+    except anthropic.APIError as error:
+        # Wrong key, no internet, rate limit, timeout...: the user sees the same calm message
+        logger.warning('AI call failed: %s', error)
+        raise AnalysisError('The AI call failed.') from error
+
+    if response.stop_reason in ('refusal', 'max_tokens'):
+        logger.warning('AI stopped early: %s', response.stop_reason)
+        raise AnalysisError(f'The AI stopped early ({response.stop_reason}).')
+
+    text = next((block.text for block in response.content if block.type == 'text'), '')
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as error:
+        logger.warning('AI answer is not JSON: %r', text[:200])
+        raise AnalysisError('The answer is not JSON.') from error
 
 
 def validate(data):
