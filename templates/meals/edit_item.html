@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit {{ item.name }}{% endblock %}
+
+{# Checker screen (Figma "Edit item"): its own header, no bottom bar #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-edit">
+        <div class="z-edit-header">
+            <a class="z-icon-btn" href="{% url 'result' meal.id %}" aria-label="Back to the meal, without saving">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+            <h1 class="mb-0">Edit item</h1>
+            {# Reset fills in Zalak's estimate again; nothing is saved until Save changes #}
+            {% if item.ai_estimate %}
+                <button type="button" class="z-link-btn" id="resetButton">Reset</button>
+            {% endif %}
+        </div>
+
+        <form method="post" id="itemForm" novalidate>
+            {% csrf_token %}
+            {{ form.amount }}
+            {{ form.unit }}
+
+            <label class="z-field-label" for="{{ form.name.id_for_label }}">Food</label>
+            <div class="z-name-wrap">
+                {{ form.name }}
+                <i class="bi bi-pencil" aria-hidden="true"></i>
+            </div>
+            {% for error in form.name.errors %}
+                <p class="z-field-error">{{ error }}</p>
+            {% endfor %}
+
+            <p class="z-field-label" id="amountLabel">Amount</p>
+            <section class="card z-amount" aria-labelledby="amountLabel">
+                <div class="card-body">
+                    <div class="z-stepper">
+                        <button type="button" class="z-step-btn" id="stepDown" aria-label="Less">
+                            <i class="bi bi-dash-lg" aria-hidden="true"></i>
+                        </button>
+                        <div class="z-step-value">
+                            {# Read out after every step: "1½ medium bowls" #}
+                            <span class="z-num z-step-number" id="amountText" aria-live="polite">{{ amount_text }}</span>
+                            <button type="button" class="z-unit-chip" data-bs-toggle="offcanvas" data-bs-target="#unitSheet"
+                                    aria-controls="unitSheet" aria-label="Unit: {{ unit_text }}. Change the unit">
+                                <span id="unitText">{{ unit_text }}</span>
+                                <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="z-step-btn" id="stepUp" aria-label="More">
+                            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                        </button>
+                    </div>
+
+                    {# The gram equivalent; hidden when the unit is already grams #}
+                    <p class="z-grams-line" id="gramsLine" {% if item.unit == 'g' %}hidden{% endif %}>
+                        <i class="bi bi-speedometer2" aria-hidden="true"></i>
+                        ≈ <span id="gramsText">{{ item.grams }}</span> g in total
+                    </p>
+
+                    <div class="z-this-item">
+                        <div>
+                            <span class="d-block">This item</span>
+                            <span class="z-small text-body-secondary" id="estimateNote">
+                                {% if item.edited_by_user %}Your amount{% else %}Zalak's estimate{% endif %}
+                            </span>
+                            <s class="z-small text-body-secondary" id="wasNote" hidden>
+                                was {{ portion_data.saved.kcalMin }}–{{ portion_data.saved.kcalMax }} kcal
+                            </s>
+                        </div>
+                        <p class="mb-0 text-nowrap">
+                            <span class="z-num z-item-kcal" id="kcalText">{{ item.kcal_min }}–{{ item.kcal_max }}</span>
+                            <span class="z-small">kcal</span>
+                        </p>
+                    </div>
+                    {% for error in form.amount.errors %}
+                        <p class="z-field-error mt-2 mb-0">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </section>
+
+            <p class="z-field-label">Details</p>
+            <div class="card z-details">
+                <button type="button" class="z-detail-row" data-bs-toggle="offcanvas" data-bs-target="#unitSheet" aria-controls="unitSheet">
+                    <span class="z-detail-icon" aria-hidden="true"><i class="bi bi-speedometer2"></i></span>
+                    <span class="z-detail-name">Unit</span>
+                    <span class="z-small text-body-secondary" id="unitRowText">{{ unit_row_text }}</span>
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+
+            {# Nutrition: collapsed to one line, opens to the three macros (Bootstrap collapse) #}
+            <div class="card z-nutrition mt-3">
+                <button type="button" class="z-nutrition-toggle collapsed" data-bs-toggle="collapse"
+                        data-bs-target="#nutritionMore" aria-expanded="false" aria-controls="nutritionMore">
+                    <span>
+                        <span class="d-block fw-semibold">Nutrition for this portion</span>
+                        <span class="z-small text-body-secondary z-nutrition-line">
+                            Protein <span data-macro="protein">{{ item.protein_min }}–{{ item.protein_max }}</span> g ·
+                            Carbs <span data-macro="carbs">{{ item.carbs_min }}–{{ item.carbs_max }}</span> g ·
+                            Fat <span data-macro="fat">{{ item.fat_min }}–{{ item.fat_max }}</span> g
+                        </span>
+                    </span>
+                    <i class="bi bi-chevron-down z-nutrition-chevron" aria-hidden="true"></i>
+                </button>
+                <div class="collapse" id="nutritionMore">
+                    <div class="z-macro-tiles">
+                        <div class="z-macro-tile z-tile-protein">
+                            <span class="z-tile-bar z-bg-protein" aria-hidden="true"></span>
+                            <span class="d-block z-small">Protein</span>
+                            <span class="fw-semibold"><span data-macro="protein">{{ item.protein_min }}–{{ item.protein_max }}</span> g</span>
+                        </div>
+                        <div class="z-macro-tile z-tile-carbs">
+                            <span class="z-tile-bar z-bg-carbs" aria-hidden="true"></span>
+                            <span class="d-block z-small">Carbs</span>
+                            <span class="fw-semibold"><span data-macro="carbs">{{ item.carbs_min }}–{{ item.carbs_max }}</span> g</span>
+                        </div>
+                        <div class="z-macro-tile z-tile-fat">
+                            <span class="z-tile-bar z-bg-fat" aria-hidden="true"></span>
+                            <span class="d-block z-small">Fat</span>
+                            <span class="fw-semibold"><span data-macro="fat">{{ item.fat_min }}–{{ item.fat_max }}</span> g</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg w-100 mt-4">Save changes</button>
+        </form>
+
+        {# Delete is its own small POST form; the last item can't go (Just checking drops the meal) #}
+        {% if can_delete %}
+            <form method="post" action="{% url 'delete_item' meal.id item.id %}" class="mt-3">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-lg w-100">
+                    <i class="bi bi-trash3" aria-hidden="true"></i> Delete item
+                </button>
+            </form>
+        {% else %}
+            <p class="z-small text-body-secondary text-center mt-3 mb-0">
+                This is the only item. Use Just checking to drop the meal.
+            </p>
+        {% endif %}
+    </div>
+
+    {% include 'meals/_unit_sheet.html' %}
+{% endblock %}
+
+{% block scripts %}
+    {{ portion_data|json_script:'portionData' }}
+    <script src="{% static 'js/portion.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

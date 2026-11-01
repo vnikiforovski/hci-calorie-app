@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
 
-from .units import UNIT_CHOICES, round_to
+from .units import NO_PLURAL, UNIT_CHOICES, format_amount, round_to
 
 
 def slot_for_time(dt):
@@ -183,12 +183,32 @@ class MealItem(models.Model):
         """'1 bowl · 300 g', '2 slices · 60 g', 'about 1 tbsp · 10 g' or just '300 g'."""
         if self.unit == 'g':
             return f"{self.grams} g"
-        amount = f"{self.amount.normalize():f}"  # 1.00 -> 1, 0.50 -> 0.5
+        amount = format_amount(self.amount)  # 1.50 -> 1½, 2.00 -> 2
         label = self.get_unit_display()
-        if self.amount > 1 and self.unit not in ('kg', 'oz', 'lb', 'ml', 'l', 'fl_oz'):
+        if self.amount > 1 and self.unit not in NO_PLURAL:
             label += 'es' if label.endswith('ch') else 's'
         about = 'about ' if self.confidence == 'unsure' else ''
         return f"{about}{amount} {label} · {self.grams} g"
+
+    @property
+    def ai_estimate(self):
+        """What the AI said about this item (for Reset on Edit item), or None for an item
+        the AI didn't give. Items keep the position they had in the AI answer."""
+        items = (self.meal.ai_response or {}).get('items') or []
+        if self.position < len(items):
+            return items[self.position]
+        return None
+
+    @property
+    def known_portions(self):
+        """Portions we know the grams of, as (amount, unit, grams): the AI's first, then the
+        saved one. units.grams_for scales from the first in the same unit."""
+        known = []
+        ai = self.ai_estimate
+        if ai:
+            known.append((ai['amount'], ai['unit'], ai['grams']))
+        known.append((self.amount, self.unit, self.grams))
+        return known
 
     def _scale(self, per_100g, step):
         return round_to(per_100g * self.grams / 100, step)

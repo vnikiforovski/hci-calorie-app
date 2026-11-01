@@ -1,12 +1,16 @@
+from decimal import Decimal
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import PhotoMealForm, TextMealForm
+from .forms import MealItemForm, PhotoMealForm, TextMealForm
 from .models import Meal, MealItem, Profile, slot_for_time
 from .services.ai import AnalysisError, analyze_photo, analyze_text
+from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
+                    NO_PLURAL, UNIT_TABS, WEIGHT_UNITS, format_amount, stepper_label)
 
 
 def home(request):
@@ -254,6 +258,107 @@ def analysis_error(request, meal_id):
         'steps': steps_for(meal),
     }
     return render(request, 'meals/error.html', context)
+
+
+def portion_data(item):
+    """Everything portion.js needs for the live preview on Edit item, read from the saved
+    item (before a form changes it). Passed to the page with the json_script filter."""
+    ai = item.ai_estimate
+    per_100g = ['kcal_min', 'kcal_max', 'protein_min', 'protein_max',
+                'carbs_min', 'carbs_max', 'fat_min', 'fat_max']
+    return {
+        'known': [[float(amount), unit, grams] for amount, unit, grams in item.known_portions],
+        'saved': {'amount': float(item.amount), 'unit': item.unit,
+                  'kcalMin': item.kcal_min, 'kcalMax': item.kcal_max},
+        'ai': {'name': ai['name'], 'amount': ai['amount'], 'unit': ai['unit']} if ai else None,
+        'per100': {name: float(getattr(item, f'{name}_100g')) for name in per_100g},
+        'gramsPerUnit': {unit: float(grams) for unit, grams in GRAMS_PER_UNIT.items()},
+        'labels': {unit: stepper_label(unit, 1) for unit in GRAMS_PER_UNIT},
+        'steps': {unit: float(step) for unit, step in MEASURED_STEPS.items()},
+        'ladder': [float(value) for value in COUNT_LADDER],
+        'noPlural': sorted(NO_PLURAL),
+        'weightUnits': sorted(WEIGHT_UNITS),
+        'minGrams': MIN_GRAMS,
+        'maxGrams': MAX_GRAMS,
+    }
+
+
+def edit_item(request, meal_id, item_id):
+    """Edit item (FR18, FR19): rename it or change its amount and unit, with a live preview.
+    Works for a draft and for a logged meal (meal detail reuses it in chunk 15)."""
+    meal = get_own_meal(request, meal_id)
+    item = get_object_or_404(MealItem, id=item_id, meal=meal)   # the item must be in this meal
+    data = portion_data(item)   # before the form changes the instance
+
+    if request.method == 'POST':
+        form = MealItemForm(request.POST, instance=item)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.grams = form.cleaned_data['grams']   # from units.grams_for, never from the browser
+            item.edited_by_user = True
+            item.save()
+            request.session['toast'] = {'text': 'Changes saved'}
+            return redirect('result', meal_id=meal.id)
+    else:
+        form = MealItemForm(instance=item)
+
+    context = {
+        'meal': meal,
+        'item': item,
+        'form': form,
+        'portion_data': data,
+        'unit_tabs': UNIT_TABS,
+        'bowl_sizes': BOWL_SIZES,
+        'can_delete': meal.items.count() > 1,
+        # The first paint, before portion.js takes over (it uses the same numbers)
+        'amount_text': format_amount(data['saved']['amount']),
+        'unit_text': stepper_label(item.unit, item.amount),
+        'unit_row_text': stepper_label(item.unit, 1),
+    }
+    return render(request, 'meals/edit_item.html', context)
+
+
+# What Undo needs to put a removed item back exactly as it was (everything but id and meal)
+ITEM_FIELDS = ['name', 'amount', 'unit', 'grams',
+               'kcal_min_100g', 'kcal_max_100g', 'protein_min_100g', 'protein_max_100g',
+               'carbs_min_100g', 'carbs_max_100g', 'fat_min_100g', 'fat_max_100g',
+               'confidence', 'reason', 'question', 'edited_by_user', 'position']
+
+
+@require_POST
+def delete_item(request, meal_id, item_id):
+    """Delete item on Edit item (FR21). The last item stays, so Result is never empty:
+    Just checking drops the whole meal. A copy waits in the session for Undo."""
+    meal = get_own_meal(request, meal_id)
+    item = get_object_or_404(MealItem, id=item_id, meal=meal)
+    if meal.items.count() <= 1:
+        return redirect('edit_item', meal_id=meal.id, item_id=item.id)
+
+    # The session holds JSON only, so the Decimal fields are kept as text
+    copy = {}
+    for field in ITEM_FIELDS:
+        value = getattr(item, field)
+        copy[field] = str(value) if isinstance(value, Decimal) else value
+    request.session['removed_item'] = {'meal_id': meal.id, 'fields': copy}
+
+    item.delete()
+    request.session['toast'] = {
+        'text': f'{item.name} removed',
+        'undo_url': reverse('undo_remove_item', args=[meal.id]),
+    }
+    return redirect('result', meal_id=meal.id)
+
+
+@require_POST
+def undo_remove_item(request, meal_id):
+    """Undo in the "Bread removed" toast: the item comes back with its numbers and its place
+    in the list (position), so Reset still finds Zalak's original. Works once."""
+    meal = get_own_meal(request, meal_id)
+    removed = request.session.get('removed_item')
+    if removed and removed['meal_id'] == meal.id:
+        del request.session['removed_item']
+        MealItem.objects.create(meal=meal, **removed['fields'])
+    return redirect('result', meal_id=meal.id)
 
 
 @require_POST

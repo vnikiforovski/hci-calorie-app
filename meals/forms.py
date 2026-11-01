@@ -6,7 +6,8 @@ from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import UploadedFile
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from .models import Meal
+from .models import Meal, MealItem
+from .units import MAX_GRAMS, grams_for
 
 PHOTO_MAX_SIDE = 1568            # px on the long side: what the AI looks at anyway
 PHOTO_MAX_BYTES = 20 * 1024 * 1024
@@ -98,3 +99,48 @@ class PhotoMealForm(forms.ModelForm):
 
     def clean_text(self):
         return self.cleaned_data['text'].strip()   # the note is optional
+
+
+class MealItemForm(forms.ModelForm):
+    """Edit item: the name, the amount and the unit. The grams follow from them
+    (units.grams_for); the per-100 g values stay, so a rename keeps the numbers."""
+
+    class Meta:
+        model = MealItem
+        fields = ['name', 'amount', 'unit']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control z-name-field', 'autocomplete': 'off'}),
+            # Both are set by portion.js: the stepper and the Unit sheet
+            'amount': forms.HiddenInput(),
+            'unit': forms.HiddenInput(),
+        }
+        error_messages = {
+            'name': {'required': 'Write what the food is, e.g. "white bread".'},
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Read before the form changes the instance: grams_for scales from these
+        self.known = self.instance.known_portions
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if not name:
+            raise forms.ValidationError('Write what the food is, e.g. "white bread".')
+        return name
+
+    def clean_amount(self):
+        amount = self.cleaned_data['amount']
+        if amount is None or amount <= 0:
+            raise forms.ValidationError('The amount must be more than 0.')
+        return amount
+
+    def clean(self):
+        cleaned = super().clean()
+        amount, unit = cleaned.get('amount'), cleaned.get('unit')
+        if amount and unit:
+            grams = grams_for(amount, unit, self.known)
+            if grams > MAX_GRAMS:
+                self.add_error('amount', "That's more than 5 kg. Check the amount.")
+            cleaned['grams'] = grams
+        return cleaned

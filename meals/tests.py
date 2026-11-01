@@ -1,5 +1,6 @@
 import copy
 from datetime import datetime
+from decimal import Decimal
 import shutil
 import tempfile
 from io import BytesIO
@@ -19,6 +20,7 @@ from django.utils import timezone
 from .admin import MealAdmin
 from .models import Meal, Profile
 from .services.ai import FAKE_RESPONSE, AnalysisError, analyze_text, validate
+from .units import format_amount, grams_for, stepper_label
 from zalak.settings import env_list
 
 
@@ -698,3 +700,280 @@ class GuestLogTests(TestCase):
         self.client.cookies.clear()
         response = self.client.post(reverse('just_checking', args=[self.meal.id]))
         self.assertEqual(response.status_code, 404)
+
+
+class UnitMathsTests(TestCase):
+    """Chunk 10: the grams rule shared by Save changes and portion.js."""
+
+    def test_same_unit_keeps_the_items_own_grams_per_unit(self):
+        # The AI's 2 slices are 80 g, so 3 slices are 120 g, not the table's 90 g
+        self.assertEqual(grams_for(Decimal('3'), 'slice', [(2, 'slice', 80)]), 120)
+
+    def test_first_known_portion_wins(self):
+        # The AI's portion comes first, so small edits don't drift through rounding
+        self.assertEqual(grams_for(Decimal('2'), 'slice', [(1, 'slice', 40), (1, 'slice', 30)]), 80)
+
+    def test_a_new_unit_uses_the_table(self):
+        self.assertEqual(grams_for(Decimal('1'), 'bowl_l', [(1, 'bowl_m', 350)]), 450)
+        self.assertEqual(grams_for(Decimal('0.3'), 'kg', [(150, 'g', 150)]), 300)
+
+    def test_weight_units_always_use_the_table(self):
+        # An odd saved portion ("1 g · 150 g") can't make 200 g into 30 kg
+        self.assertEqual(grams_for(Decimal('200'), 'g', [(1, 'g', 150)]), 200)
+
+    def test_rounded_to_5_and_at_least_5(self):
+        self.assertEqual(grams_for(Decimal('1.5'), 'oz'), 45)     # 42.5 g
+        self.assertEqual(grams_for(Decimal('1'), 'pinch'), 5)     # 0.5 g
+
+    def test_format_amount(self):
+        cases = {'1.50': '1½', '0.25': '¼', '0.75': '¾', '2.00': '2', '0.30': '0.3', '150': '150'}
+        for value, text in cases.items():
+            with self.subTest(value):
+                self.assertEqual(format_amount(Decimal(value)), text)
+
+    def test_stepper_label(self):
+        self.assertEqual(stepper_label('bowl_m', 1), 'medium bowl')
+        self.assertEqual(stepper_label('bowl_m', Decimal('1.5')), 'medium bowls')
+        self.assertEqual(stepper_label('pinch', 2), 'pinches')
+        self.assertEqual(stepper_label('tbsp', 2), 'tbsp')
+
+    def test_portion_on_result(self):
+        meal = make_draft()
+        item = meal.items.get()
+        item.amount, item.unit, item.grams = Decimal('1.5'), 'slice', 45
+        self.assertEqual(item.portion, '1½ slices · 45 g')
+        item.amount, item.unit, item.grams = Decimal('2'), 'tbsp', 30
+        self.assertEqual(item.portion, '2 tbsp · 30 g')
+
+
+class EditItemTests(TestCase):
+    """Chunk 10: Edit item. Chicken is 150 g at 150–170 kcal and 28–31 g protein per 100 g."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, slot='lunch')
+        self.item = self.meal.items.get()
+
+    def url(self, item=None, meal=None):
+        item = item or self.item
+        return reverse('edit_item', args=[(meal or self.meal).id, item.id])
+
+    def save(self, **data):
+        data = {'name': 'Chicken breast', 'amount': '150', 'unit': 'g', **data}
+        return self.client.post(self.url(), data)
+
+    def add_bread(self):
+        return self.meal.items.create(name='Bread', amount=2, unit='slice', grams=60, position=1,
+                                      kcal_min_100g=250, kcal_max_100g=280,
+                                      protein_min_100g=8, protein_max_100g=9,
+                                      carbs_min_100g=48, carbs_max_100g=50,
+                                      fat_min_100g=3, fat_max_100g=4, confidence='sure')
+
+    def test_result_pencil_opens_edit_item(self):
+        page = self.client.get(reverse('result', args=[self.meal.id]))
+        self.assertContains(page, f'href="{self.url()}"')
+
+    def test_page_loads(self):
+        page = self.client.get(self.url())
+        self.assertContains(page, 'Edit item')
+        self.assertContains(page, 'value="Chicken breast"')
+        self.assertContains(page, 'id="portionData"')
+        self.assertContains(page, 'js/portion.js?v=')
+        self.assertContains(page, 'id="unitSheet"')
+        self.assertContains(page, '230–260')                  # kcal for 150 g
+        self.assertNotContains(page, 'id="resetButton"')      # no AI answer behind this item
+        self.assertContains(page, 'This is the only item.')   # so no Delete
+
+    def test_more_chicken_updates_result(self):
+        # The chunk's test: 150 g -> 200 g, protein follows (T2)
+        response = self.save(amount='200')
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]), fetch_redirect_response=False)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.grams, 200)
+        self.assertTrue(self.item.edited_by_user)
+
+        result = self.client.get(reverse('result', args=[self.meal.id]))
+        self.assertContains(result, '300–340')     # kcal
+        self.assertContains(result, '56–62 g')     # protein
+        self.assertContains(result, 'Changes saved')
+
+    def test_rename_keeps_the_numbers(self):
+        self.save(name='  Turkey breast  ')
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.name, 'Turkey breast')
+        self.assertEqual(self.item.grams, 150)
+        self.assertEqual(self.item.kcal_min_100g, 150)
+        self.assertEqual(self.item.kcal_max_100g, 170)
+
+    def test_new_unit_uses_the_table(self):
+        self.save(amount='1', unit='piece')
+        self.item.refresh_from_db()
+        self.assertEqual((self.item.amount, self.item.unit, self.item.grams), (1, 'piece', 100))
+
+    def test_grams_never_come_from_the_browser(self):
+        self.save(amount='200', grams='999')
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.grams, 200)
+
+    def test_bad_input_is_explained(self):
+        cases = {
+            'zero amount': ({'amount': '0'}, 'The amount must be more than 0.'),
+            'empty name': ({'name': '   '}, 'Write what the food is'),
+            'too much': ({'amount': '6000'}, 'more than 5 kg'),
+        }
+        for label, (data, message) in cases.items():
+            with self.subTest(label):
+                response = self.save(**data)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, message)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.grams, 150)
+
+    def test_another_users_item_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        theirs = make_draft(other)
+        response = self.client.get(self.url(item=theirs.items.get(), meal=theirs))
+        self.assertEqual(response.status_code, 404)
+
+    def test_item_from_another_meal_is_404(self):
+        second = make_draft(self.user)
+        response = self.client.get(self.url(item=second.items.get(), meal=self.meal))
+        self.assertEqual(response.status_code, 404)
+
+    def test_logged_meal_items_can_be_edited(self):
+        self.meal.status = 'logged'
+        self.meal.save()
+        self.save(amount='200')
+        self.item.refresh_from_db()
+        self.meal.refresh_from_db()
+        self.assertEqual(self.item.grams, 200)
+        self.assertEqual(self.meal.status, 'logged')
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)   # counted once
+
+    def test_delete_item(self):
+        bread = self.add_bread()
+        page = self.client.get(self.url(item=bread))
+        delete_url = reverse('delete_item', args=[self.meal.id, bread.id])
+        self.assertContains(page, f'action="{delete_url}"')
+
+        response = self.client.post(delete_url)
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]), fetch_redirect_response=False)
+        self.assertFalse(self.meal.items.filter(pk=bread.pk).exists())
+        self.assertContains(self.client.get(response.url), 'Bread removed')
+
+    def test_last_item_stays(self):
+        response = self.client.post(reverse('delete_item', args=[self.meal.id, self.item.id]))
+        self.assertRedirects(response, self.url())
+        self.assertTrue(self.meal.items.filter(pk=self.item.pk).exists())
+
+    def test_delete_needs_a_post(self):
+        bread = self.add_bread()
+        response = self.client.get(reverse('delete_item', args=[self.meal.id, bread.id]))
+        self.assertEqual(response.status_code, 405)
+
+
+class UndoRemoveItemTests(TestCase):
+    """Undo after Delete item: the item comes back exactly as it was."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, slot='lunch')
+        self.bread = self.meal.items.create(
+            name='Bread', amount=Decimal('1.5'), unit='slice', grams=45, position=1,
+            kcal_min_100g=250, kcal_max_100g=280, protein_min_100g=Decimal('8.5'), protein_max_100g=9,
+            carbs_min_100g=48, carbs_max_100g=50, fat_min_100g=3, fat_max_100g=4,
+            confidence='unsure', reason='Hard to see the slices.', question='How many?',
+            edited_by_user=True)
+        self.undo_url = reverse('undo_remove_item', args=[self.meal.id])
+
+    def remove_bread(self):
+        return self.client.post(reverse('delete_item', args=[self.meal.id, self.bread.id]))
+
+    def test_toast_offers_undo(self):
+        result = self.client.get(self.remove_bread().url)
+        self.assertContains(result, 'Bread removed')
+        self.assertContains(result, f'action="{self.undo_url}"')
+
+    def test_undo_brings_it_back_as_it_was(self):
+        totals = (self.meal.kcal_min, self.meal.kcal_max)
+        self.remove_bread()
+        response = self.client.post(self.undo_url)
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]))
+
+        bread = self.meal.items.get(name='Bread')
+        self.assertEqual((bread.amount, bread.unit, bread.grams, bread.position), (Decimal('1.5'), 'slice', 45, 1))
+        self.assertEqual(bread.protein_min_100g, Decimal('8.5'))
+        self.assertEqual((bread.confidence, bread.reason, bread.question), ('unsure', 'Hard to see the slices.', 'How many?'))
+        self.assertTrue(bread.edited_by_user)
+        self.assertEqual(list(self.meal.items.values_list('name', flat=True)), ['Chicken breast', 'Bread'])
+        self.assertEqual((self.meal.kcal_min, self.meal.kcal_max), totals)
+
+    def test_undo_works_once(self):
+        self.remove_bread()
+        self.client.post(self.undo_url)
+        self.client.post(self.undo_url)
+        self.assertEqual(self.meal.items.filter(name='Bread').count(), 1)
+
+    def test_undo_without_a_removal_does_nothing(self):
+        response = self.client.post(self.undo_url)
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]))
+        self.assertEqual(self.meal.items.count(), 2)
+
+    def test_undo_on_another_meal_does_nothing(self):
+        other_meal = make_draft(self.user)
+        self.remove_bread()
+        self.client.post(reverse('undo_remove_item', args=[other_meal.id]))
+        self.assertEqual(other_meal.items.count(), 1)              # nothing landed there
+        self.client.post(self.undo_url)
+        self.assertTrue(self.meal.items.filter(name='Bread').exists())   # still waiting for its own meal
+
+    def test_another_users_meal_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        theirs = make_draft(other)
+        response = self.client.post(reverse('undo_remove_item', args=[theirs.id]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_undo_needs_a_post(self):
+        self.remove_bread()
+        self.assertEqual(self.client.get(self.undo_url).status_code, 405)
+        self.assertFalse(self.meal.items.filter(name='Bread').exists())
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class EditAIItemTests(TestCase):
+    """Chunk 10: items with an AI answer behind them scale by the AI's grams and can be Reset."""
+
+    def setUp(self):
+        answer = good_answer()
+        answer['items'][1].update(grams=80)   # the AI's 2 slices of bread weigh 80 g
+        with patch('meals.services.ai._ask_model', return_value=answer):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče, bread', 'slot': 'lunch'})
+        self.meal = Meal.objects.get()
+        self.bread = self.meal.items.get(name='White bread')
+        self.url = reverse('edit_item', args=[self.meal.id, self.bread.id])
+
+    def test_reset_is_offered_with_zalaks_values(self):
+        page = self.client.get(self.url)
+        self.assertContains(page, 'id="resetButton"')
+        self.assertContains(page, '"ai": {"name": "White bread", "amount": 2, "unit": "slice"}')
+
+    def test_more_slices_use_the_ais_slice_weight(self):
+        self.client.post(self.url, {'name': 'White bread', 'amount': '3', 'unit': 'slice'})
+        self.bread.refresh_from_db()
+        self.assertEqual(self.bread.grams, 120)
+
+    def test_reset_values_bring_back_the_ais_grams(self):
+        # Change the unit and save, then save Zalak's values again (what Reset fills in)
+        self.client.post(self.url, {'name': 'Bread', 'amount': '100', 'unit': 'g'})
+        self.client.post(self.url, {'name': 'White bread', 'amount': '2', 'unit': 'slice'})
+        self.bread.refresh_from_db()
+        self.assertEqual((self.bread.name, self.bread.grams), ('White bread', 80))
+
+    def test_a_guest_can_edit_their_own_item(self):
+        self.client.post(self.url, {'name': 'White bread', 'amount': '1', 'unit': 'slice'})
+        self.bread.refresh_from_db()
+        self.assertEqual(self.bread.grams, 40)
+        self.client.cookies.clear()
+        self.assertEqual(self.client.get(self.url).status_code, 404)

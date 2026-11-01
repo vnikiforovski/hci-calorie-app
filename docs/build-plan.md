@@ -125,68 +125,70 @@ class MealItem(models.Model):
 
 ### Phase A: core checker, including voice (26–29 Oct, ~3 chunks a day)
 
-- [ ] **0. Project setup** (26 Oct)
+- [x] **0. Project setup** (26 Oct)
   - Work: `.venv`, the 4 packages, `startproject zalak`, app `meals`; settings (TEMPLATES DIRS, STATIC, MEDIA, `.env` via python-dotenv); `media/` added to `.gitignore`; a placeholder page.
   - Files: `zalak/settings.py`, `zalak/urls.py`, `meals/apps.py`, `meals/views.py`, `templates/base.html`, `requirements.txt`, `.gitignore`
   - Pattern: settings.py, urls.py + `static()`
   - Test: runserver shows the placeholder; `/admin` loads.
-- [ ] **1. Theme + layout shell** (26 Oct)
+- [x] **1. Theme + layout shell** (26 Oct)
   - Work: Bootstrap, Icons and fonts in `static/`; `zalak.css` (tokens overriding `--bs-*`, pill buttons, cards, confidence badge); `base.html` with the mobile bottom bar / desktop sidebar and a guest header; a "Coming soon" page for Diary and Statistics; a temporary style page.
   - Files: `static/…`, `static/css/zalak.css`, `templates/base.html`, `templates/coming_soon.html`, `templates/style.html`, `views.py`, `urls.py`
   - Pattern: base.html + `{% extends %}`
   - Test: the style page at 390 and 1440; every nav link opens a page.
-- [ ] **2. Models + admin** (26 Oct)
+- [x] **2. Models + admin** (26 Oct)
   - Work: Profile, Meal, MealItem, `units.py`, total properties; admin with `list_display`, the item inline, `get_queryset`, the permissions, `save_model` (owner only).
   - Files: `meals/models.py`, `meals/units.py`, `meals/admin.py`
   - Pattern: models.py, admin.py
   - Test: make a meal with 3 items in /admin; a second non-superuser sees only their own.
-- [ ] **3. Result page (read-only)** (27 Oct)
+- [x] **3. Result page (read-only)** (27 Oct)
   - Work: total range, description, macro bar, item cards with confidence badges, slot dropdown, sticky Just checking / Log (inactive), "Estimate, not medical advice".
   - Files: `views.py`, `urls.py`, `templates/meals/result.html`, `templates/meals/_item_card.html`
   - Pattern: doctor_detail + `{% include %}`
   - Test: `/meal/<id>/` for the admin-made meal, compared with Figma Result; someone else's meal gives a 404.
-- [ ] **4. Text input → fake AI** (27 Oct)
+- [x] **4. Text input → fake AI** (27 Oct)
   - Work: the Text and voice page (TextMealForm, detail chips); POST creates a draft (`commit=False`, slot from time); `services/ai.py` returns a fixed fake JSON; the validator turns it into items; redirect to Result.
   - Files: `forms.py`, `views.py`, `services/ai.py`, `templates/meals/text_input.html`, `static/js/chips.js`
   - Pattern: ModelForm + exclude, `commit=False`, PRG
   - Test: type a meal → Result with the fake items; Analyze is disabled while the field is empty.
-- [ ] **5. Real AI (text)** (27 Oct)
+- [x] **5. Real AI (text)** (27 Oct)
   - Work: the model proposal, then an Anthropic call with structured outputs (JSON schema); the prompt (ranges, the three confidence words, calm tone, no allergen claims); full validation; `AnalysisError`.
   - Files: `services/ai.py`, `settings.py`
   - Pattern: beyond the exam (a service module)
   - Test: "tavče gravče, bread, shopska salad" gives plausible ranges and an unsure item with a reason.
-- [ ] **6. Analyzing + errors** (28 Oct)
+- [x] **6. Analyzing + errors** (28 Oct)
   - Work: an overlay shown instantly on submit with step messages + Cancel (plain JS), where the cookie loses a bite per step (Figma "Cookie (bites = progress)"); the error page "Couldn't analyze this" with Try again (same draft) / Edit the text; the No food found page. Figma has only the photo versions of the error pages, so the text versions are an adaptation; the exact Figma match is checked in chunk 19.
   - Files: `templates/meals/_analyzing.html`, `templates/meals/_input_card.html`, `static/js/analyzing.js`, `views.py`, `urls.py`, `services/ai.py`, `templates/meals/error.html`, `templates/meals/no_food.html`, `zalak.css` (the cookie reuses `img/logo.svg`)
   - Pattern: PRG, `get_object_or_404`
   - Test: a wrong API key → error page with the input kept, and Retry works; "my shoe" → No food found.
-- [ ] **7. Voice input (FR7, Must)** (28 Oct)
+- [x] **7. Voice input (FR7, Must)** (28 Oct)
   - Work: Web Speech API in the text field; idle / listening (pulsing, live words) / done (editable) states; `input_method='voice'`; the mic is hidden when unsupported.
   - Files: `static/js/voice.js`, `templates/meals/text_input.html`, `forms.py`
   - Pattern: JS only where the interaction needs it
   - Test: in Chrome, dictate → edit → Analyze; in Firefox there's no mic and the field still works.
-- [ ] **8. Photo + note** (28 Oct)
+- [x] **8. Photo + note** (28 Oct)
   - Work: PhotoMealForm (`multipart`); the native camera input with a preview; the note + chips; a Tips button placeholder; the image sent to the AI; the photo shown on Result.
   - Files: `forms.py`, `views.py`, `services/ai.py`, `templates/meals/photo_input.html`, `static/js/photo_preview.js`
   - Pattern: ImageField + `request.FILES`
   - Test: a plate photo with "cooked in butter"; a phone on the LAN (`runserver 0.0.0.0:8000`) opens the camera.
-- [ ] **8b. Photo + voice polish** (1 Nov, added after phone tests through the https tunnel)
+- [x] **8b. Photo + voice polish** (1 Nov, added after phone tests through the https tunnel)
   - Work: voice state machine for Android Chrome (every SpeechRecognition event, start/stop watchdogs, `[voice]` console logs, one phrase per tap on Android); waves that follow speech; swipeable photo tips (Figma Tips 1–3) with "Don't show again" in `Profile.seen_photo_tips` or the session; a live camera on phones with the native camera as fallback; a desktop drop zone + two columns; the bigger note-step preview; `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` extras from `.env`.
   - Files: `static/js/voice.js`, `static/js/photo.js`, `static/js/photo_tips.js`, `templates/meals/photo_input.html`, `_photo_tips.html`, `_meal_drawing.html`, `views.py`, `urls.py`, `settings.py`, `zalak.css`
   - Pattern: `@require_POST` + session / Profile, beyond the exam (getUserMedia, DataTransfer)
   - Test: voice on Android through the tunnel stops every time; live camera → note; tips "Don't show again" survives a reload; desktop drag / paste.
-- [ ] **9. Log / Just checking + signals** (29 Oct)
+- [x] **9. Log / Just checking + signals** (29 Oct)
   - Work: Log → `logged`, toast "Logged to lunch · Undo"; Just checking deletes the draft; signals for the slot from time, the counter (draft → logged) and removing the photo file.
   - Files: `views.py`, `signals.py`, `apps.py`, `templates/meals/_toast.html`, a temporary `home.html` list
   - Pattern: signals.py + `ready()`
   - Test: log a meal → the counter goes up once (also when logged from the admin); Undo works; after Just checking the photo is gone from `media/`.
 - [ ] **10. Edit item: amount** (29 Oct)
   - Work: MealItemForm with the name, a stepper + quick fractions, the unit picker (offcanvas-bottom with 4 tabs), the "≈ g" line, a live kcal/macro preview, and Save changes / Reset / Delete item.
-  - Files: `forms.py`, `views.py`, `templates/meals/edit_item.html`, `static/js/portion.js`
+  - Adapted from Figma (agreed 1 Nov): the stepper walks the fractions itself (¼ ½ ¾ 1 1½ 2 2½ 3, then whole numbers; measured units step evenly), no separate chips; no "How it was cooked" row (Could), no fibre/salt, no name suggestions; Delete works now (Undo in chunk 11) but not on the last item; logged meals' items can be edited too (reused in chunk 15). Same unit → scale by the item's own grams per unit; a new unit → the `units.py` table.
+  - Files: `units.py`, `models.py`, `forms.py`, `views.py`, `urls.py`, `templates/meals/edit_item.html`, `_unit_sheet.html`, `_item_card.html`, `static/js/portion.js`, `zalak.css`
   - Pattern: ModelForm with `instance`
   - Test: chicken 150 g → 200 g, and protein updates live and on Result (T2, NFR7).
 - [ ] **11. Add / remove / re-estimate / inline question** (29 Oct)
   - Work: "Add something Zalak missed" and "Re-estimate" via `estimate_item`; remove with Undo; the A little / About that / A lot chips on unsure items.
+  - Done early (1 Nov, with chunk 10): remove with Undo. Delete item keeps a copy of the item in the session; Undo in the toast recreates it with its numbers and position (no soft delete, so no `meal.items` filtering).
   - Files: `views.py`, `services/ai.py`, `templates/meals/result.html`, `templates/meals/_item_card.html`
   - Pattern: POST + redirect
   - Test: add "coffee with milk", remove the bread + Undo, tap "A lot" on the oil.

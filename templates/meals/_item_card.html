@@ -24,10 +24,9 @@
             </div>
             <div class="d-flex flex-column align-items-end justify-content-between gap-2">
                 <span class="z-small fw-semibold z-tabular text-nowrap">{{ item.kcal_min }}–{{ item.kcal_max }} kcal</span>
-                {# Edit item opens in chunk 10 #}
-                <button type="button" class="z-icon-btn" aria-label="Edit {{ item.name }}" disabled>
+                <a class="z-icon-btn" href="{% url 'edit_item' item.meal_id item.id %}" aria-label="Edit {{ item.name }}">
                     <i class="bi bi-pencil" aria-hidden="true"></i>
-                </button>
+                </a>
             </div>
         </div>
 

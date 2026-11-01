@@ -1593,3 +1593,245 @@ button.z-chip:hover { background: var(--z-tint); }
 @media (prefers-reduced-motion: reduce) {
     .z-toast { transition: none; }
 }
+
+/* ---------- Edit item (chunk 10, Figma "Edit item") ---------- */
+
+.z-edit { max-width: 640px; margin: 0 auto; padding-bottom: 2rem; }
+
+.z-edit-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+.z-edit-header h1 { flex: 1; }
+.z-edit-header .z-link-btn { text-decoration: none; font-size: 0.875rem; }
+
+.z-field-label {
+    display: block;
+    margin: 1.25rem 0 0.5rem;
+    color: var(--z-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+}
+.z-field-error { margin: 0.375rem 0 0; color: var(--z-danger); font-size: 0.875rem; }
+
+/* Name field with the pencil inside on the right */
+.z-name-wrap { position: relative; }
+.z-name-field { min-height: 52px; padding-right: 2.75rem; border-radius: 16px; font-weight: 600; }
+.z-name-wrap .bi-pencil {
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    transform: translateY(-50%);
+    color: var(--z-muted);
+    pointer-events: none;
+}
+
+/* Amount card: round - / + around the big number and the unit chip */
+.z-amount { border-radius: 24px; }
+.z-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.z-step-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--z-tint);
+    color: var(--z-ink);
+    font-size: 1.375rem;
+}
+.z-step-btn:hover { background: var(--z-line); }
+.z-step-btn:disabled { background: var(--z-bg); color: var(--z-line); }
+
+.z-step-value {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+}
+.z-step-number { font-size: 2.5rem; line-height: 1; }
+
+.z-unit-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 36px;
+    padding: 0.25rem 0.875rem;
+    border: 0;
+    border-radius: 50rem;
+    background: var(--z-tint);
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+.z-unit-chip:hover { background: var(--z-line); }
+
+.z-grams-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+    padding: 0.625rem;
+    border-radius: 12px;
+    background: var(--z-tint);
+    font-size: 0.875rem;
+}
+.z-grams-line[hidden] { display: none; }
+
+.z-this-item {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+.z-item-kcal { font-size: 1.25rem; }
+
+/* Details: one row per setting, opening its sheet */
+.z-details { padding: 0 1rem; }
+.z-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 64px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--z-ink);
+    text-align: left;
+}
+.z-detail-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--z-tint);
+}
+.z-detail-name { flex: 1; font-weight: 600; }
+
+/* Nutrition: one line closed, three pastel tiles open */
+.z-nutrition-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 1rem;
+    border: 0;
+    background: none;
+    color: var(--z-ink);
+    text-align: left;
+}
+.z-nutrition-chevron { transition: transform 0.2s ease; }
+.z-nutrition-toggle:not(.collapsed) .z-nutrition-chevron { transform: rotate(180deg); }
+.z-nutrition-toggle:not(.collapsed) .z-nutrition-line { display: none; }
+
+.z-macro-tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    padding: 0 1rem 1rem;
+}
+.z-macro-tile { padding: 0.75rem; border-radius: 14px; }
+.z-tile-protein { background: var(--z-peach); }
+.z-tile-carbs { background: var(--z-butter); }
+.z-tile-fat { background: var(--z-lilac); }
+.z-tile-bar { display: block; width: 24px; height: 4px; margin-bottom: 0.5rem; border-radius: 2px; }
+
+/* ---------- Bottom sheet (Unit; same look as the Tips sheet) ---------- */
+
+.z-sheet.offcanvas-bottom {
+    height: auto;
+    max-height: 92vh;
+    padding: 0 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+    background: var(--z-bg);
+}
+.z-sheet-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.z-sheet-body { overflow-y: auto; }
+
+/* Segmented control: the 4 tabs and the bowl sizes */
+.z-segmented {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 50rem;
+    background: var(--z-tint);
+}
+.z-segment {
+    flex: 1;
+    min-height: 40px;
+    padding: 0.375rem 0.5rem;
+    border: 0;
+    border-radius: 50rem;
+    background: none;
+    color: var(--z-muted);
+    font-size: 0.875rem;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.z-segment.active { background: var(--z-card); color: var(--z-ink); font-weight: 600; box-shadow: 0 1px 3px rgba(30, 58, 48, 0.12); }
+.z-segment:has(input:focus-visible) { outline: 2px solid var(--z-ink); outline-offset: 2px; }
+
+.z-unit-list { margin: 0; padding: 0 1rem; }
+.z-unit-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 56px;
+    padding: 0.625rem 0;
+    cursor: pointer;
+}
+.z-unit-option + .z-unit-option { border-top: 1px solid var(--z-line); }
+
+.z-radio {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: var(--z-ink);
+}
+
+@media (min-width: 992px) {
+    /* No desktop frame in Figma: the same centred sheet as Tips */
+    .z-sheet.offcanvas-bottom {
+        left: calc(50% - 240px);
+        right: auto;
+        bottom: 2rem;
+        width: 480px;
+        border-radius: 24px;
+    }
+    .has-sidebar .z-sheet.offcanvas-bottom { left: calc(50% + var(--z-sidebar-width) / 2 - 240px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .z-nutrition-chevron { transition: none; }
+}
+
+/* Result: the toast ("Changes saved") sits above the Just checking / Log bar */
+body:has(.z-actions) .z-toast { bottom: calc(8.5rem + env(safe-area-inset-bottom)); }
