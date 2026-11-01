@@ -18,7 +18,7 @@
     <h1 class="mt-3 mb-3">Describe your meal</h1>
 
     {# The current URL: a new meal, or "Edit the text" of an existing draft (same page) #}
-    <form method="post" action="{{ request.path }}" id="textMealForm" class="z-with-actions" novalidate data-analyzing>
+    <form method="post" action="{{ request.path }}" id="textMealForm" class="z-with-actions" novalidate data-analyzing data-require-text>
         {% csrf_token %}
         {{ form.slot }}
         {{ form.input_method }}

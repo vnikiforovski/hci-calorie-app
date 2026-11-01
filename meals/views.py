@@ -1,11 +1,12 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import Http404
+from django.http import Http404, HttpResponse
+from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import TextMealForm
-from .models import Meal, MealItem, slot_for_time
-from .services.ai import AnalysisError, analyze_text
+from .forms import PhotoMealForm, TextMealForm
+from .models import Meal, MealItem, Profile, slot_for_time
+from .services.ai import AnalysisError, analyze_photo, analyze_text
 
 
 def home(request):
@@ -36,8 +37,13 @@ SLOT_OPTIONS = [
 ]
 SLOT_ICONS = {value: icon for value, label, icon in SLOT_OPTIONS}
 
-# The steps the Analyzing overlay shows for a typed meal (the photo has its own in chunk 8)
+# The steps the Analyzing overlay shows, for a typed / dictated meal and for a photo
 TEXT_STEPS = ['Reading your meal', 'Finding the foods', 'Estimating portions']
+PHOTO_STEPS = ['Looking at your photo', 'Finding the foods', 'Estimating portions']
+
+
+def steps_for(meal):
+    return PHOTO_STEPS if meal and meal.photo else TEXT_STEPS
 
 
 def result(request, meal_id):
@@ -104,7 +110,11 @@ def analyze_meal(meal):
     """Ask the AI about a saved draft and redirect to what comes next:
     Result, No food found, or the error page. Used by Analyze and Try again."""
     try:
-        data = analyze_text(meal.text)
+        if meal.photo:
+            with meal.photo.open('rb') as photo:
+                data = analyze_photo(photo.read(), meal.text)
+        else:
+            data = analyze_text(meal.text)
     except AnalysisError as error:
         # The draft and its input stay saved, so nothing is lost (FR29)
         return redirect(reverse('analysis_error', args=[meal.id]) + f'?why={error.kind}')
@@ -136,6 +146,9 @@ def text_input(request, meal_id=None):
         form = TextMealForm(request.POST, instance=meal)
         if form.is_valid():
             meal = form.save(commit=False)   # input_method (text or voice) comes from the form
+            if meal.photo:
+                # "Describe it instead" on a photo draft: it becomes a text meal, still one draft
+                meal.photo.delete(save=False)
             if not meal.slot:
                 meal.slot = slot_for_time(timezone.now())
             if meal_id is None:
@@ -159,6 +172,64 @@ def text_input(request, meal_id=None):
     return render(request, 'meals/text_input.html', context)
 
 
+def photo_input(request, meal_id=None):
+    """Photo + note. Without meal_id it starts a new draft; with one ("Take another photo")
+    it gives that draft a new photo, so a retake doesn't leave a second draft behind."""
+    meal = get_own_draft(request, meal_id) if meal_id else None
+    old_photo = meal.photo.name if meal and meal.photo else ''
+
+    if request.method == 'POST':
+        form = PhotoMealForm(request.POST, request.FILES, instance=meal)
+        if form.is_valid():
+            meal = form.save(commit=False)
+            meal.input_method = 'photo'
+            if not meal.slot:
+                meal.slot = slot_for_time(timezone.now())
+            if meal_id is None:
+                set_owner(request, meal)
+            # Saved first, so the photo and note are kept even if the AI fails (FR29)
+            meal.save()
+            if old_photo and old_photo != meal.photo.name:
+                meal.photo.storage.delete(old_photo)   # the retaken photo replaces the old file
+            return analyze_meal(meal)
+    elif meal:
+        form = PhotoMealForm(instance=meal)
+    else:
+        slot = request.GET.get('slot')
+        if slot not in SLOT_ICONS:
+            slot = slot_for_time(timezone.now())
+        form = PhotoMealForm(initial={'slot': slot})
+
+    slot = form['slot'].value() or slot_for_time(timezone.now())
+    context = {
+        'form': form,
+        'slot': slot,
+        'steps': PHOTO_STEPS,
+        'show_tips': not tips_seen(request),   # the tips open by themselves until "Don't show again"
+    }
+    return render(request, 'meals/photo_input.html', context)
+
+
+def tips_seen(request):
+    """True after "Don't show these tips again": kept in the Profile, or in the session for a guest."""
+    if request.user.is_authenticated:
+        return Profile.objects.filter(user=request.user, seen_photo_tips=True).exists()
+    return request.session.get('seen_photo_tips', False)
+
+
+@require_POST
+def photo_tips_seen(request):
+    """Sent by photo_tips.js when the tips close with "Don't show these tips again" ticked."""
+    if request.user.is_authenticated:
+        # get_or_create: the Profile signal for new users only arrives in chunk 12
+        profile, created = Profile.objects.get_or_create(user=request.user)
+        profile.seen_photo_tips = True
+        profile.save()
+    else:
+        request.session['seen_photo_tips'] = True
+    return HttpResponse(status=204)
+
+
 def retry(request, meal_id):
     """Try again on the error page: the same draft goes to the AI again."""
     meal = get_own_draft(request, meal_id)
@@ -176,17 +247,18 @@ def analysis_error(request, meal_id):
     context = {
         'meal': meal,
         'why': why,
-        'steps': TEXT_STEPS,
+        'steps': steps_for(meal),
     }
     return render(request, 'meals/error.html', context)
 
 
 def no_food(request, meal_id):
     meal = get_own_draft(request, meal_id)
-    reason = (meal.ai_response or {}).get('no_food_reason', '')
+    answer = meal.ai_response or {}
     context = {
         'meal': meal,
-        'reason': reason,
+        'reason': answer.get('no_food_reason', ''),
+        'seen': answer.get('seen', []),
     }
     return render(request, 'meals/no_food.html', context)
 

@@ -22,6 +22,17 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 
+def env_list(name, defaults):
+    """A comma-separated list from .env, added to the defaults (duplicates dropped).
+    E.g. DJANGO_ALLOWED_HOSTS=192.168.1.183 to open the app from a phone on the LAN."""
+    values = list(defaults)
+    for value in os.environ.get(name, '').split(','):
+        value = value.strip()
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -31,7 +42,10 @@ SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# localhost for the laptop, *.trycloudflare.com for phone tests through the https tunnel;
+# more hosts (a LAN IP) come from .env
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['localhost', '127.0.0.1', '.trycloudflare.com'])
+CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', ['https://*.trycloudflare.com'])
 
 
 # Application definition
@@ -130,7 +144,7 @@ STATICFILES_DIRS = [
 
 # Added as ?v= to our own CSS and JS links (meals/context_processors.py).
 # Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
-STATIC_VERSION = '4'
+STATIC_VERSION = '7'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

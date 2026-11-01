@@ -1,0 +1,74 @@
+{# Photo tips, Figma "Photo · Tips 1-3 of 3": a bottom sheet with three swipeable cards.          #}
+{# Opens by itself on phones until "Don't show these tips again" (show_tips from the view).       #}
+{# photo_tips.js runs the dots and buttons and stores the choice through photo_tips_seen.         #}
+{% include 'meals/_meal_drawing.html' %}
+
+<div class="offcanvas offcanvas-bottom z-tips" tabindex="-1" id="photoTips" aria-labelledby="photoTipsTitle"
+     data-seen-url="{% url 'photo_tips_seen' %}" {% if show_tips %}data-auto-open{% endif %}>
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+    <h2 class="visually-hidden" id="photoTipsTitle">Tips for a good photo</h2>
+
+    {# Native swiping (scroll snap); focusable, so the arrow keys move it too #}
+    <div class="z-tips-track" id="tipsTrack" tabindex="0" aria-label="Three tips. Swipe, or use the arrow keys.">
+        <section class="z-tip" aria-label="Tip 1 of 3">
+            <div class="z-tip-cards">
+                <div class="z-tip-card is-good">
+                    <span class="z-tip-badge"><i class="bi bi-check-lg" aria-hidden="true"></i><span class="visually-hidden">Do:</span></span>
+                    <svg class="z-tip-meal" role="img" aria-label="The whole plate inside the photo"><use href="#zMeal"/></svg>
+                </div>
+                <div class="z-tip-card is-bad">
+                    <span class="z-tip-badge"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Don't:</span></span>
+                    <svg class="z-tip-meal is-cut" role="img" aria-label="Half the plate outside the photo"><use href="#zMeal"/></svg>
+                </div>
+            </div>
+            <h3 class="z-tip-title">Fit the whole plate</h3>
+            <p class="z-tip-text">Keep every food and drink inside the corners. Zalak can only count what it can see.</p>
+        </section>
+
+        <section class="z-tip" aria-label="Tip 2 of 3">
+            <div class="z-tip-cards">
+                <div class="z-tip-card is-good">
+                    <span class="z-tip-badge"><i class="bi bi-check-lg" aria-hidden="true"></i><span class="visually-hidden">Do:</span></span>
+                    <svg class="z-tip-meal" role="img" aria-label="A bright photo taken from above"><use href="#zMeal"/></svg>
+                </div>
+                <div class="z-tip-card is-bad is-dark">
+                    <span class="z-tip-badge"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Don't:</span></span>
+                    <svg class="z-tip-meal is-side" role="img" aria-label="A dark photo taken from the side"><use href="#zMeal"/></svg>
+                </div>
+            </div>
+            <h3 class="z-tip-title">Good light, from above</h3>
+            <p class="z-tip-text">Shoot from above in good light. Dark or side photos hide portions.</p>
+        </section>
+
+        <section class="z-tip" aria-label="Tip 3 of 3">
+            <div class="z-tip-cards">
+                <div class="z-tip-card is-good">
+                    <span class="z-tip-badge"><i class="bi bi-check-lg" aria-hidden="true"></i><span class="visually-hidden">Do:</span></span>
+                    <svg class="z-tip-meal is-left" role="img" aria-label="A photo with a note"><use href="#zMeal"/></svg>
+                    <span class="z-tip-note" aria-hidden="true">cooked in butter</span>
+                </div>
+                <div class="z-tip-card is-bad">
+                    <span class="z-tip-badge"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="visually-hidden">Don't:</span></span>
+                    <svg class="z-tip-meal" role="img" aria-label="A photo without a note"><use href="#zMeal"/></svg>
+                </div>
+            </div>
+            <h3 class="z-tip-title">Add what the photo can't show</h3>
+            <p class="z-tip-text">A short note like "cooked in butter" or "I ate half" makes the estimate much better.</p>
+        </section>
+    </div>
+
+    <div class="z-tip-dots" aria-hidden="true"><span class="active"></span><span></span><span></span></div>
+
+    {# Tips 1 and 2: Skip / Next. Tip 3: the checkbox and Got it. #}
+    <div class="z-tip-actions" id="tipsMore">
+        <button type="button" class="btn btn-outline-secondary btn-lg" data-bs-dismiss="offcanvas">Skip</button>
+        <button type="button" class="btn btn-primary btn-lg" id="tipsNext">Next</button>
+    </div>
+    <div class="z-tip-actions is-last" id="tipsLast" hidden>
+        <label class="z-tip-check">
+            <input class="form-check-input mt-0" type="checkbox" id="tipsDontShow">
+            Don't show these tips again
+        </label>
+        <button type="button" class="btn btn-primary btn-lg" data-bs-dismiss="offcanvas">Got it</button>
+    </div>
+</div>

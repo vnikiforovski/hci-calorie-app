@@ -17,11 +17,33 @@
         {% include 'meals/_input_card.html' with chip='No food found' chip_icon='bi-search' %}
         <h1>Zalak couldn't find food here</h1>
         <p class="z-state-text">Nothing was logged. {{ reason }}</p>
+
+        {% if meal.photo %}
+            {# Figma "Photo · No food found": what Zalak saw, and how to take the next photo #}
+            {% if seen %}
+                <p class="z-seen">
+                    <span class="z-small text-body-secondary">Zalak saw:</span>
+                    {% for thing in seen %}<span class="z-tag z-small">{{ thing }}</span>{% endfor %}
+                </p>
+            {% endif %}
+
+            <h2 class="z-small fw-semibold text-start mt-4 mb-2">For the next photo</h2>
+            <ul class="z-photo-tips">
+                <li><span class="z-tip-icon z-tint-peach" aria-hidden="true"><i class="bi bi-bounding-box-circles"></i></span>Whole plate in the corners</li>
+                <li><span class="z-tip-icon z-tint-butter" aria-hidden="true"><i class="bi bi-brightness-high"></i></span>Good light or flash</li>
+                <li><span class="z-tip-icon z-tint-lilac" aria-hidden="true"><i class="bi bi-phone"></i></span>Phone right above the plate</li>
+            </ul>
+        {% endif %}
     </div>
 
     <div class="z-actions">
         <div class="z-actions-buttons z-actions-one">
-            <a class="btn btn-primary btn-lg" href="{% url 'edit_text' meal.id %}">Describe it again</a>
+            {% if meal.photo %}
+                <a class="btn btn-primary btn-lg" href="{% url 'edit_photo' meal.id %}">Take another photo</a>
+                <a class="btn btn-outline-secondary btn-lg" href="{% url 'edit_text' meal.id %}">Describe it instead</a>
+            {% else %}
+                <a class="btn btn-primary btn-lg" href="{% url 'edit_text' meal.id %}">Describe it again</a>
+            {% endif %}
         </div>
     </div>
 {% endblock %}

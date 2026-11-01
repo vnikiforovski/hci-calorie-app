@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Photo of your meal{% endblock %}
+
+{# Checker screen: no header or bottom bar #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    {# photo.js picks a mode on load and sets data-mode:                                              #}
+    {#   live    phones with camera access: the live viewfinder, then the note step                     #}
+    {#   native  phones without it: the note step with "Take a photo" (the phone's own camera)          #}
+    {#   desktop 992 px and wider: a drop zone, then the photo and the note in two columns              #}
+    {# Without JavaScript the native note step shows. "Take another photo" uses this page for a draft.  #}
+    <div class="z-photo-page" id="photoPage" data-mode="native">
+        <form method="post" action="{{ request.path }}" enctype="multipart/form-data" id="photoMealForm" novalidate data-analyzing>
+            {% csrf_token %}
+            {{ form.slot }}
+            {{ form.photo }}
+
+            {# Live camera, Figma "Photo · Camera" (phones only) #}
+            <section class="z-camera" id="cameraState" aria-labelledby="cameraTitle" hidden>
+                <div class="z-camera-top">
+                    <a class="z-camera-btn" href="{% url 'home' %}" aria-label="Close and go to Home">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </a>
+                    <span class="z-camera-slot"><span class="visually-hidden">Meal slot:</span> {{ slot|capfirst }}</span>
+                    <span class="z-camera-spacer" aria-hidden="true"></span>
+                </div>
+
+                <div class="z-viewfinder">
+                    <video id="cameraVideo" playsinline muted autoplay aria-hidden="true"></video>
+                    <span class="z-corner z-corner-tl" aria-hidden="true"></span>
+                    <span class="z-corner z-corner-tr" aria-hidden="true"></span>
+                    <span class="z-corner z-corner-bl" aria-hidden="true"></span>
+                    <span class="z-corner z-corner-br" aria-hidden="true"></span>
+                    <h1 class="visually-hidden" id="cameraTitle">Take a photo of your meal</h1>
+                    <p class="z-viewfinder-hint">Fit the whole plate inside the corners</p>
+                </div>
+
+                <p class="z-photo-message" data-photo-message role="status">{% for error in form.photo.errors %}{{ error }} {% endfor %}</p>
+
+                <div class="z-camera-bar">
+                    <button type="button" class="z-camera-side" id="uploadButton">
+                        <span class="z-camera-side-icon" aria-hidden="true"><i class="bi bi-image"></i></span>
+                        Upload
+                    </button>
+                    <button type="button" class="z-shutter" id="shutterButton" aria-label="Take the photo">
+                        <span aria-hidden="true"></span>
+                    </button>
+                    <button type="button" class="z-camera-side" data-bs-toggle="offcanvas" data-bs-target="#photoTips" aria-controls="photoTips">
+                        <span class="z-camera-side-icon z-round" aria-hidden="true"><i class="bi bi-lightbulb"></i></span>
+                        Tips
+                    </button>
+                </div>
+            </section>
+
+            {# Desktop step 1: drop, choose or paste a photo #}
+            <section class="z-drop-step" id="dropState" aria-labelledby="dropTitle" hidden>
+                <div class="z-back-row">
+                    <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Close and go to Home">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </a>
+                    <span class="fw-medium">Add to {{ slot }}</span>
+                </div>
+                <h1 class="mt-3 mb-3" id="dropTitle">Add a photo of your meal</h1>
+
+                <div class="z-dropzone" id="dropZone">
+                    <span class="z-dropzone-icon" aria-hidden="true"><i class="bi bi-image"></i></span>
+                    <p class="mb-0">Drag a meal photo here, or
+                        <button type="button" class="z-link-btn" id="chooseFileButton">choose a file</button>
+                    </p>
+                    <p class="z-small text-body-secondary mb-0">You can also paste a photo (Ctrl+V)</p>
+                </div>
+
+                <p class="z-photo-message" data-photo-message role="status">{% for error in form.photo.errors %}{{ error }} {% endfor %}</p>
+
+                <button type="button" class="z-link-btn mt-2" data-bs-toggle="offcanvas" data-bs-target="#photoTips" aria-controls="photoTips">
+                    <i class="bi bi-lightbulb" aria-hidden="true"></i> Tips for a good photo
+                </button>
+            </section>
+
+            {# The note step, Figma "Photo · Add a note". On desktop: the photo left, the note right. #}
+            <section class="z-note" id="noteState">
+                <div class="z-hero z-note-band">
+                    <div class="z-hero-top">
+                        <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Close and go to Home">
+                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                        </a>
+                        <button type="button" class="z-retake" id="noteTipsButton" data-bs-toggle="offcanvas" data-bs-target="#photoTips" aria-controls="photoTips">
+                            <i class="bi bi-lightbulb" aria-hidden="true"></i> Tips
+                        </button>
+                        <button type="button" class="z-retake" id="retakeButton" hidden>
+                            <i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span id="retakeLabel">Retake</span>
+                        </button>
+                    </div>
+                    <div class="z-plate">
+                        <img class="z-note-photo" id="photoPreview" alt="Your photo of the meal" hidden>
+                        {# No photo yet (native mode): the ring itself opens the phone's camera #}
+                        <button type="button" class="z-take-photo" id="takePhotoButton">
+                            <i class="bi bi-camera" aria-hidden="true"></i>
+                            Take a photo
+                        </button>
+                    </div>
+                    <button type="button" class="z-link-btn z-gallery-link" id="galleryButton">Choose from gallery</button>
+                </div>
+
+                <div class="z-result z-note-sheet">
+                    <p class="z-photo-message" data-photo-message role="status">{% for error in form.photo.errors %}{{ error }} {% endfor %}</p>
+
+                    <h2 class="h1 mb-2" id="noteTitle" tabindex="-1">Anything the photo can't show?</h2>
+                    <p class="z-small text-body-secondary mb-3">Optional. It helps Zalak with hidden oil, sauces and portions.</p>
+
+                    {{ form.text }}
+
+                    <div class="z-chip-row mt-3">
+                        <button type="button" class="z-chip" data-insert="cooked in oil"><i class="bi bi-plus-lg" aria-hidden="true"></i> Cooked in oil</button>
+                        <button type="button" class="z-chip" data-insert="half portion"><i class="bi bi-plus-lg" aria-hidden="true"></i> Half portion</button>
+                        <button type="button" class="z-chip" data-insert="sauce on the side"><i class="bi bi-plus-lg" aria-hidden="true"></i> Sauce on the side</button>
+                        <button type="button" class="z-chip" data-insert="shared dish"><i class="bi bi-plus-lg" aria-hidden="true"></i> Shared dish</button>
+                    </div>
+
+                    <div class="z-actions">
+                        <div class="z-actions-buttons z-actions-one">
+                            <button type="submit" class="btn btn-primary btn-lg" id="analyzeButton">Analyze</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </form>
+    </div>
+
+    {% include 'meals/_photo_tips.html' %}
+    {% include 'meals/_analyzing.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/chips.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/photo.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/photo_tips.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

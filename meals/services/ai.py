@@ -1,9 +1,10 @@
-"""The only place that talks to the AI. Views call analyze_text() and get back
+"""The only place that talks to the AI. Views call analyze_text() or analyze_photo() and get back
 validated data, or an AnalysisError that they handle like any AI failure.
 
 The model must answer JSON in the shape of RESPONSE_SCHEMA (structured outputs);
 validate() then checks the rules a schema can't express (min <= max, unsure needs a reason)."""
 
+import base64
 import json
 import logging
 import os
@@ -30,8 +31,11 @@ class AnalysisError(Exception):
         self.kind = kind
 
 
-SYSTEM_PROMPT = f"""You are Zalak, a calm meal calorie checker. The user describes a meal they ate.
-Split it into food items and estimate each one for the portion eaten.
+SYSTEM_PROMPT = f"""You are Zalak, a calm meal calorie checker. The user describes a meal they ate,
+or sends a photo of it with an optional note. Split it into food items and estimate each one for the portion eaten.
+
+With a photo: judge portions against the plate and the cutlery. The note wins over the photo
+(e.g. "I ate half", "cooked in butter"). Name what you can see; mark items you can't see well as unsure.
 
 For each item give:
 - name: short and plain, e.g. "White bread".
@@ -48,7 +52,9 @@ You know Macedonian and Balkan dishes (tavče gravče, shopska salad, burek, ajv
 title: a short name for the whole meal. description: one neutral sentence about the meal.
 Never call a food good, bad, healthy or unhealthy, give no advice, and make no allergen claims.
 
-If the text contains no food or drink, answer status "no_food" with a kind one-sentence no_food_reason and no items. Otherwise status "ok"."""
+seen: up to 3 short things you noticed in the photo (e.g. "a dark room", "part of a table"); empty for text.
+If the text or photo contains no food or drink, or the photo is too dark or blurry to see the food, answer status "no_food"
+with a kind one-sentence no_food_reason (e.g. "The photo looks too dark to see a plate.") and no items. Otherwise status "ok"."""
 
 
 def _item_schema():
@@ -72,11 +78,12 @@ RESPONSE_SCHEMA = {
     'properties': {
         'status': {'type': 'string', 'enum': ['ok', 'no_food']},
         'no_food_reason': {'type': 'string'},
+        'seen': {'type': 'array', 'items': {'type': 'string'}},
         'title': {'type': 'string'},
         'description': {'type': 'string'},
         'items': {'type': 'array', 'items': _item_schema()},
     },
-    'required': ['status', 'no_food_reason', 'title', 'description', 'items'],
+    'required': ['status', 'no_food_reason', 'seen', 'title', 'description', 'items'],
     'additionalProperties': False,
 }
 
@@ -84,6 +91,7 @@ RESPONSE_SCHEMA = {
 FAKE_RESPONSE = {
     'status': 'ok',
     'no_food_reason': '',
+    'seen': [],
     'title': 'Tavče gravče with bread and salad',
     'description': 'A filling lunch with good protein and fibre.',
     'items': [
@@ -111,15 +119,38 @@ FAKE_RESPONSE = {
 def analyze_text(text):
     """Estimate a typed or dictated meal. Returns validated data (see validate)."""
     if settings.ZALAK_AI_FAKE:
-        if settings.ZALAK_AI_FAKE_DELAY > 0:
-            time.sleep(settings.ZALAK_AI_FAKE_DELAY)   # act like a real call, so the overlay shows
-        return validate(FAKE_RESPONSE)
+        return _fake_answer()
     return validate(_ask_model(text))
+
+
+def analyze_photo(image_bytes, note=''):
+    """Estimate a meal from a photo (JPEG, already shrunk by the form) and the optional note.
+    The photo and the note go in one message, so the AI reads them together (late fusion)."""
+    if settings.ZALAK_AI_FAKE:
+        return _fake_answer()
+    content = [
+        {
+            'type': 'image',
+            'source': {
+                'type': 'base64',
+                'media_type': 'image/jpeg',
+                'data': base64.standard_b64encode(image_bytes).decode('ascii'),
+            },
+        },
+        {'type': 'text', 'text': f'Note: {note}' if note else 'No note.'},
+    ]
+    return validate(_ask_model(content))
+
+
+def _fake_answer():
+    if settings.ZALAK_AI_FAKE_DELAY > 0:
+        time.sleep(settings.ZALAK_AI_FAKE_DELAY)   # act like a real call, so the overlay shows
+    return validate(FAKE_RESPONSE)
 
 
 def _ask_model(user_content):
     """One call to Claude. Returns the parsed JSON answer or raises AnalysisError.
-    user_content is the message content: the meal text now, text + image for photos (chunk 8)."""
+    user_content is the message content: the meal text, or an image block + the note for photos."""
     if not os.environ.get('ANTHROPIC_API_KEY'):
         # Without a key the SDK raises TypeError, not APIError, so check it ourselves
         logger.warning('ANTHROPIC_API_KEY is not set in .env')
@@ -160,14 +191,15 @@ def _ask_model(user_content):
 
 def validate(data):
     """Check the AI answer against the rules in docs/build-plan.md and clean it.
-    Returns {'status', 'no_food_reason', 'title', 'description', 'items'}."""
+    Returns {'status', 'no_food_reason', 'seen', 'title', 'description', 'items'}."""
     if not isinstance(data, dict):
         raise AnalysisError('The answer is not an object.')
 
+    seen = _seen(data.get('seen'))
     status = data.get('status')
     if status == 'no_food':
         return {'status': 'no_food', 'no_food_reason': _text(data.get('no_food_reason'), 200),
-                'title': '', 'description': '', 'items': []}
+                'seen': seen, 'title': '', 'description': '', 'items': []}
     if status != 'ok':
         raise AnalysisError(f'Unknown status: {status!r}')
 
@@ -178,6 +210,7 @@ def validate(data):
     return {
         'status': 'ok',
         'no_food_reason': '',
+        'seen': seen,
         'title': _text(data.get('title'), 120),
         'description': _text(data.get('description'), 200),
         'items': [_validate_item(item) for item in items],
@@ -231,3 +264,11 @@ def _number(value):
 def _text(value, limit):
     """Trimmed text, cut to the field length. Missing text becomes ''."""
     return str(value or '').strip()[:limit]
+
+
+def _seen(value):
+    """Up to 3 short things the AI noticed in the photo; anything else becomes []."""
+    if not isinstance(value, list):
+        return []
+    words = [_text(word, 40) for word in value if isinstance(word, str)]
+    return [word for word in words if word][:3]

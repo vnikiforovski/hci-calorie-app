@@ -1,14 +1,21 @@
 import copy
+import shutil
+import tempfile
+from io import BytesIO
 from unittest.mock import patch
 
 import anthropic
 import httpx2
 
+from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from PIL import Image
 from django.urls import reverse
 
-from .models import Meal
+from .models import Meal, Profile
 from .services.ai import FAKE_RESPONSE, AnalysisError, analyze_text, validate
+from zalak.settings import env_list
 
 
 def good_answer():
@@ -293,3 +300,177 @@ class AskModelErrorTests(TestCase):
         response = httpx2.Response(401, request=request)
         error = anthropic.AuthenticationError('bad key', response=response, body=None)
         self.assertEqual(self.call_with(error).kind, 'failed')
+
+
+def jpeg(name='plate.jpg', size=(40, 30)):
+    """A small real JPEG, as a phone would upload it."""
+    buffer = BytesIO()
+    Image.new('RGB', size, (200, 120, 60)).save(buffer, 'JPEG')
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/jpeg')
+
+
+class SeenTests(TestCase):
+    def test_seen_is_cleaned_and_capped(self):
+        data = validate({'status': 'no_food', 'no_food_reason': 'Too dark.',
+                         'seen': [' a dark room ', 'part of a table', '', 'a lamp', 'a cat', 7]})
+        self.assertEqual(data['seen'], ['a dark room', 'part of a table', 'a lamp'])
+
+    def test_missing_seen_is_empty(self):
+        self.assertEqual(validate(good_answer() | {'seen': 'oops'})['seen'], [])
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class PhotoInputTests(TestCase):
+    """Chunk 8: photo + note, the photo error pages, Take another photo and Describe it instead."""
+    url = reverse('photo_input')
+
+    def setUp(self):
+        media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media, ignore_errors=True)
+        settings_override = override_settings(MEDIA_ROOT=media)
+        settings_override.enable()
+        self.addCleanup(settings_override.disable)
+
+    def post(self, url=None, answer=None, **data):
+        data.setdefault('slot', 'lunch')
+        with patch('meals.services.ai._ask_model', return_value=answer or good_answer()) as ask_model:
+            response = self.client.post(url or self.url, data)
+        return response, ask_model
+
+    def test_page_loads(self):
+        response = self.client.get(self.url)
+        self.assertContains(response, 'enctype="multipart/form-data"')
+        self.assertContains(response, 'Looking at your photo')
+        self.assertContains(response, 'js/photo.js?v=')
+        self.assertContains(response, 'js/photo_tips.js?v=')
+        self.assertContains(response, '<video id="cameraVideo"')
+
+    def test_photo_and_note_go_to_the_ai_together(self):
+        response, ask_model = self.post(photo=jpeg(), text='cooked in butter')
+        meal = Meal.objects.get()
+        self.assertRedirects(response, reverse('result', args=[meal.id]))
+        self.assertEqual(meal.input_method, 'photo')
+        self.assertEqual(meal.text, 'cooked in butter')
+        self.assertTrue(meal.photo.name.endswith('.jpg'))
+
+        image, note = ask_model.call_args.args[0]
+        self.assertEqual(image['type'], 'image')
+        self.assertEqual(image['source']['media_type'], 'image/jpeg')
+        self.assertEqual(note, {'type': 'text', 'text': 'Note: cooked in butter'})
+
+        result = self.client.get(reverse('result', args=[meal.id]))
+        self.assertContains(result, meal.photo.url)
+
+    def test_big_photo_is_shrunk(self):
+        self.post(photo=jpeg(size=(3000, 2000)))
+        with Image.open(Meal.objects.get().photo.path) as image:
+            self.assertEqual(image.size, (1568, 1045))
+
+    def test_not_an_image_is_refused_calmly(self):
+        bad = SimpleUploadedFile('menu.txt', b'not a photo', content_type='text/plain')
+        response, ask_model = self.post(photo=bad)
+        self.assertContains(response, "Zalak can&#x27;t read that file. Try another photo.")
+        self.assertFalse(Meal.objects.exists())
+        ask_model.assert_not_called()
+
+    def test_no_photo_is_refused(self):
+        response, ask_model = self.post(text='just a note')
+        self.assertContains(response, 'Take or choose a photo first.')
+        self.assertFalse(Meal.objects.exists())
+
+    def test_try_again_sends_the_photo_again(self):
+        with patch('meals.services.ai._ask_model', side_effect=AnalysisError('down')):
+            self.client.post(self.url, {'photo': jpeg(), 'slot': 'lunch'})
+        meal = Meal.objects.get()
+        page = self.client.get(reverse('analysis_error', args=[meal.id]))
+        self.assertContains(page, 'Describe it instead')
+        self.assertContains(page, 'Looking at your photo')
+
+        response, ask_model = self.post(url=reverse('retry', args=[meal.id]))
+        self.assertRedirects(response, reverse('result', args=[meal.id]))
+        self.assertEqual(ask_model.call_args.args[0][0]['type'], 'image')
+
+    def test_photo_no_food_page(self):
+        no_food = NO_FOOD | {'no_food_reason': 'The photo looks too dark to see a plate.',
+                             'seen': ['a dark room', 'part of a table']}
+        self.post(photo=jpeg(), answer=no_food)
+        meal = Meal.objects.get()
+        page = self.client.get(reverse('no_food', args=[meal.id]))
+        self.assertContains(page, 'a dark room')
+        self.assertContains(page, 'For the next photo')
+        self.assertContains(page, reverse('edit_photo', args=[meal.id]))
+        self.assertContains(page, 'Describe it instead')
+
+    def test_take_another_photo_replaces_the_file(self):
+        self.post(photo=jpeg(), answer=NO_FOOD)
+        meal = Meal.objects.get()
+        old_photo = meal.photo.name
+
+        self.post(url=reverse('edit_photo', args=[meal.id]), photo=jpeg('second.jpg'))
+        meal.refresh_from_db()
+        self.assertEqual(Meal.objects.count(), 1)              # the same draft
+        self.assertNotEqual(meal.photo.name, old_photo)
+        self.assertFalse(meal.photo.storage.exists(old_photo))  # no orphan file
+
+    def test_describe_it_instead_makes_a_text_meal(self):
+        self.post(photo=jpeg(), answer=NO_FOOD)
+        meal = Meal.objects.get()
+        photo_name = meal.photo.name
+
+        with patch('meals.services.ai._ask_model', return_value=good_answer()) as ask_model:
+            self.client.post(reverse('edit_text', args=[meal.id]),
+                             {'text': 'tavče gravče and bread', 'slot': 'lunch'})
+        meal.refresh_from_db()
+        self.assertEqual(meal.input_method, 'text')
+        self.assertFalse(meal.photo)
+        self.assertFalse(meal.photo.storage.exists(photo_name))
+        self.assertEqual(ask_model.call_args.args[0], 'tavče gravče and bread')
+
+    def test_another_guest_gets_404(self):
+        self.post(photo=jpeg(), answer=NO_FOOD)
+        meal = Meal.objects.get()
+        self.client.cookies.clear()
+        response = self.client.get(reverse('edit_photo', args=[meal.id]))
+        self.assertEqual(response.status_code, 404)
+
+
+class PhotoTipsTests(TestCase):
+    """Chunk 8b: the tips open by themselves until "Don't show these tips again"."""
+    page = reverse('photo_input')
+    seen = reverse('photo_tips_seen')
+
+    def test_guest_choice_is_kept_in_the_session(self):
+        self.assertContains(self.client.get(self.page), 'data-auto-open')
+        response = self.client.post(self.seen)
+        self.assertEqual(response.status_code, 204)
+        self.assertTrue(self.client.session['seen_photo_tips'])
+        self.assertNotContains(self.client.get(self.page), 'data-auto-open')
+
+    def test_signed_in_choice_is_kept_in_the_profile(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        self.assertContains(self.client.get(self.page), 'data-auto-open')
+
+        self.client.post(self.seen)   # no Profile yet (the signal comes in chunk 12): it is created
+        self.assertTrue(Profile.objects.get(user=user).seen_photo_tips)
+        self.assertNotContains(self.client.get(self.page), 'data-auto-open')
+
+    def test_only_a_post_stores_it(self):
+        self.assertEqual(self.client.get(self.seen).status_code, 405)
+
+
+class EnvListTests(TestCase):
+    """Chunk 8b: ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS take extra values from .env."""
+
+    def test_defaults_alone(self):
+        with patch.dict('os.environ', {}, clear=True):
+            self.assertEqual(env_list('HOSTS', ['localhost']), ['localhost'])
+
+    def test_extras_are_added_and_trimmed(self):
+        with patch.dict('os.environ', {'HOSTS': ' 192.168.1.183 , ,example.com'}):
+            self.assertEqual(env_list('HOSTS', ['localhost']),
+                             ['localhost', '192.168.1.183', 'example.com'])
+
+    def test_no_duplicates(self):
+        with patch.dict('os.environ', {'HOSTS': 'localhost,127.0.0.1'}):
+            self.assertEqual(env_list('HOSTS', ['localhost', '127.0.0.1']), ['localhost', '127.0.0.1'])

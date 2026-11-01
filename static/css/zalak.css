@@ -819,21 +819,27 @@ button.z-chip:hover { background: var(--z-tint); }
     50% { transform: scale(1); }
 }
 
-/* Decorative: Web Speech gives no sound level, so the bars only show "listening" */
+/* Decorative, without a second audio stream (Web Speech gives no sound level):
+   flat while listening in silence, moving while speech is heard (is-speaking, onspeechstart),
+   a short pulse for each recognised word (is-pulse, onresult), flat again at onspeechend / onend */
 .z-wave {
     display: none;
     align-items: center;
     gap: 4px;
     height: 30px;
     margin-top: 0.75rem;
+    transition: transform 0.15s ease-out;
 }
 .z-voice.is-listening .z-wave { display: flex; }
+.z-wave.is-pulse { transform: scale(1.15); }
 .z-wave span {
     width: 4px;
     border-radius: 2px;
     background: var(--z-accent);
-    animation: z-wave 0.9s ease-in-out infinite alternate;
+    transform: scaleY(0.3);
+    transition: transform 0.2s ease-out;   /* settles back to flat */
 }
+.z-voice.is-speaking .z-wave span { animation: z-wave 0.9s ease-in-out infinite alternate; }
 /* Bar heights from the Figma frame, each starting at a different moment */
 .z-wave span:nth-child(1) { height: 10px; animation-delay: -0.1s; }
 .z-wave span:nth-child(2) { height: 22px; animation-delay: -0.5s; }
@@ -861,8 +867,437 @@ button.z-chip:hover { background: var(--z-tint); }
     /* The rings and bars stay still, as in the Figma frame */
     .z-voice.is-listening .z-mic-circle::before,
     .z-voice.is-listening .z-mic-circle::after,
-    .z-wave span { animation: none; }
+    .z-voice.is-speaking .z-wave span { animation: none; }
+    .z-wave span { transform: none; transition: none; }   /* the Figma bar heights, still */
+    .z-wave,
+    .z-wave.is-pulse { transform: none; transition: none; }
 }
+
+/* ---------- Photo (chunks 8 and 8b, Figma "Photo · Camera / Tips / Add a note") ---------- */
+
+/* Live camera on phones: black bars above and below the picture (Figma 90 / 600 / 154 px).
+   It covers the page but stays under the Tips sheet (offcanvas backdrop 1040). */
+.z-camera {
+    position: fixed;
+    inset: 0;
+    z-index: 1035;
+    display: flex;
+    flex-direction: column;
+    background: #111412;
+    color: #FFFFFF;
+}
+.z-camera-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(1rem + env(safe-area-inset-top)) 1.25rem 1rem;
+}
+.z-camera-btn,
+.z-camera-spacer {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+}
+.z-camera-btn {
+    background: rgba(255, 255, 255, 0.14);
+    color: #FFFFFF;
+    font-size: 1.125rem;
+    text-decoration: none;
+}
+.z-camera-btn:hover { background: rgba(255, 255, 255, 0.24); color: #FFFFFF; }
+.z-camera-slot {
+    padding: 0.375rem 1rem;
+    border-radius: 50rem;
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* The live picture fills the middle; corners and the hint lie on top of it */
+.z-viewfinder {
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+    background: #2A2E2B;
+}
+.z-viewfinder video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;              /* the shutter crops the photo the same way (photo.js) */
+}
+.z-viewfinder-hint {
+    position: absolute;
+    left: 1rem;
+    right: 1rem;
+    bottom: calc(20% - 2rem);
+    margin: 0;
+    text-align: center;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);   /* readable on any picture */
+}
+.z-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border: 3px solid #FFFFFF;
+}
+.z-corner-tl { top: 23%; left: 10%; border-right: 0; border-bottom: 0; border-top-left-radius: 6px; }
+.z-corner-tr { top: 23%; right: 10%; border-left: 0; border-bottom: 0; border-top-right-radius: 6px; }
+.z-corner-bl { bottom: 20%; left: 10%; border-right: 0; border-top: 0; border-bottom-left-radius: 6px; }
+.z-corner-br { bottom: 20%; right: 10%; border-left: 0; border-top: 0; border-bottom-right-radius: 6px; }
+
+.z-camera-bar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 1.25rem 1.5rem calc(1.25rem + env(safe-area-inset-bottom));
+}
+.z-camera-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    justify-self: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: #FFFFFF;
+    font-size: 0.8125rem;
+}
+.z-camera-side-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.14);
+    font-size: 1.25rem;
+}
+.z-camera-side-icon.z-round { border-radius: 50%; }
+.z-camera-side:hover .z-camera-side-icon { background: rgba(255, 255, 255, 0.24); }
+
+/* The shutter: a white disc in a white ring (78 px, Figma) */
+.z-shutter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 78px;
+    height: 78px;
+    padding: 0;
+    border: 4px solid #FFFFFF;
+    border-radius: 50%;
+    background: none;
+}
+.z-shutter span {
+    width: 62px;
+    height: 62px;
+    border: 2px solid #111412;
+    border-radius: 50%;
+    background: #FFFFFF;
+    transition: transform 0.1s;
+}
+.z-shutter:active span { transform: scale(0.92); }
+.z-camera :focus-visible { outline-color: #FFFFFF; }
+
+/* A calm line for a bad file or no camera: never red (on the dark bar it is butter) */
+.z-photo-message { margin: 0 0 1rem; color: var(--z-ink); font-weight: 500; }
+.z-photo-message:empty { display: none; }
+.z-camera .z-photo-message { margin: 0; padding: 0.75rem 1.25rem 0; text-align: center; color: var(--z-butter); }
+
+/* Note step: the photo on the plate in the sage band, the sheet overlapping it (Figma 330 px band,
+   230 px photo = 206 px + the 12 px ring) */
+.z-note-band { padding-bottom: 3rem; }
+.z-note-photo,
+.z-take-photo {
+    display: block;
+    width: 206px;
+    height: 206px;
+    border-radius: 50%;
+    border: 4px solid var(--z-card);
+}
+.z-note-photo { object-fit: cover; }
+
+/* No photo yet (native mode): the empty ring is the camera button */
+.z-take-photo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    background: var(--z-card);
+    color: var(--z-ink);
+    font-weight: 600;
+}
+.z-take-photo .bi { font-size: 2.5rem; }
+.z-take-photo:hover { background: var(--z-bg); }
+
+.z-retake {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--z-line);
+    border-radius: 50rem;
+    background: var(--z-card);
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+.z-retake:hover { background: var(--z-tint); }
+
+/* A text-looking button (choose a file, Choose from gallery, Tips for a good photo) */
+.z-link-btn {
+    min-height: 44px;
+    padding: 0.25rem;
+    border: 0;
+    background: none;
+    color: var(--z-ink);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.z-gallery-link { display: block; margin: 0.75rem auto 0; }
+.z-note-sheet h2:focus { outline: none; }   /* focused by JS for screen readers, not by the user */
+
+/* Desktop step 1: the drop zone (the whole page takes a drop, the zone shows it) */
+.z-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-height: 420px;
+    padding: 2rem;
+    border: 2px dashed var(--z-line);
+    border-radius: 24px;
+    background: var(--z-card);
+    text-align: center;
+    transition: background-color 0.15s, border-color 0.15s;
+}
+.z-photo-page.is-dragging .z-dropzone { border-color: var(--z-ink); background: var(--z-tint); }
+.z-dropzone-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--z-tint);
+    font-size: 2rem;
+}
+.z-drop-step .z-photo-message { margin-top: 1rem; }
+
+@media (min-width: 992px) {
+    /* Step 2: the photo on the left, the note, chips and Analyze on the right */
+    .z-note {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 2.5rem;
+        align-items: start;
+    }
+    /* Two columns need more than the 640 px guest column (a signed-in page is already 1120 px) */
+    .z-main:has(.z-photo-page),
+    body:has(.z-photo-page) .z-header { max-width: 1040px; }
+    .z-note .z-note-band { max-width: none; margin: 0; padding: 1.5rem 1.5rem 2.5rem; }
+    /* The photo fills its column, up to 360 px, and stays a circle */
+    .z-note .z-plate { width: 100%; max-width: 384px; }
+    .z-note .z-note-photo,
+    .z-note .z-take-photo { width: 100%; height: auto; aspect-ratio: 1 / 1; }
+    .z-note .z-note-sheet { max-width: none; margin: 0; padding: 1rem 0 0; background: none; }
+    .z-note .z-actions { position: static; padding: 1.5rem 0 0; border: 0; background: none; }
+    .z-note .z-actions-buttons { max-width: none; margin: 0; }
+}
+
+/* ---------- Photo tips sheet (chunk 8b, Figma "Photo · Tips 1-3 of 3") ---------- */
+
+.z-tips.offcanvas-bottom {
+    height: auto;
+    max-height: 92vh;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    border-radius: 24px 24px 0 0;
+}
+.z-sheet-handle {
+    width: 44px;
+    height: 5px;
+    margin: 10px auto 16px;
+    border-radius: 3px;
+    background: var(--z-line);
+}
+
+/* Swiping is the browser's own scrolling, snapped one card at a time */
+.z-tips-track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+.z-tips-track::-webkit-scrollbar { display: none; }
+.z-tips-track:focus-visible { outline-offset: -3px; }
+.z-tip {
+    flex: 0 0 100%;
+    padding: 0 1.5rem;
+    scroll-snap-align: start;
+    text-align: center;
+}
+.z-tip-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 1rem;
+}
+.z-tip-card {
+    position: relative;
+    height: 150px;
+    overflow: hidden;               /* the "cut" plate leaves the card */
+    border-radius: 16px;
+    background: var(--z-tint);
+}
+.z-tip-card.is-dark { background: #6E6C64; }   /* the dark photo of tip 2 */
+.z-tip-badge {
+    position: absolute;
+    z-index: 1;
+    top: 8px;
+    left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    font-size: 1rem;
+}
+.is-good .z-tip-badge { background: var(--z-ink); color: #FFFFFF; }
+.is-bad .z-tip-badge { background: var(--z-butter); color: var(--z-ink); }
+
+/* The meal drawing, placed as in each Figma card */
+.z-tip-meal {
+    position: absolute;
+    top: 20px;
+    left: calc(50% - 55px);
+    width: 110px;
+    height: 110px;
+}
+.z-tip-meal.is-cut { left: auto; right: -35px; top: 30px; }
+.z-tip-meal.is-left { left: 14px; }
+.z-tip-meal.is-side { top: 45px; transform: scale(0.8, 0.4); opacity: 0.55; }
+.z-tip-note {
+    position: absolute;
+    top: 104px;
+    left: 40px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: var(--z-card);
+    box-shadow: 0 2px 6px rgba(30, 58, 48, 0.15);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+.z-tip-title { margin: 0 0 0.5rem; font-size: 1.5rem; }
+.z-tip-text { max-width: 22rem; margin: 0 auto; color: var(--z-muted); }
+
+/* Dots: the current tip is a longer ink pill */
+.z-tip-dots {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin: 1rem 0;
+}
+.z-tip-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--z-line);
+    transition: width 0.2s;
+}
+.z-tip-dots span.active { width: 22px; background: var(--z-ink); }
+
+.z-tip-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 0 1.5rem;
+}
+.z-tip-actions.is-last { grid-template-columns: 1fr; }
+.z-tip-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    font-size: 0.875rem;
+}
+
+/* Desktop: the same sheet as a centred card */
+@media (min-width: 992px) {
+    .z-tips.offcanvas-bottom {
+        left: calc(50% - 240px);
+        right: auto;
+        bottom: 2rem;
+        width: 480px;
+        border-radius: 24px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .z-tip-dots span,
+    .z-dropzone,
+    .z-shutter span { transition: none; }
+}
+
+/* Small icons in pastel squares (the No food page's tips for the next photo) */
+.z-tip-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: var(--z-ink);
+    font-size: 1.125rem;
+}
+.z-tint-peach { background: var(--z-peach); }
+.z-tint-butter { background: var(--z-butter); }
+.z-tint-lilac { background: var(--z-lilac); }
+
+/* Photo No food found: what Zalak saw, and three cards for the next photo */
+.z-seen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+.z-photo-tips {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.z-photo-tips li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.875rem 0.5rem;
+    border: 1px solid var(--z-line);
+    border-radius: 16px;
+    background: var(--z-card);
+    font-size: 0.8125rem;
+    line-height: 1.3;
+}
+.z-photo-tips .z-tip-icon { border-radius: 10px; }
 
 /* ---------- Analyzing overlay (chunk 6) ---------- */
 

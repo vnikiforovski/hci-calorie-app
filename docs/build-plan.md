@@ -19,7 +19,7 @@ Agreed 25 Oct 2026. **Finish by Sun 1 Nov, demo on 4 or 5 Nov**, hard deadline 1
 - **Scaling.** Each item stores the AI's kcal/macros per 100 g, with `grams` as the single source. Weight/volume units convert exactly. Portion units (slice, bowl S/M/L, plate, serving…) use a default-grams table in `units.py`.
 - **Rename vs re-estimate.** Renaming keeps the numbers. "Re-estimate" and "Add item" make one small AI call for that single item.
 - **Deferred features.** "Tell Zalak" is Should; "How it was cooked" is Could.
-- **Camera** is the native `<input type="file" accept="image/*" capture="environment">` with a preview.
+- **Camera** (changed in chunk 8b): a live viewfinder (`getUserMedia`, rear camera) on phones over https or localhost; the native `<input type="file" accept="image/*" capture="environment">` as the fallback when there's no camera access; a drop zone (drag, choose, Ctrl+V) on desktop.
 - **Delete** is a soft delete (`deleted_at`), so Undo is one update.
 - **Slots and catalog.** 4 fixed meal slots. No `Food` model. Totals are computed with `@property`, not stored.
 - **The `meals_logged` counter lives in one place:** the `pre_save` signal on Meal (draft → logged). It fires for the admin, the views and the guest sign-up alike. Admin `save_model` only sets the owner.
@@ -170,6 +170,11 @@ class MealItem(models.Model):
   - Files: `forms.py`, `views.py`, `services/ai.py`, `templates/meals/photo_input.html`, `static/js/photo_preview.js`
   - Pattern: ImageField + `request.FILES`
   - Test: a plate photo with "cooked in butter"; a phone on the LAN (`runserver 0.0.0.0:8000`) opens the camera.
+- [ ] **8b. Photo + voice polish** (1 Nov, added after phone tests through the https tunnel)
+  - Work: voice state machine for Android Chrome (every SpeechRecognition event, start/stop watchdogs, `[voice]` console logs, one phrase per tap on Android); waves that follow speech; swipeable photo tips (Figma Tips 1–3) with "Don't show again" in `Profile.seen_photo_tips` or the session; a live camera on phones with the native camera as fallback; a desktop drop zone + two columns; the bigger note-step preview; `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` extras from `.env`.
+  - Files: `static/js/voice.js`, `static/js/photo.js`, `static/js/photo_tips.js`, `templates/meals/photo_input.html`, `_photo_tips.html`, `_meal_drawing.html`, `views.py`, `urls.py`, `settings.py`, `zalak.css`
+  - Pattern: `@require_POST` + session / Profile, beyond the exam (getUserMedia, DataTransfer)
+  - Test: voice on Android through the tunnel stops every time; live camera → note; tips "Don't show again" survives a reload; desktop drag / paste.
 - [ ] **9. Log / Just checking + signals** (29 Oct)
   - Work: Log → `logged`, toast "Logged to lunch · Undo"; Just checking deletes the draft; signals for the slot from time, the counter (draft → logged) and removing the photo file.
   - Files: `views.py`, `signals.py`, `apps.py`, `templates/meals/_toast.html`, a temporary `home.html` list

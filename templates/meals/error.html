@@ -39,7 +39,12 @@
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary btn-lg w-100">Try again</button>
             </form>
-            <a class="btn btn-outline-secondary btn-lg" href="{% url 'edit_text' meal.id %}">Edit the text</a>
+            {% if meal.photo %}
+                {# FR30: type it instead; the same draft becomes a text meal #}
+                <a class="btn btn-outline-secondary btn-lg" href="{% url 'edit_text' meal.id %}">Describe it instead</a>
+            {% else %}
+                <a class="btn btn-outline-secondary btn-lg" href="{% url 'edit_text' meal.id %}">Edit the text</a>
+            {% endif %}
         </div>
     </div>
 
