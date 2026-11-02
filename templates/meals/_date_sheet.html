@@ -1,0 +1,72 @@
+{# "Jump to a date" (Figma "Overlay · Jump to a date"), built by views.calendar_month.          #}
+{# Days are links to Home for that day; future days are not. ‹ › reload Home with ?month=, and #}
+{# home.js opens the sheet again (data-open-on-load). Reused by the Diary in chunk 16.          #}
+<div class="offcanvas offcanvas-bottom z-sheet z-date-sheet" tabindex="-1" id="dateSheet" aria-labelledby="dateSheetTitle"
+     {% if calendar_open %}data-open-on-load{% endif %}>
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+    <div class="z-sheet-title">
+        <div>
+            <h2 class="mb-0" id="dateSheetTitle">Jump to a date</h2>
+            <p class="z-small text-body-secondary mb-0">Days with a dot have meals</p>
+        </div>
+        <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="z-sheet-body">
+        <div class="z-cal-nav">
+            <a class="z-cal-arrow" href="{{ calendar.prev_url }}" aria-label="Previous month, {{ calendar.prev_month|date:'F' }}">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+            <span class="z-cal-month">{{ calendar.first|date:'F Y' }}</span>
+            {% if calendar.next_url %}
+                <a class="z-cal-arrow" href="{{ calendar.next_url }}" aria-label="Next month, {{ calendar.next_month|date:'F' }}">
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </a>
+            {% else %}
+                <span class="z-cal-arrow is-off" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
+            {% endif %}
+        </div>
+
+        <table class="z-cal">
+            <caption class="visually-hidden">{{ calendar.first|date:'F Y' }}</caption>
+            <thead>
+                <tr>
+                    <th scope="col"><abbr title="Monday">Mo</abbr></th>
+                    <th scope="col"><abbr title="Tuesday">Tu</abbr></th>
+                    <th scope="col"><abbr title="Wednesday">We</abbr></th>
+                    <th scope="col"><abbr title="Thursday">Th</abbr></th>
+                    <th scope="col"><abbr title="Friday">Fr</abbr></th>
+                    <th scope="col"><abbr title="Saturday">Sa</abbr></th>
+                    <th scope="col"><abbr title="Sunday">Su</abbr></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for week in calendar.weeks %}
+                    <tr>
+                        {% for cell in week %}
+                            <td>
+                                {% if not cell %}
+                                {% elif cell.is_future %}
+                                    <span class="z-cal-day is-future">{{ cell.date.day }}</span>
+                                {% else %}
+                                    <a class="z-cal-day{% if cell.is_selected %} is-selected{% endif %}" href="{{ cell.url }}"
+                                       aria-label="{{ cell.date|date:'l j F' }}{% if cell.has_meals %}, has meals{% endif %}"
+                                       {% if cell.is_selected %}aria-current="date"{% endif %}>
+                                        {{ cell.date.day }}
+                                        {% if cell.has_meals %}<span class="z-cal-dot" aria-hidden="true"></span>{% endif %}
+                                    </a>
+                                {% endif %}
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <a class="z-cal-today" href="{% url 'home' %}">
+            <i class="bi bi-record-circle" aria-hidden="true"></i> Go to today
+        </a>
+    </div>
+</div>

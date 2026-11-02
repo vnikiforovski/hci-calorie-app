@@ -1,5 +1,7 @@
-from datetime import timedelta
+import calendar
+from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
@@ -17,18 +19,195 @@ from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURE
 
 
 def home(request):
-    """The landing page. A guest gets Welcome (chunk 12); a signed-in user gets Home.
-    Home is still the temporary list from chunk 9; chunk 14 builds the real one."""
+    """The landing page. A guest gets Welcome (chunk 12); a signed-in user gets Home (chunk 14):
+    the week strip, what was eaten that day, and the four meal slots. ?date= picks the day."""
     if not request.user.is_authenticated:
         return render(request, 'meals/welcome.html')
     kept = pop_kept_meal(request)
     if kept:
         # Signed in from "Keep this meal?": the guest's meal is logged (signals.keep_guest_meal)
         request.session['toast'] = logged_toast(kept)
-    meals = (Meal.objects
-             .filter(user=request.user, status='logged', deleted_at__isnull=True)
-             .prefetch_related('items')[:20])
-    return render(request, 'meals/home.html', {'meals': meals})
+
+    today = timezone.localdate()
+    day = parse_day(request.GET.get('date')) or today
+    logged = Meal.objects.filter(user=request.user, status='logged', deleted_at__isnull=True)
+    day_meals = logged.filter(eaten_at__date=day).prefetch_related('items').order_by('eaten_at')
+
+    # One queryset per slot, like the exam's index grouped by specialty
+    slots = []
+    for value, label, icon in SLOT_OPTIONS:
+        meals = list(day_meals.filter(slot=value))
+        slots.append({
+            'value': value,
+            'label': label,
+            'icon': icon,
+            'meals': meals,
+            'summary': slot_summary(meals),
+            'kcal_min': sum(meal.kcal_min for meal in meals),
+            'kcal_max': sum(meal.kcal_max for meal in meals),
+        })
+
+    all_meals = [meal for slot in slots for meal in slot['meals']]
+    totals = {name: sum(getattr(meal, name) for meal in all_meals)
+              for name in ['kcal_min', 'kcal_max', 'protein_min', 'protein_max',
+                           'carbs_min', 'carbs_max', 'fat_min', 'fat_max']}
+    macros = [
+        {'key': 'protein', 'name': 'Protein', 'min': totals['protein_min'], 'max': totals['protein_max']},
+        {'key': 'carbs', 'name': 'Carbs', 'min': totals['carbs_min'], 'max': totals['carbs_max']},
+        {'key': 'fat', 'name': 'Fat', 'min': totals['fat_min'], 'max': totals['fat_max']},
+    ]
+    # The bar in the Eaten card: one part per slot that has meals, as wide as its share
+    # of the day (the middle of each range), with the legend in words beside it
+    bar = [{'value': slot['value'], 'label': slot['label'],
+            'share': (slot['kcal_min'] + slot['kcal_max']) // 2}
+           for slot in slots if slot['kcal_max']]
+
+    month, calendar_open = parse_month(request.GET.get('month'), day)
+    context = {
+        'day': day,
+        'is_today': day == today,
+        'eaten_label': eaten_label(day, today),
+        'greeting': greeting(),
+        'week': week_strip(day),
+        'calendar': calendar_month(logged, month, day),
+        'calendar_open': calendar_open,
+        'slots': slots,
+        'totals': totals,
+        'macros': macros,
+        'bar': bar,
+        # Figma "Home · First day": until the very first meal is logged
+        'first_day': not logged.exists(),
+        # The Add meal sheet logs to the day on screen (decided 2 Nov); today needs nothing
+        'add_day': day if day != today else None,
+    }
+    return render(request, 'meals/home.html', context)
+
+
+# ---------- Home helpers (chunk 14) ----------
+
+WEEKDAY_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+
+
+def parse_day(value):
+    """A day from ?date= or ?day= (2026-11-02) that is today or earlier, else None.
+    The future is never shown or logged to (docs/05, constraints)."""
+    try:
+        day = date.fromisoformat(value or '')
+    except ValueError:
+        return None
+    return day if day <= timezone.localdate() else None
+
+
+def parse_month(value, day):
+    """The month the calendar sheet shows: ?month=2026-10 after its ‹ › arrows (the sheet then
+    opens by itself), otherwise the selected day's month. Never after this month."""
+    this_month = timezone.localdate().replace(day=1)
+    try:
+        year, month = (int(part) for part in (value or '').split('-'))
+        first = date(year, month, 1)
+    except ValueError:
+        return day.replace(day=1), False
+    return min(first, this_month), True
+
+
+def home_url(day=None, month=None):
+    """Home for a day (and a calendar month). Today is plain "/", so the URL stays clean."""
+    params = {}
+    if day and day != timezone.localdate():
+        params['date'] = day.isoformat()
+    if month:
+        params['month'] = month.strftime('%Y-%m')
+    url = reverse('home')
+    return f'{url}?{urlencode(params)}' if params else url
+
+
+def greeting():
+    """ "Good afternoon" on the desktop Home, from the local hour."""
+    hour = timezone.localtime().hour
+    if hour < 12:
+        return 'Good morning'
+    if hour < 18:
+        return 'Good afternoon'
+    return 'Good evening'
+
+
+def eaten_label(day, today):
+    """The Eaten card's label: always "eaten", never "left" (docs/06)."""
+    if day == today:
+        return 'Eaten today'
+    if day == today - timedelta(days=1):
+        return 'Eaten yesterday'
+    return f'Eaten on {day:%a} {day.day}'
+
+
+def slot_summary(meals):
+    """The line under a slot's name: "Nothing yet", the meal's title, or "2 meals · A, B"."""
+    titles = [meal.title or 'Meal' for meal in meals]
+    if not titles:
+        return 'Nothing yet'
+    if len(titles) == 1:
+        return titles[0]
+    return f'{len(titles)} meals · ' + ', '.join(titles)
+
+
+def week_strip(day):
+    """Mo–Su of the selected day's week. Future days are not links. ‹ goes a week back
+    (same weekday); › goes a week forward but never past today, and is gone on this week."""
+    today = timezone.localdate()
+    monday = day - timedelta(days=day.weekday())
+    days = []
+    for offset in range(7):
+        this = monday + timedelta(days=offset)
+        days.append({
+            'date': this,
+            'short': WEEKDAY_SHORT[offset],
+            'url': home_url(this),
+            'is_selected': this == day,
+            'is_future': this > today,
+        })
+    sunday = monday + timedelta(days=6)
+    return {
+        'days': days,
+        'prev_url': home_url(day - timedelta(days=7)),
+        'next_url': home_url(min(day + timedelta(days=7), today)) if sunday < today else None,
+    }
+
+
+def calendar_month(logged, first, selected):
+    """The "Jump to a date" month (Figma): weeks from Monday, None outside the month,
+    a dot on days with logged meals, future days not links."""
+    today = timezone.localdate()
+    weeks = calendar.Calendar(firstweekday=0).monthdatescalendar(first.year, first.month)
+    times = logged.filter(eaten_at__date__range=(weeks[0][0], weeks[-1][-1])).values_list('eaten_at', flat=True)
+    meal_days = {timezone.localtime(eaten_at).date() for eaten_at in times}
+
+    rows = []
+    for week in weeks:
+        row = []
+        for this in week:
+            if this.month != first.month:
+                row.append(None)
+                continue
+            row.append({
+                'date': this,
+                'url': home_url(this),
+                'has_meals': this in meal_days,
+                'is_selected': this == selected,
+                'is_today': this == today,
+                'is_future': this > today,
+            })
+        rows.append(row)
+
+    previous = (first - timedelta(days=1)).replace(day=1)
+    following = (first + timedelta(days=31)).replace(day=1)
+    return {
+        'first': first,
+        'weeks': rows,
+        'prev_url': home_url(selected, previous),
+        'prev_month': previous,
+        'next_url': home_url(selected, following) if following <= today else None,
+        'next_month': following,
+    }
 
 
 # ---------- Accounts (chunk 12). Sign in and Sign out are Django's LoginView / LogoutView (urls.py). ----------
@@ -286,10 +465,26 @@ def get_own_draft(request, meal_id):
     return meal
 
 
+def picked_day(request, meal_id):
+    """The past day a new meal goes to: Home on Mon 12 sends day=… with "+" (decided 2 Nov).
+    None means now: today, an edited draft, or a missing, odd or future day."""
+    if meal_id is not None:
+        return None
+    day = parse_day(request.POST.get('day') if request.method == 'POST' else request.GET.get('day'))
+    return day if day and day != timezone.localdate() else None
+
+
+def eaten_on(day):
+    """The current clock time on a past day."""
+    now = timezone.localtime()
+    return now.replace(year=day.year, month=day.month, day=day.day)
+
+
 def text_input(request, meal_id=None):
     """Text and voice. Without meal_id it starts a new draft; with one ("Edit the text")
     it edits that draft, so a corrected meal doesn't leave a second draft behind."""
     meal = get_own_draft(request, meal_id) if meal_id else None
+    day = picked_day(request, meal_id)
 
     if request.method == 'POST':
         form = TextMealForm(request.POST, instance=meal)
@@ -301,6 +496,8 @@ def text_input(request, meal_id=None):
             # An empty slot is filled from the time by the pre_save signal (signals.py)
             if meal_id is None:
                 set_owner(request, meal)
+                if day:
+                    meal.eaten_at = eaten_on(day)
             # The draft is saved first, so the input is kept even if the AI fails (FR29)
             meal.save()
             return analyze_meal(meal)
@@ -315,6 +512,7 @@ def text_input(request, meal_id=None):
     context = {
         'form': form,
         'slot': form['slot'].value(),
+        'day': day,
         'steps': TEXT_STEPS,
     }
     return render(request, 'meals/text_input.html', context)
@@ -325,6 +523,7 @@ def photo_input(request, meal_id=None):
     it gives that draft a new photo, so a retake doesn't leave a second draft behind."""
     meal = get_own_draft(request, meal_id) if meal_id else None
     old_photo = meal.photo.name if meal and meal.photo else ''
+    day = picked_day(request, meal_id)
 
     if request.method == 'POST':
         form = PhotoMealForm(request.POST, request.FILES, instance=meal)
@@ -334,6 +533,8 @@ def photo_input(request, meal_id=None):
             # An empty slot is filled from the time by the pre_save signal (signals.py)
             if meal_id is None:
                 set_owner(request, meal)
+                if day:
+                    meal.eaten_at = eaten_on(day)
             # Saved first, so the photo and note are kept even if the AI fails (FR29)
             meal.save()
             if old_photo and old_photo != meal.photo.name:
@@ -351,6 +552,7 @@ def photo_input(request, meal_id=None):
     context = {
         'form': form,
         'slot': slot,
+        'day': day,
         'steps': PHOTO_STEPS,
         'show_tips': not tips_seen(request),   # the tips open by themselves until "Don't show again"
     }
@@ -613,7 +815,8 @@ def log_meal(request, meal_id):
 
     # Shown once on the next page by the toast context processor
     request.session['toast'] = logged_toast(meal)
-    return redirect('home')
+    # Home opens on the meal's day, so a meal logged to Mon 12 is seen landing there
+    return redirect(home_url(timezone.localdate(meal.eaten_at)))
 
 
 @require_POST

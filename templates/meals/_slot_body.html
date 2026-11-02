@@ -1,0 +1,10 @@
+{% load humanize %}
+{# The inside of a slot row (_slot.html): the same for a link, a button or a plain row #}
+<span class="z-slot-icon" aria-hidden="true"><i class="bi {{ slot.icon }}"></i></span>
+<span class="z-slot-text">
+    <span class="z-slot-name">{{ slot.label }}</span>
+    <span class="z-slot-summary">{{ slot.summary }}</span>
+</span>
+{% if slot.meals %}
+    <span class="z-slot-kcal">{{ slot.kcal_min|intcomma }}–{{ slot.kcal_max|intcomma }}<span class="visually-hidden"> kcal</span></span>
+{% endif %}

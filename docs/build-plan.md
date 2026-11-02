@@ -205,7 +205,7 @@ class MealItem(models.Model):
   - Files: `forms.py`, `views.py`, `signals.py`, `urls.py`, `settings.py`, `templates/base.html`, `templates/registration/login.html`, `welcome.html`, `signup_1.html`, `signup_2.html`, `_field.html`, `home.html`, `coming_soon.html`, `static/js/auth.js`, `zalak.css`
   - Pattern: ModelForm, signals
   - Test: create an account, Skip step 2, sign out, sign in.
-- [ ] **13. Guest flow (T7) + guest draft cleanup** (30 Oct)
+- [x] **13. Guest flow (T7) + guest draft cleanup** (30 Oct)
   - Work: a guest's draft is tied to the session; Log → the "Keep this meal?" sheet → sign-up → the draft is assigned and logged; guest drafts older than 24 h are deleted on each new draft.
   - Note from chunk 12: Django's `login()` gives the session a new key, so read the guest's `session_key` (or keep the meal id in the session) *before* signing in, or the draft can't be found afterwards. Same for Sign in from the sheet.
   - Decided 2 Nov: the guest's Log opens the sheet; "Create a free account" submits the Log form (so the slot goes along) and `log_meal` keeps the draft's id + session key in `session['guest_meal']`. A `user_logged_in` signal in `signals.py` logs it after any sign-in (sign-up step 1, Sign in, "Sign in instead"), so the meal is safe before step 2. The toast is "Welcome to Zalak, Ana · Logged to lunch" after sign-up and "Logged to lunch" after sign-in, both with Undo. "Not now, I was just checking" is Just checking.
@@ -215,7 +215,9 @@ class MealItem(models.Model):
   - Test: in a private window, check → Log → create an account → the meal is on Home and the counter is 1; an old guest draft (backdated in admin) disappears.
 - [ ] **14. Home** (31 Oct)
   - Work: the week strip (`?date=`, arrows, date picker); the Eaten today card (range, bar by slot); macro cards; four slots (one queryset per slot) with an "N meals" sheet; "+" per slot and the corner "+" → the Add meal sheet (offcanvas-bottom); the first-day empty state.
-  - Files: `views.py`, `templates/meals/home.html`, `_add_meal_sheet.html`, `_slot.html`
+  - Decided 2 Nov: "+" on a past day logs to that day (the Add sheet carries `day=`; the input pages keep it in a hidden field; the draft gets that day at the current clock time; Log returns to `?date=` of that day). Jump to a date is the Figma calendar sheet, built in Python with the `calendar` module (dots on days with meals, no future days, months by `?month=`), reused by the Diary.
+  - Adapted from Figma: arrows at the ends of the week strip (docs/05; Figma has none); the date beside "Meals" opens the calendar; the Add meal sheet is on every signed-in page (the corner "+" and the sidebar's "Add a meal"), a GET form, so slot and day work without JS. Left out: water, the desktop "On average" chart (chunk 17), "Your meals" and Recent in the sheet (chunk 22). One meal in a slot opens Result until chunk 15 brings Meal detail. `django.contrib.humanize` for `1,230`.
+  - Files: `settings.py`, `context_processors.py`, `views.py`, `templates/base.html`, `templates/meals/home.html`, `_slot.html`, `_slot_body.html`, `_slot_sheet.html`, `_add_meal_sheet.html`, `_date_sheet.html`, `text_input.html`, `photo_input.html`, `static/js/add_meal_sheet.js`, `static/js/home.js`, `zalak.css`
   - Pattern: index grouped by specialty, `__date` lookups
   - Test: log 3 meals in different slots; switch days; check a new account's empty state.
 - [ ] **15. Meal detail: edit + delete with Undo** (31 Oct)

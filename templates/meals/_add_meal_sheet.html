@@ -1,0 +1,55 @@
+{# Add meal (Figma "Add meal"): on every page of a signed-in user (base.html), opened by the corner "+", #}
+{# the sidebar's "Add a meal", a slot's "+" and "Add another snack". A GET form: the chosen slot (and a #}
+{# past day from Home) go to the input page as ?slot=…&day=…, with or without JavaScript.              #}
+{# add_meal_sheet.js keeps the title in step with the chips. "Your meals" and Recent come in chunk 22.  #}
+<div class="offcanvas offcanvas-bottom z-sheet z-add-sheet" tabindex="-1" id="addMealSheet" aria-labelledby="addMealTitle"
+     data-default-slot="{{ add_slot }}">
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+    <form method="get" action="{% url 'text_input' %}">
+        <div class="z-sheet-title">
+            <h2 class="z-add-title mb-0" id="addMealTitle">
+                Add to <span data-add-slot-label>{{ add_slot }}</span>{% if add_day %} · {{ add_day|date:'D j' }}{% endif %}
+            </h2>
+            <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <fieldset>
+            <legend class="visually-hidden">Meal slot</legend>
+            <div class="z-add-slots">
+                {% for value, label, icon in slot_options %}
+                    <input type="radio" class="btn-check" name="slot" value="{{ value }}" id="addSlot-{{ value }}"
+                           {% if value == add_slot %}checked{% endif %}>
+                    <label class="z-slot-chip" for="addSlot-{{ value }}">
+                        <i class="bi {{ icon }}" aria-hidden="true"></i> {{ label }}
+                    </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+        {% if not add_day %}
+            <p class="z-small text-body-secondary mt-3 mb-0" id="addSlotHint">{{ add_slot|capfirst }} was picked from the time. Tap to change.</p>
+        {% else %}
+            <input type="hidden" name="day" value="{{ add_day|date:'Y-m-d' }}">
+        {% endif %}
+
+        <div class="z-add-options">
+            <button type="submit" class="z-add-option z-add-option-photo" formaction="{% url 'photo_input' %}">
+                <span class="z-add-option-icon" aria-hidden="true"><i class="bi bi-camera"></i></span>
+                <span class="z-add-option-text">
+                    <span class="z-add-option-title">Photo</span>
+                    <span class="z-add-option-hint">Snap your plate, add a note if you like</span>
+                </span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+            <button type="submit" class="z-add-option z-add-option-text-voice" formaction="{% url 'text_input' %}">
+                <span class="z-add-option-icon" aria-hidden="true"><i class="bi bi-mic"></i></span>
+                <span class="z-add-option-text">
+                    <span class="z-add-option-title">Text and voice</span>
+                    <span class="z-add-option-hint">Type or say what you ate</span>
+                </span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+        </div>
+    </form>
+</div>

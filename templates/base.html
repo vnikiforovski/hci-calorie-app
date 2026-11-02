@@ -34,7 +34,8 @@
             <i class="bi bi-bar-chart" aria-hidden="true"></i> Statistics
         </a>
         <div class="z-sidebar-bottom">
-            <a class="btn btn-primary btn-lg" href="{% url 'add_meal' %}">
+            <a class="btn btn-primary btn-lg" href="{% url 'add_meal' %}"
+               data-bs-toggle="offcanvas" data-bs-target="#addMealSheet" aria-controls="addMealSheet">
                 <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a meal
             </a>
             <a class="z-profile-row {% if page == 'profile' %}active{% endif %}" href="{% url 'profile' %}"
@@ -98,15 +99,20 @@
                 <i class="bi bi-bar-chart" aria-hidden="true"></i> Statistics
             </a>
         </nav>
-        <a class="z-fab" href="{% url 'add_meal' %}" aria-label="Add a meal">
+        <a class="z-fab" href="{% url 'add_meal' %}" aria-label="Add a meal"
+           data-bs-toggle="offcanvas" data-bs-target="#addMealSheet" aria-controls="addMealSheet">
             <i class="bi bi-plus-lg" aria-hidden="true"></i>
         </a>
     {% endblock %}
+
+    {# The Add meal sheet (chunk 14); the hrefs above to add_meal are the fallback without JavaScript #}
+    {% include 'meals/_add_meal_sheet.html' %}
 {% endif %}
 
 {% include 'meals/_toast.html' %}
 
 <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
+{% if user.is_authenticated %}<script src="{% static 'js/add_meal_sheet.js' %}?v={{ STATIC_VERSION }}"></script>{% endif %}
 {% if toast %}<script src="{% static 'js/toast.js' %}?v={{ STATIC_VERSION }}"></script>{% endif %}
 {% block scripts %}{% endblock %}
 </body>

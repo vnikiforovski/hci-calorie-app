@@ -1,0 +1,23 @@
+{# One meal slot on Home (Figma "Slot/…"). The row opens what is in it: one meal opens the meal  #}
+{# (Result for now; Meal detail in chunk 15), several open the slot sheet, none opens nothing.    #}
+{# The "+" opens the Add meal sheet with this slot chosen (add_meal_sheet.js reads data-slot).    #}
+<li class="z-slot-row">
+    {% if slot.meals|length == 1 %}
+        <a class="z-slot-main" href="{% url 'result' slot.meals.0.id %}">
+            {% include 'meals/_slot_body.html' %}
+        </a>
+    {% elif slot.meals %}
+        <button type="button" class="z-slot-main" data-bs-toggle="offcanvas" data-bs-target="#slotSheet-{{ slot.value }}"
+                aria-controls="slotSheet-{{ slot.value }}">
+            {% include 'meals/_slot_body.html' %}
+        </button>
+    {% else %}
+        <div class="z-slot-main">
+            {% include 'meals/_slot_body.html' %}
+        </div>
+    {% endif %}
+    <a class="z-icon-btn z-slot-add" href="{% url 'text_input' %}?slot={{ slot.value }}{% if add_day %}&amp;day={{ add_day|date:'Y-m-d' }}{% endif %}"
+       data-bs-toggle="offcanvas" data-bs-target="#addMealSheet" data-slot="{{ slot.value }}" aria-label="Add to {{ slot.value }}">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+    </a>
+</li>

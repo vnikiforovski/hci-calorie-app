@@ -2200,3 +2200,352 @@ a.z-link-btn { display: inline-flex; align-items: center; justify-content: cente
     .z-welcome-cookie,
     .z-welcome-dot { animation: none; }
 }
+
+/* ---------- Home (chunk 14, Figma "Home", "Home · First day", "Desktop · Home") ---------- */
+
+:root {
+    /* The Eaten bar's slot parts: Figma data/mid, data/strong, data/soft; dinner in ink.
+       Never on their own: the legend names each part. */
+    --z-slot-breakfast: #7FA38D;
+    --z-slot-lunch: #3F5C50;
+    --z-slot-snack: #B7CDB0;
+    --z-slot-dinner: #1E3A30;
+}
+
+.z-desktop-only { display: none; }
+
+/* Phones keep the logo header, so the greeting h1 is only for screen readers there */
+@media (max-width: 991.98px) {
+    .z-home-hello {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+}
+
+/* Week strip: 7 days, with arrows at the ends (adapted: docs/05 lists arrows, Figma shows none) */
+.z-week { display: flex; align-items: stretch; gap: 0.125rem; margin: 0.25rem 0 1rem; }
+.z-week-arrow {
+    flex: 0 0 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    color: var(--z-muted);
+    text-decoration: none;
+}
+a.z-week-arrow:hover { background: var(--z-tint); color: var(--z-ink); }
+.z-week-days {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.25rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.z-week-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.125rem;
+    min-height: 62px;
+    border-radius: 16px;
+    color: var(--z-ink);
+    text-decoration: none;
+}
+a.z-week-day:hover { background: var(--z-tint); color: var(--z-ink); }
+.z-week-name { font-size: 0.75rem; font-weight: 500; }
+.z-week-num { font-size: 0.9375rem; font-weight: 600; }
+.z-week-day.is-selected,
+.z-week-day.is-selected:hover { background: var(--z-ink); color: #fff; }
+.z-week-day.is-future { color: var(--z-muted); opacity: 0.5; }
+
+/* First-day card: peach, the cookie and a calm invitation */
+.z-first-day {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1.25rem;
+    border-radius: 18px;
+    background: var(--z-peach);
+    font-size: 0.875rem;
+}
+.z-first-day-cookie { flex: 0 0 56px; width: 56px; height: 56px; }
+.z-first-day-title { margin: 0 0 0.25rem; font-family: var(--z-font-body); font-size: 1rem; font-weight: 600; }
+
+/* Eaten card */
+.z-eaten .card-body { padding: 1.25rem 1.125rem; }
+.z-eaten-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.z-eaten-label {
+    margin: 0;
+    font-family: var(--z-font-body);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--z-muted);
+}
+.z-estimate-tag {
+    padding: 0.125rem 0.625rem;
+    border-radius: 50rem;
+    background: var(--z-tint);
+    color: var(--z-ink);
+    font-size: 0.8125rem;
+}
+.z-eaten-total { margin: 0.375rem 0 0.75rem; }
+.z-eaten-total .z-num { font-size: 2.125rem; line-height: 1.1; letter-spacing: -0.03em; }
+.z-slot-bar { display: flex; gap: 3px; height: 10px; }
+.z-slot-part { flex: 1 1 0; min-width: 8px; border-radius: 5px; }
+.z-slot-part.is-empty { background: var(--z-tint); }
+.z-slot-breakfast { background: var(--z-slot-breakfast); }
+.z-slot-lunch { background: var(--z-slot-lunch); }
+.z-slot-snack { background: var(--z-slot-snack); }
+.z-slot-dinner { background: var(--z-slot-dinner); }
+.z-slot-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin: 0.625rem 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--z-muted);
+    font-size: 0.8125rem;
+}
+.z-slot-legend li { display: inline-flex; align-items: center; gap: 0.375rem; }
+.z-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+/* Macro cards: three in a row, each macro's color only as a small line on top */
+.z-macro-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+.z-macro-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.875rem 0.75rem;
+    border: 1px solid var(--z-line);
+    border-radius: 16px;
+    background: var(--z-card);
+}
+.z-macro-line { width: 24px; height: 4px; margin-bottom: 0.5rem; border-radius: 2px; }
+.z-macro-card-name { font-size: 0.8125rem; }
+.z-macro-card-value { font-size: 1.0625rem; }
+
+/* Meals: four slot rows in one card */
+.z-home-meals { margin-top: 1.75rem; }
+.z-meals-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.z-meals-head h2 { font-size: 1.25rem; }
+.z-date-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 44px;
+    padding: 0 0.25rem;
+    border: 0;
+    background: none;
+    color: var(--z-muted);
+    font-size: 0.8125rem;
+}
+.z-date-btn:hover { color: var(--z-ink); text-decoration: underline; text-underline-offset: 3px; }
+.z-slots { margin: 0; padding: 0.25rem 1rem; list-style: none; }
+.z-slot-row { display: flex; align-items: center; gap: 0.5rem; min-height: 72px; }
+.z-slot-row + .z-slot-row { border-top: 1px solid var(--z-line); }
+.z-slot-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0;
+    border: 0;
+    background: none;
+    color: var(--z-ink);
+    text-align: left;
+    text-decoration: none;
+}
+a.z-slot-main:hover,
+button.z-slot-main:hover { color: var(--z-ink); }
+a.z-slot-main:hover .z-slot-name,
+button.z-slot-main:hover .z-slot-name { text-decoration: underline; text-underline-offset: 3px; }
+.z-slot-icon {
+    flex: 0 0 52px;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--z-tint);
+    font-size: 1.375rem;
+}
+.z-slot-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.z-slot-name { font-weight: 600; }
+.z-slot-summary { overflow: hidden; color: var(--z-muted); font-size: 0.8125rem; text-overflow: ellipsis; white-space: nowrap; }
+.z-slot-kcal { flex: none; font-size: 0.8125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.z-slot-add { flex: none; }
+
+/* Slot sheet (Figma "Overlay · Snack (2 meals)") */
+.z-slot-meals { margin: 0; padding: 0.25rem 1rem; list-style: none; }
+.z-slot-meals li + li { border-top: 1px solid var(--z-line); }
+.z-slot-meal {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    min-height: 68px;
+    padding: 0.5rem 0;
+    color: var(--z-ink);
+    text-decoration: none;
+}
+.z-slot-meal:hover { color: var(--z-ink); }
+.z-slot-meal:hover .z-slot-name { text-decoration: underline; text-underline-offset: 3px; }
+.z-slot-thumb { flex: 0 0 44px; width: 44px; height: 44px; border-radius: 10px; object-fit: cover; }
+.z-thumb-sky { background: var(--z-sky); }
+.z-thumb-lilac { background: var(--z-lilac); }
+.z-thumb-peach { background: var(--z-peach); }
+.z-thumb-butter { background: var(--z-butter); }
+.z-slot-meal-arrow { color: var(--z-muted); }
+
+/* Add meal sheet (Figma "Add meal") */
+.z-add-title { font-size: 1.75rem; }
+.z-add-sheet fieldset { margin: 0; }
+.z-add-slots { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.z-slot-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 44px;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--z-line);
+    border-radius: 50rem;
+    background: var(--z-card);
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.z-slot-chip:hover { border-color: var(--z-ink); }
+.btn-check:checked + .z-slot-chip { background: var(--z-ink); border-color: var(--z-ink); color: #fff; }
+.btn-check:focus-visible + .z-slot-chip { outline: 3px solid var(--z-ink); outline-offset: 2px; }
+.z-add-options { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.25rem; }
+.z-add-option {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    min-height: 80px;
+    padding: 1rem;
+    border: 0;
+    border-radius: 18px;
+    color: var(--z-ink);
+    text-align: left;
+}
+.z-add-option-photo { background: var(--z-peach); }
+.z-add-option-text-voice { background: var(--z-sky); }
+.z-add-option:hover { filter: brightness(0.97); }
+.z-add-option-icon {
+    flex: 0 0 52px;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: var(--z-card);
+    font-size: 1.375rem;
+}
+.z-add-option-text { flex: 1; display: flex; flex-direction: column; }
+.z-add-option-title { font-weight: 600; }
+.z-add-option-hint { color: var(--z-muted); font-size: 0.8125rem; }
+
+/* Jump to a date (Figma "Overlay · Jump to a date") */
+.z-cal-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+.z-cal-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: var(--z-ink);
+    font-size: 1.125rem;
+    text-decoration: none;
+}
+a.z-cal-arrow:hover { background: var(--z-tint); color: var(--z-ink); }
+.z-cal-arrow.is-off { color: var(--z-line); }
+.z-cal-month { font-weight: 600; }
+.z-cal {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--z-line);
+    border-radius: 18px;
+    background: var(--z-card);
+    text-align: center;
+}
+.z-cal th { padding: 0.5rem 0; color: var(--z-muted); font-size: 0.8125rem; font-weight: 500; }
+.z-cal abbr { text-decoration: none; cursor: default; }
+.z-cal td { height: 48px; padding: 0.125rem 0; }
+.z-cal-day {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: var(--z-ink);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+a.z-cal-day:hover { background: var(--z-tint); color: var(--z-ink); }
+.z-cal-day.is-selected,
+.z-cal-day.is-selected:hover { background: var(--z-ink); color: #fff; }
+.z-cal-day.is-future { color: var(--z-muted); opacity: 0.5; }
+.z-cal-dot {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    margin-left: -2px;
+    border-radius: 50%;
+    background: var(--z-ink);
+}
+.z-cal-day.is-selected .z-cal-dot { background: var(--z-accent); }
+.z-cal-today {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    margin-top: 0.5rem;
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+.z-cal-today:hover { color: var(--z-ink); text-decoration: underline; text-underline-offset: 3px; }
+
+@media (min-width: 992px) {
+    .z-desktop-only { display: block; }
+
+    /* Desktop Home: greeting left, week strip right, then two columns */
+    .z-home-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; margin: 0.5rem 0 1.75rem; }
+    .z-home-greeting { margin-bottom: 0.25rem; font-size: 1.875rem; }
+    .z-week { flex: 0 0 440px; margin: 0; }
+    .z-home-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.75rem; align-items: start; }
+    .z-home-meals { margin-top: 0; }
+}

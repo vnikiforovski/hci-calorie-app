@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',   # intcomma: 1,230 kcal on Home (chunk 14)
     'meals',
 ]
 
@@ -84,6 +85,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'meals.context_processors.static_version',
                 'meals.context_processors.toast',
+                'meals.context_processors.add_meal',
             ],
         },
     },
@@ -151,7 +153,7 @@ STATICFILES_DIRS = [
 
 # Added as ?v= to our own CSS and JS links (meals/context_processors.py).
 # Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
-STATIC_VERSION = '15'
+STATIC_VERSION = '16'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

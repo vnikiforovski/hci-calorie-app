@@ -1,0 +1,41 @@
+{% load humanize %}
+{# A slot with several meals (Figma "Overlay · Snack (2 meals)"): each meal with its own time. #}
+{# "Add another snack" opens the Add meal sheet; Bootstrap closes this one first.              #}
+<div class="offcanvas offcanvas-bottom z-sheet" tabindex="-1" id="slotSheet-{{ slot.value }}" aria-labelledby="slotSheetTitle-{{ slot.value }}">
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+    <div class="z-sheet-title">
+        <div>
+            <h2 class="mb-0" id="slotSheetTitle-{{ slot.value }}">{{ slot.label }}</h2>
+            <p class="z-small text-body-secondary mb-0">{{ slot.meals|length }} meals · {{ slot.kcal_min|intcomma }}–{{ slot.kcal_max|intcomma }} kcal</p>
+        </div>
+        <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="z-sheet-body">
+        <ul class="card z-slot-meals">
+            {% for meal in slot.meals %}
+                <li>
+                    <a class="z-slot-meal" href="{% url 'result' meal.id %}">
+                        {% if meal.photo %}
+                            <img class="z-slot-thumb" src="{{ meal.photo.url }}" alt="">
+                        {% else %}
+                            <span class="z-slot-thumb z-thumb-{% cycle 'sky' 'lilac' 'peach' 'butter' %}" aria-hidden="true"></span>
+                        {% endif %}
+                        <span class="z-slot-text">
+                            <span class="z-slot-name">{{ meal.title|default:'Meal' }}</span>
+                            <span class="z-slot-summary">{{ meal.eaten_at|time:'H:i' }} · {{ meal.kcal_min|intcomma }}–{{ meal.kcal_max|intcomma }} kcal</span>
+                        </span>
+                        <i class="bi bi-chevron-right z-slot-meal-arrow" aria-hidden="true"></i>
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+        <p class="z-small text-body-secondary my-3">Each meal keeps its own time in the Diary. Home adds them up per slot.</p>
+        <button type="button" class="btn btn-outline-secondary btn-lg w-100"
+                data-bs-toggle="offcanvas" data-bs-target="#addMealSheet" data-slot="{{ slot.value }}">
+            Add another {{ slot.value }}
+        </button>
+    </div>
+</div>

@@ -1,30 +1,132 @@
 {% extends 'base.html' %}
+{% load static humanize %}
 
 {% block title %}Home{% endblock %}
 
-{# Temporary Home (chunk 9), so a logged meal can be seen. Chunk 14 builds the real Home. #}
-{# Guests get Welcome instead (views.home), so this page is always for a signed-in user.  #}
+{# Home (chunk 14), Figma "Home", "Home · First day" and "Desktop · Home". views.home builds it:    #}
+{# the week strip, what was eaten that day, and the four slots (one queryset per slot).            #}
+{# Guests get Welcome instead, so this page is always for a signed-in user.                        #}
 {% block content %}
-    <h1>Home</h1>
+    <div class="z-home">
+        <div class="z-home-top">
+            {# Desktop: "Good afternoon, Ana" + the date. Phones keep the logo header, so the h1 is for screen readers. #}
+            <div class="z-home-hello">
+                <h1 class="z-home-greeting">{{ greeting }}{% if user.first_name %}, {{ user.first_name }}{% endif %}</h1>
+                <p class="z-desktop-only text-body-secondary mb-0">{{ day|date:'l, j F' }}</p>
+            </div>
 
-    {% if meals %}
-        <ul class="list-unstyled">
-            {% for meal in meals %}
-                <li class="card mb-2">
-                    <a class="card-body d-flex justify-content-between align-items-center gap-3 text-reset text-decoration-none"
-                       href="{% url 'result' meal.id %}">
-                        <span>
-                            <span class="fw-semibold">{{ meal.title|default:'Meal' }}</span><br>
-                            <span class="z-small text-body-secondary">
-                                {{ meal.get_slot_display }} · {{ meal.eaten_at|date:'D j M, H:i' }}
-                            </span>
-                        </span>
-                        <span class="z-tabular text-nowrap">{{ meal.kcal_min }}–{{ meal.kcal_max }} kcal</span>
+            {# Week strip: Mo–Su of the selected day's week; future days are not links (docs/05) #}
+            <nav class="z-week" aria-label="Days of the week">
+                <a class="z-week-arrow" href="{{ week.prev_url }}" aria-label="Previous week">
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                </a>
+                <ol class="z-week-days">
+                    {% for d in week.days %}
+                        <li>
+                            {% if d.is_future %}
+                                <span class="z-week-day is-future" aria-label="{{ d.date|date:'l j F' }}, not yet">
+                                    <span class="z-week-name" aria-hidden="true">{{ d.short }}</span>
+                                    <span class="z-week-num" aria-hidden="true">{{ d.date.day }}</span>
+                                </span>
+                            {% else %}
+                                <a class="z-week-day{% if d.is_selected %} is-selected{% endif %}" href="{{ d.url }}"
+                                   aria-label="{{ d.date|date:'l j F' }}"{% if d.is_selected %} aria-current="date"{% endif %}>
+                                    <span class="z-week-name" aria-hidden="true">{{ d.short }}</span>
+                                    <span class="z-week-num" aria-hidden="true">{{ d.date.day }}</span>
+                                </a>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ol>
+                {% if week.next_url %}
+                    <a class="z-week-arrow" href="{{ week.next_url }}" aria-label="Next week">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
                     </a>
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p class="text-body-secondary">No meals logged yet. Tap + to add one.</p>
-    {% endif %}
+                {% else %}
+                    <span class="z-week-arrow" aria-hidden="true"></span>   {# this week: nothing ahead yet #}
+                {% endif %}
+            </nav>
+        </div>
+
+        {% if first_day %}
+            {# Figma "Home · First day" #}
+            <section class="z-first-day" aria-labelledby="firstDayTitle">
+                <img class="z-first-day-cookie" src="{% static 'img/logo.svg' %}" alt="">
+                <div>
+                    <h2 class="z-first-day-title" id="firstDayTitle">Log your first meal</h2>
+                    <p class="mb-0">Tap + and snap your plate. Zalak does the counting, you just eat.</p>
+                </div>
+            </section>
+        {% endif %}
+
+        <div class="z-home-cols">
+            <div class="z-home-dash">
+                {# Eaten: always "eaten", never "left" (docs/06). The bar has a legend in words, never color alone. #}
+                <section class="card z-eaten" aria-labelledby="eatenTitle">
+                    <div class="card-body">
+                        <div class="z-eaten-top">
+                            <h2 class="z-eaten-label" id="eatenTitle">{{ eaten_label }}</h2>
+                            <span class="z-estimate-tag">Estimate</span>
+                        </div>
+                        <p class="z-eaten-total">
+                            <span class="z-num">{% if totals.kcal_max %}{{ totals.kcal_min|intcomma }}–{{ totals.kcal_max|intcomma }}{% else %}0{% endif %}</span>
+                            <span class="text-body-secondary">kcal</span>
+                        </p>
+                        <div class="z-slot-bar" aria-hidden="true">
+                            {% for part in bar %}
+                                <span class="z-slot-part z-slot-{{ part.value }}" style="flex-grow: {{ part.share }}"></span>
+                            {% empty %}
+                                <span class="z-slot-part is-empty"></span>
+                            {% endfor %}
+                        </div>
+                        {% if bar %}
+                            <ul class="z-slot-legend">
+                                {% for part in bar %}
+                                    <li><span class="z-legend-dot z-slot-{{ part.value }}" aria-hidden="true"></span>{{ part.label }}</li>
+                                {% endfor %}
+                            </ul>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <ul class="z-macro-cards" aria-label="Macros eaten">
+                    {% for macro in macros %}
+                        <li class="z-macro-card">
+                            <span class="z-macro-line z-bg-{{ macro.key }}" aria-hidden="true"></span>
+                            <span class="z-macro-card-name">{{ macro.name }}</span>
+                            <span class="z-num z-macro-card-value">{% if macro.max %}{{ macro.min }}–{{ macro.max }}{% else %}0{% endif %} g</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <section class="z-home-meals" aria-labelledby="mealsTitle">
+                <div class="z-meals-head">
+                    <h2 class="mb-0" id="mealsTitle">Meals</h2>
+                    {# Not in Figma: the date opens "Jump to a date" #}
+                    <button type="button" class="z-date-btn" data-bs-toggle="offcanvas" data-bs-target="#dateSheet" aria-controls="dateSheet">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                        {{ day|date:'l, j F' }}<span class="visually-hidden">: jump to a date</span>
+                    </button>
+                </div>
+                <ul class="card z-slots">
+                    {% for slot in slots %}
+                        {% include 'meals/_slot.html' %}
+                    {% endfor %}
+                </ul>
+            </section>
+        </div>
+    </div>
+
+    {# A slot with several meals opens its own sheet (Figma "Overlay · Snack (2 meals)") #}
+    {% for slot in slots %}
+        {% if slot.meals|length > 1 %}
+            {% include 'meals/_slot_sheet.html' %}
+        {% endif %}
+    {% endfor %}
+    {% include 'meals/_date_sheet.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/home.js' %}?v={{ STATIC_VERSION }}"></script>
 {% endblock %}

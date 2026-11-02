@@ -19,7 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .admin import MealAdmin
-from .models import Meal, Profile
+from .models import Meal, Profile, slot_for_time
 from .services.ai import (FAKE_RESPONSE, ITEM_RESPONSE_SCHEMA, AnalysisError, analyze_text, estimate_item,
                           validate)
 from .units import format_amount, grams_for, stepper_label
@@ -1640,3 +1640,198 @@ class AccountTests(TestCase):
             self.assertEqual(page.status_code, 200)
             self.assertContains(page, 'js/auth.js')
             self.assertContains(page, 'data-password-toggle')
+
+
+class HomeTests(TestCase):
+    """Chunk 14: the week strip, the Eaten card, the four slots and the sheets."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password', first_name='Ana')
+        self.client.force_login(self.user)
+        self.today = timezone.localdate()
+
+    def log(self, slot, day=None, title='Chicken', hour=12, user=None, **fields):
+        """A logged meal of 230-260 kcal (chicken, 150 g) on a day, at a local hour."""
+        meal = make_draft(user=user or self.user, slot=slot, status='logged', **fields)
+        day = day or self.today
+        when = timezone.make_aware(datetime(day.year, day.month, day.day, hour, 0))
+        Meal.objects.filter(id=meal.id).update(eaten_at=when, title=title)
+        meal.refresh_from_db()
+        return meal
+
+    def home(self, **params):
+        return self.client.get(reverse('home'), params)
+
+    def slot(self, page, value):
+        return next(slot for slot in page.context['slots'] if slot['value'] == value)
+
+    def test_meals_are_grouped_by_slot_with_day_totals(self):
+        self.log('breakfast', title='Yogurt')
+        self.log('snack', title='Apple', hour=11)
+        self.log('snack', title='Coffee', hour=16)
+        page = self.home()
+        self.assertEqual(len(self.slot(page, 'breakfast')['meals']), 1)
+        self.assertEqual(len(self.slot(page, 'snack')['meals']), 2)
+        self.assertEqual(self.slot(page, 'snack')['summary'], '2 meals · Apple, Coffee')
+        self.assertEqual(self.slot(page, 'dinner')['summary'], 'Nothing yet')
+        self.assertEqual(page.context['totals']['kcal_min'], 690)
+        self.assertEqual(page.context['totals']['kcal_max'], 780)
+        self.assertContains(page, '690–780')
+        self.assertEqual(page.context['totals']['protein_min'], 126)
+        self.assertContains(page, 'Eaten today')
+        # The bar has a part per slot with meals, and the legend names them
+        self.assertEqual([part['value'] for part in page.context['bar']], ['breakfast', 'snack'])
+
+    def test_big_totals_get_thousands_separators(self):
+        for hour in range(8, 13):
+            self.log('lunch', hour=hour)
+        self.assertContains(self.home(), '1,150–1,300')
+
+    def test_only_this_users_logged_meals_of_that_day_count(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        make_draft(user=self.user, slot='lunch')                         # a draft
+        self.log('lunch', deleted_at=timezone.now())                      # deleted
+        self.log('lunch', user=other)                                     # someone else's
+        self.log('lunch', day=self.today - timedelta(days=1))             # another day
+        page = self.home()
+        self.assertEqual(page.context['totals']['kcal_max'], 0)
+        self.assertTrue(all(not slot['meals'] for slot in page.context['slots']))
+        self.assertContains(page, '<span class="z-num">0</span>', html=False)
+
+    def test_a_past_day(self):
+        yesterday = self.today - timedelta(days=1)
+        self.log('dinner', day=yesterday)
+        page = self.home(date=yesterday.isoformat())
+        self.assertEqual(page.context['day'], yesterday)
+        self.assertEqual(page.context['eaten_label'], 'Eaten yesterday')
+        self.assertEqual(len(self.slot(page, 'dinner')['meals']), 1)
+        # "+" logs to the day on screen: the Add sheet carries it
+        self.assertEqual(page.context['add_day'], yesterday)
+        self.assertContains(page, f'name="day" value="{yesterday.isoformat()}"')
+
+    def test_an_older_day_is_named(self):
+        day = self.today - timedelta(days=3)
+        page = self.home(date=day.isoformat())
+        self.assertEqual(page.context['eaten_label'], f'Eaten on {day:%a} {day.day}')
+
+    def test_future_or_odd_dates_show_today(self):
+        for value in [(self.today + timedelta(days=1)).isoformat(), 'yesterday', '2026-02-30']:
+            page = self.home(date=value)
+            self.assertEqual(page.context['day'], self.today)
+            self.assertIsNone(page.context['add_day'])
+
+    def test_week_strip(self):
+        page = self.home()
+        days = page.context['week']['days']
+        self.assertEqual(len(days), 7)
+        self.assertEqual(days[0]['date'].weekday(), 0)   # starts on Monday
+        self.assertIsNone(page.context['week']['next_url'])   # nothing ahead of this week
+        for day in days:
+            if day['date'] > self.today:
+                self.assertTrue(day['is_future'])
+                self.assertNotContains(page, f'href="/?date={day["date"].isoformat()}"')
+
+        last_week = self.home(date=(self.today - timedelta(days=7)).isoformat())
+        self.assertEqual(last_week.context['week']['next_url'], '/')   # a week on is today
+
+    def test_calendar_marks_days_with_meals(self):
+        self.log('lunch')
+        page = self.home()
+        cells = [cell for week in page.context['calendar']['weeks'] for cell in week if cell]
+        today_cell = next(cell for cell in cells if cell['date'] == self.today)
+        self.assertTrue(today_cell['has_meals'])
+        self.assertTrue(today_cell['is_selected'])
+        self.assertTrue(all(cell['is_future'] for cell in cells if cell['date'] > self.today))
+        self.assertIsNone(page.context['calendar']['next_url'])   # never past this month
+        self.assertFalse(page.context['calendar_open'])
+
+    def test_calendar_month_arrows(self):
+        page = self.home(month='2026-01')
+        self.assertEqual(page.context['calendar']['first'], datetime(2026, 1, 1).date())
+        self.assertTrue(page.context['calendar_open'])
+        self.assertContains(page, 'data-open-on-load')
+        # A month in the future shows this month; a broken one the selected day's month
+        self.assertEqual(self.home(month='2999-01').context['calendar']['first'], self.today.replace(day=1))
+        self.assertFalse(self.home(month='soon').context['calendar_open'])
+
+    def test_first_day_card_until_the_first_meal(self):
+        self.assertContains(self.home(), 'Log your first meal')
+        self.log('lunch', day=self.today - timedelta(days=5))
+        self.assertNotContains(self.home(), 'Log your first meal')
+
+    def test_one_meal_links_to_it_and_two_open_a_sheet(self):
+        lunch = self.log('lunch')
+        apple = self.log('snack', title='Apple')
+        coffee = self.log('snack', title='Coffee')
+        page = self.home()
+        self.assertContains(page, f'href="{reverse("result", args=[lunch.id])}"')
+        self.assertContains(page, 'id="slotSheet-snack"')
+        self.assertNotContains(page, 'id="slotSheet-lunch"')
+        for meal in (apple, coffee):
+            self.assertContains(page, f'href="{reverse("result", args=[meal.id])}"')
+        self.assertContains(page, 'Add another snack')
+
+    def test_add_sheet_is_on_every_signed_in_page(self):
+        page = self.home()
+        self.assertContains(page, 'id="addMealSheet"')
+        self.assertEqual(page.context['add_slot'], slot_for_time(timezone.now()))
+        self.assertContains(page, 'was picked from the time')
+        self.assertContains(self.client.get(reverse('diary')), 'id="addMealSheet"')
+
+    def test_guests_have_no_add_sheet(self):
+        self.client.logout()
+        self.assertNotContains(self.home(), 'id="addMealSheet"')
+
+    def test_greeting(self):
+        self.assertRegex(self.home().content.decode(), r'Good (morning|afternoon|evening), Ana')
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class PastDayTests(TestCase):
+    """Chunk 14: "+" on a past day on Home logs the meal to that day."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.yesterday = timezone.localdate() - timedelta(days=1)
+
+    def analyze(self, **data):
+        data.setdefault('text', 'chicken and rice')
+        data.setdefault('slot', 'dinner')
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), data)
+        return Meal.objects.get()
+
+    def test_the_page_says_which_day(self):
+        page = self.client.get(reverse('text_input'), {'slot': 'dinner', 'day': self.yesterday.isoformat()})
+        self.assertContains(page, f'name="day" value="{self.yesterday.isoformat()}"')
+        self.assertContains(page, f'Add to dinner · {self.yesterday:%a} {self.yesterday.day}')
+
+    def test_a_past_day_keeps_the_clock_time(self):
+        meal = self.analyze(day=self.yesterday.isoformat())
+        self.assertEqual(timezone.localtime(meal.eaten_at).date(), self.yesterday)
+
+    def test_a_future_day_means_now(self):
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        meal = self.analyze(day=tomorrow.isoformat())
+        self.assertEqual(timezone.localtime(meal.eaten_at).date(), timezone.localdate())
+
+    def test_log_goes_to_that_days_home(self):
+        meal = self.analyze(day=self.yesterday.isoformat())
+        response = self.client.post(reverse('log_meal', args=[meal.id]), {'slot': 'dinner'})
+        self.assertRedirects(response, f'/?date={self.yesterday.isoformat()}')
+        meal.refresh_from_db()
+        self.assertEqual(meal.status, 'logged')
+
+    def test_log_today_goes_to_plain_home(self):
+        meal = self.analyze()
+        response = self.client.post(reverse('log_meal', args=[meal.id]), {'slot': 'dinner'})
+        self.assertRedirects(response, reverse('home'))
+
+    def test_photo_on_a_past_day(self):
+        use_temp_media(self)
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('photo_input'),
+                             {'photo': jpeg(), 'slot': 'lunch', 'day': self.yesterday.isoformat()})
+        meal = Meal.objects.get()
+        self.assertEqual(timezone.localtime(meal.eaten_at).date(), self.yesterday)
