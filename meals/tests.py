@@ -2134,3 +2134,146 @@ class DiaryTests(TestCase):
         self.assertEqual(page.context['calendar']['today_url'], '/diary/')
         # Home's calendar still links to Home
         self.assertEqual(self.client.get(reverse('home')).context['calendar']['today_url'], '/')
+
+
+class StatisticsTests(TestCase):
+    """Chunk 17: Statistics for a Mo–Su week or a month. The fixed numbers use last week and last
+    month, so they don't depend on today's weekday. Each meal is chicken, 150 g: 230–260 kcal,
+    protein 42–47 g, carbs 0 g, fat 5–6 g."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.today = timezone.localdate()
+        self.this_monday = self.today - timedelta(days=self.today.weekday())
+        self.last_monday = self.this_monday - timedelta(days=7)
+
+    def log(self, day, slot='lunch', hour=12, title='Chicken', user=None, **fields):
+        meal = make_draft(user=user or self.user, slot=slot, status='logged', **fields)
+        when = timezone.make_aware(datetime(day.year, day.month, day.day, hour, 0))
+        Meal.objects.filter(id=meal.id).update(eaten_at=when, title=title)
+        meal.refresh_from_db()
+        return meal
+
+    def stats(self, **params):
+        return self.client.get(reverse('statistics'), params)
+
+    def last_week(self):
+        return self.stats(date=self.last_monday.isoformat())
+
+    def test_a_guest_is_sent_to_sign_in(self):
+        self.client.logout()
+        page = self.stats()
+        self.assertEqual(page.status_code, 302)
+        self.assertIn(reverse('sign_in'), page['Location'])
+
+    def test_the_numbers_match_the_meals_by_hand(self):
+        wednesday = self.last_monday + timedelta(days=2)
+        self.log(self.last_monday, 'lunch', hour=12)
+        self.log(self.last_monday, 'dinner', hour=19)
+        self.log(wednesday, 'lunch', title='Yogurt')
+        page = self.last_week()
+        self.assertTemplateUsed(page, 'meals/statistics.html')
+        stats = page.context['stats']
+        self.assertEqual(stats['days_logged'], 2)
+        self.assertEqual(stats['days_total'], 7)
+        self.assertEqual(stats['meal_count'], 3)
+        self.assertContains(page, '2 of 7')
+
+        # Monday 460–520, Wednesday 230–260: (690 ÷ 2, 780 ÷ 2) rounded to 10
+        self.assertEqual((stats['kcal_min'], stats['kcal_max']), (350, 390))
+        self.assertContains(page, '350–390')
+        monday, tuesday = stats['days'][0], stats['days'][1]
+        self.assertTrue(monday['has_meals'])
+        self.assertFalse(tuesday['has_meals'])
+        self.assertIn('460–520 kcal', monday['spoken'])
+        self.assertIn('nothing logged', tuesday['spoken'])
+        # The chart's top is 1,000 × 1.1 here: Monday's bar is 520 / 1,100, its light top 60 / 520
+        self.assertEqual(monday['bar_pct'], '47.3')
+        self.assertEqual(monday['range_pct'], '11.5')
+        self.assertEqual([line['value'] for line in stats['grid']], [1000])
+
+        # Grams a day: protein 126–141 ÷ 2 → 65–70, fat 15–18 ÷ 2 → 10–10 (rounded to 5)
+        macros = {macro['key']: macro for macro in stats['macros']}
+        self.assertEqual((macros['protein']['min'], macros['protein']['max']), (65, 70))
+        self.assertEqual((macros['carbs']['min'], macros['carbs']['max']), (0, 0))
+        self.assertEqual((macros['fat']['min'], macros['fat']['max']), (10, 10))
+        self.assertEqual(sum(macro['pct'] for macro in stats['macros']), 100)
+        self.assertEqual(macros['protein']['pct'], 78)
+        self.assertContains(page, 'Protein · 78%')
+
+    def test_shares_match_figma(self):
+        from .views import macro_shares
+        macros = macro_shares([
+            {'key': 'protein', 'energy': 70 * 4},
+            {'key': 'carbs', 'energy': 165 * 4},
+            {'key': 'fat', 'energy': 55 * 9},
+        ])
+        self.assertEqual([macro['pct'] for macro in macros], [20, 46, 34])
+
+    def test_only_this_users_logged_meals_of_that_week_count(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        self.log(self.last_monday)
+        self.log(self.last_monday, user=other)
+        self.log(self.last_monday, deleted_at=timezone.now())
+        self.log(self.last_monday - timedelta(days=1))   # the Sunday before
+        draft = make_draft(user=self.user, slot='lunch')
+        monday = self.last_monday
+        Meal.objects.filter(id=draft.id).update(
+            eaten_at=timezone.make_aware(datetime(monday.year, monday.month, monday.day, 9)))
+        stats = self.last_week().context['stats']
+        self.assertEqual(stats['meal_count'], 1)
+        self.assertEqual((stats['kcal_min'], stats['kcal_max']), (230, 260))
+
+    def test_this_week_has_no_next_and_no_future_bars(self):
+        page = self.stats()
+        self.assertEqual(page.context['words'], 'this week')
+        self.assertIsNone(page.context['next_url'])
+        self.assertEqual(page.context['prev_url'], f'{reverse("statistics")}?date={self.last_monday.isoformat()}')
+        future = [d for d in page.context['stats']['days'] if d['date'] > self.today]
+        self.assertTrue(all(d['is_future'] and not d['has_meals'] for d in future))
+        # A day after today shows this week
+        tomorrow = self.today + timedelta(days=1)
+        self.assertEqual(self.stats(date=tomorrow.isoformat()).context['words'], 'this week')
+
+    def test_last_week_goes_forward_to_this_week(self):
+        page = self.last_week()
+        self.assertEqual(page.context['words'], 'last week')
+        self.assertEqual(page.context['next_url'], reverse('statistics'))
+        self.assertContains(page, 'Previous week')
+
+    def test_a_month(self):
+        last_day = self.today.replace(day=1) - timedelta(days=1)
+        self.log(last_day)
+        page = self.stats(period='month', date=last_day.isoformat())
+        stats = page.context['stats']
+        self.assertEqual(page.context['words'], 'last month')
+        self.assertEqual(page.context['label'], f'{last_day:%B %Y}')
+        self.assertEqual(stats['days_total'], last_day.day)
+        self.assertEqual(stats['days_logged'], 1)
+        self.assertEqual([d['axis'] for d in stats['days'] if d['axis']][:2], ['1', '8'])
+        # Week / Month keep the day
+        self.assertEqual(page.context['week_url'], f'{reverse("statistics")}?date={last_day.isoformat()}')
+
+    def test_most_logged_needs_two_of_the_same(self):
+        self.log(self.last_monday, title='Chicken')
+        self.log(self.last_monday + timedelta(days=1), title='chicken ')
+        self.log(self.last_monday + timedelta(days=2), title='Yogurt')
+        page = self.last_week()
+        rows = page.context['stats']['most_logged']
+        self.assertEqual([(row['title'], row['count']) for row in rows], [('chicken', 2)])
+        self.assertContains(page, 'Most logged last week')
+        self.assertContains(page, '2×')
+
+    def test_an_empty_week_says_so_calmly(self):
+        page = self.stats()
+        self.assertContains(page, 'Nothing logged this week yet.')
+        self.assertNotContains(page, 'Macros, average a day')
+        self.assertContains(self.last_week(), 'Nothing logged last week.')
+
+    def test_week_labels(self):
+        from datetime import date
+        from .views import period_label
+        self.assertEqual(period_label('week', date(2026, 10, 12), date(2026, 10, 18)), '12–18 October')
+        self.assertEqual(period_label('week', date(2026, 10, 26), date(2026, 11, 1)), '26 October – 1 November')
+        self.assertEqual(period_label('month', date(2026, 10, 1), date(2026, 10, 31)), 'October 2026')

@@ -230,7 +230,7 @@ class MealItem(models.Model):
   - Files: `forms.py`, `views.py`, `urls.py`, `templates/meals/meal_detail.html`, `_time_sheet.html`, `_slot_dropdown.html`, `_meal_summary.html`, `_meal_items.html`, `result.html`, `static/js/meal_detail.js`, `slot_select.js`, `zalak.css`
   - Pattern: `has_delete_permission`, PRG, ImageField + `request.FILES`
   - Test: change the time, rename the title (shows on Meal detail and Home), add a photo to a typed meal, replace it (the old file is gone from `media/`), remove it, then delete + Undo (FR25).
-- [ ] **16. Simple Diary** (1 Nov)
+- [x] **16. Simple Diary** (1 Nov)
   - Work: one page per day with meal photos, time, name and range, plus the day total; arrows and a date jump; meal → meal detail. Replaces the "Coming soon" page. No book animation.
   - Decided 2 Nov: the arrows step through every calendar day (an empty past day says "Nothing logged this day" with "Add a meal to this day"); back always works (changed 2 Nov: no "Start" at the first logged meal, whose page is only labelled "First page"); nothing after today. The desktop is Figma's two-page spread (the day before | the chosen day), its arrows two days at a time. Meal detail goes back where it was opened from (Home or the Diary, `?from=` kept in the session per meal), also after Save, Delete and Undo. Today's page lists its empty slots at the end ("Nothing yet · Tap to add it"). The calendar sheet is shared with Home (`calendar_month(..., url_for)`), and the Add meal sheet takes the day from the button that opens it (`data-day`).
   - Left out: the "Your meals" tab and button (chunk 22), the page dots, the book animation (Could). Thumbnails without a photo are a pastel square with a small CSS plate. The page keeps a fixed minimum size (phones: the screen between header and arrows, at least 32rem; desktop book: at least 38rem); a busy day grows longer.
@@ -242,7 +242,9 @@ class MealItem(models.Model):
 
 - [ ] **17. Statistics page** (2 Nov)
   - Work: the last 7 days, with the average kcal range per day and the average macro split; no target line, no red/green. Replaces "Coming soon".
-  - Files: `views.py`, `templates/meals/statistics.html`
+  - Decided 2 Nov: Figma's **Mo–Su weeks** (as on Home's week strip) instead of "the last 7 days", plus a **Month** view through Figma's Week / Month switch (`?period=month`, `?date=` picks the week or month; ‹ always goes back, › stops at the period holding today). Averages are over the **days with a logged meal** (a day not logged isn't a day of eating nothing): kcal rounded to 10, grams to 5. Each bar is solid up to the lowest estimate and lighter up to the highest; the chart's top is 1.1 × the highest day (at least 1,000), with grid lines every 1,000. Macro shares come from the middle of each range × 4/4/9 kcal per g and add up to 100 (Figma's 20/46/34). Also built from Figma: the Days logged and Meals cards, and "Most logged this week" (names logged at least twice, case-insensitive, top 3, with the latest photo or the slot's pastel).
+  - Adapted from Figma: left out Customize (FR41, Could), the Water card (water not built), Weight and BMI (no weight history; BMI is out of scope), so two KPI cards. The Month view and the desktop layout have no Figma frame: a month has thin bars with the day number on 1, 8, 15, 22, 29; at 1440 the switch and the range share a row and the chart sits beside Macros + Most logged. Empty and future days draw no bar; an empty period says "Nothing logged this week yet." and hides Macros and Most logged. The Week / Month options are 44 px high (Figma 38). Still left out: the desktop Home "On average" card.
+  - Files: `views.py`, `templates/meals/statistics.html`, `zalak.css`, `settings.py` (`STATIC_VERSION`), `tests.py`
   - Pattern: loops over querysets
   - Test: the numbers match the logged meals by hand.
 - [ ] **18. Small Profile page** (2 Nov)

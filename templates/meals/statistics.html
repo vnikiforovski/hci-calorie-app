@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Statistics{% endblock %}
+
+{# Statistics (chunk 17), Figma "Statistics" and "Statistics · Last week". views.statistics builds it:  #}
+{# a Mo–Su week or a calendar month of logged meals. It shows patterns and never judges: no target     #}
+{# line, no red or green days, no scores. Left out of Figma: Customize, Water, Weight and BMI.          #}
+{# The page has its own header (Statistics + Profile), like the Diary, so the logo header is left out.  #}
+{% block header %}{% endblock %}
+
+{% block content %}
+    <div class="z-stats">
+        <div class="z-stats-head">
+            <h1 class="mb-0">Statistics</h1>
+            <a class="z-icon-btn z-mobile-only" href="{% url 'profile' %}" aria-label="Profile">
+                <i class="bi bi-person" aria-hidden="true"></i>
+            </a>
+        </div>
+
+        <div class="z-stats-controls">
+            {# Week / Month: two links, so it works without JavaScript #}
+            <nav class="z-stats-switch" aria-label="Period">
+                <a class="z-stats-switch-option{% if period == 'week' %} active{% endif %}" href="{{ week_url }}"
+                   {% if period == 'week' %}aria-current="page"{% endif %}>Week</a>
+                <a class="z-stats-switch-option{% if period == 'month' %} active{% endif %}" href="{{ month_url }}"
+                   {% if period == 'month' %}aria-current="page"{% endif %}>Month</a>
+            </nav>
+
+            {# ‹ always goes back; › stops at the period that holds today (faded, as in Figma) #}
+            <nav class="z-stats-range" aria-label="{% if period == 'week' %}Weeks{% else %}Months{% endif %}">
+                <a class="z-icon-btn" href="{{ prev_url }}" aria-label="Previous {{ period }}">
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                </a>
+                <p class="z-stats-range-label mb-0">{{ label }}</p>
+                {% if next_url %}
+                    <a class="z-icon-btn" href="{{ next_url }}" aria-label="Next {{ period }}">
+                        <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </a>
+                {% else %}
+                    <span class="z-icon-btn is-disabled" aria-hidden="true">
+                        <i class="bi bi-chevron-right"></i>
+                    </span>
+                {% endif %}
+            </nav>
+        </div>
+
+        <ul class="z-kpis" aria-label="Summary">
+            <li class="z-kpi z-tint-butter">
+                <span class="z-kpi-name">Days logged</span>
+                <span class="z-num z-kpi-value">{{ stats.days_logged }} of {{ stats.days_total }}</span>
+                <span class="z-kpi-note">{{ words }}</span>
+            </li>
+            <li class="z-kpi z-tint-lilac">
+                <span class="z-kpi-name">Meals</span>
+                <span class="z-num z-kpi-value">{{ stats.meal_count }}</span>
+                <span class="z-kpi-note">written down</span>
+            </li>
+        </ul>
+
+        <div class="z-stats-cols">
+            {# Calories per day: one bar per day, solid to the lowest estimate, lighter up to the highest #}
+            <section class="z-stats-card" aria-labelledby="averageTitle">
+                <h2 class="z-stats-kicker" id="averageTitle">On average</h2>
+                {% if stats.days_logged %}
+                    <p class="z-stats-average">
+                        <span class="z-num">{{ stats.kcal_min|intcomma }}–{{ stats.kcal_max|intcomma }}</span>
+                        <span class="z-stats-unit">kcal a day</span>
+                    </p>
+                {% else %}
+                    <p class="z-stats-empty">Nothing logged {{ words }}{% if not next_url %} yet{% endif %}.</p>
+                {% endif %}
+
+                <div class="z-chart{% if period == 'month' %} is-month{% endif %}">
+                    <div class="z-chart-grid" aria-hidden="true">
+                        {% for line in stats.grid %}
+                            <span class="z-chart-line" style="bottom: {{ line.pct }}%">
+                                <span class="z-chart-line-label">{{ line.value|intcomma }}</span>
+                            </span>
+                        {% endfor %}
+                    </div>
+                    <ol class="z-chart-days" aria-label="Calories per day">
+                        {% for d in stats.days %}
+                            <li class="z-chart-day{% if d.is_future %} is-future{% endif %}">
+                                <span class="z-chart-plot" aria-hidden="true">
+                                    {% if d.has_meals %}
+                                        <span class="z-chart-bar" style="height: {{ d.bar_pct }}%">
+                                            <span class="z-chart-range" style="height: {{ d.range_pct }}%"></span>
+                                        </span>
+                                    {% endif %}
+                                </span>
+                                <span class="z-chart-axis" aria-hidden="true">{{ d.axis }}</span>
+                                <span class="visually-hidden">{{ d.spoken }}</span>
+                            </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+
+                <ul class="z-chart-legend" aria-hidden="true">
+                    <li><span class="z-chart-key is-low"></span>Lowest estimate</li>
+                    <li><span class="z-chart-key is-range"></span>Possible range</li>
+                </ul>
+            </section>
+
+            {% if stats.days_logged %}
+                <div class="z-stats-side">
+                    {# The colors are only beside the words, never on their own #}
+                    <section class="z-stats-card" aria-labelledby="macrosTitle">
+                        <h2 class="z-stats-title" id="macrosTitle">Macros, average a day</h2>
+                        <div class="z-split-bar" aria-hidden="true">
+                            {% for macro in stats.macros %}
+                                {% if macro.pct %}<span class="z-bg-{{ macro.key }}" style="flex-grow: {{ macro.pct }}"></span>{% endif %}
+                            {% endfor %}
+                        </div>
+                        <ul class="z-split-values">
+                            {% for macro in stats.macros %}
+                                <li>
+                                    <span class="z-split-name"><span class="z-split-dot z-bg-{{ macro.key }}" aria-hidden="true"></span>{{ macro.name }} · {{ macro.pct }}%</span>
+                                    <span class="z-split-grams">{{ macro.min }}–{{ macro.max }} g</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </section>
+
+                    {% if stats.most_logged %}
+                        <section class="z-stats-card" aria-labelledby="mostTitle">
+                            <h2 class="z-stats-title" id="mostTitle">Most logged {{ words }}</h2>
+                            <ol class="z-most">
+                                {% for row in stats.most_logged %}
+                                    <li class="z-most-row">
+                                        {% if row.photo %}
+                                            <img class="z-most-thumb" src="{{ row.photo.url }}" alt="">
+                                        {% else %}
+                                            <span class="z-most-thumb z-thumb-{{ row.tint }}" aria-hidden="true"></span>
+                                        {% endif %}
+                                        <span class="z-most-title">{{ row.title }}</span>
+                                        <span class="z-most-count">{{ row.count }}×<span class="visually-hidden"> logged</span></span>
+                                    </li>
+                                {% endfor %}
+                            </ol>
+                        </section>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

@@ -15,7 +15,7 @@ from .forms import MealDetailForm, MealItemForm, PhotoMealForm, ProfileDetailsFo
 from .models import Meal, MealItem, Profile, slot_for_time
 from .services.ai import AnalysisError, analyze_photo, analyze_text, estimate_item
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
-                    NO_PLURAL, UNIT_TABS, WEIGHT_UNITS, format_amount, stepper_label)
+                    NO_PLURAL, UNIT_TABS, WEIGHT_UNITS, format_amount, round_to, stepper_label)
 
 
 def home(request):
@@ -1088,9 +1088,207 @@ def diary_page(logged, day, first_day):
     }
 
 
+# ---------- Statistics (chunk 17, Figma "Statistics", "Statistics · Last week") ----------
+
+STATS_PERIODS = ['week', 'month']
+# kcal in a gram of each macro: for the share of the day's energy (Figma "Protein · 20%")
+KCAL_PER_GRAM = {'protein': 4, 'carbs': 4, 'fat': 9}
+MACRO_NAMES = [('protein', 'Protein'), ('carbs', 'Carbs'), ('fat', 'Fat')]
+# A month's chart names only these days under its bars, so the labels fit at 390 px
+MONTH_AXIS_DAYS = {1, 8, 15, 22, 29}
+MOST_LOGGED_COUNT = 3
+
+
 @login_required
 def statistics(request):
-    return render(request, 'coming_soon.html', {'title': 'Statistics'})
+    """Statistics (FR28, the default of FR41): a Mo–Su week (as on Home's week strip) or a calendar month.
+    ?period=month switches, ?date= picks the period that holds that day. Only logged meals count,
+    and the averages are over the days with a logged meal (a day not logged isn't a day of eating nothing)."""
+    today = timezone.localdate()
+    period = request.GET.get('period')
+    if period not in STATS_PERIODS:
+        period = 'week'
+    day = parse_day(request.GET.get('date')) or today
+    first, last = period_bounds(period, day)
+
+    logged = Meal.objects.filter(user=request.user, status='logged', deleted_at__isnull=True)
+    meals = list(logged.filter(eaten_at__date__range=(first, last))
+                 .prefetch_related('items').order_by('eaten_at'))
+
+    # ‹ always goes back (as in the Diary); › stops at the period that holds today
+    previous = first - timedelta(days=1)
+    words = period_words(period, first)
+    context = {
+        'period': period,
+        'words': words,
+        'label': period_label(period, first, last),
+        'week_url': stats_url('week', day),
+        'month_url': stats_url('month', day),
+        'prev_url': stats_url(period, period_bounds(period, previous)[0]),
+        'next_url': stats_url(period, last + timedelta(days=1)) if last < today else None,
+        'stats': period_stats(meals, first, last, period),
+    }
+    return render(request, 'meals/statistics.html', context)
+
+
+def period_bounds(period, day):
+    """The first and last day of the Mo–Su week or the calendar month that holds day."""
+    if period == 'month':
+        first = day.replace(day=1)
+        return first, first.replace(day=calendar.monthrange(first.year, first.month)[1])
+    first = day - timedelta(days=day.weekday())
+    return first, first + timedelta(days=6)
+
+
+def stats_url(period, day):
+    """A Statistics page. This week needs no parameters, so the nav link stays clean."""
+    params = {}
+    if period != 'week':
+        params['period'] = period
+    if period_bounds(period, day)[0] != period_bounds(period, timezone.localdate())[0]:
+        params['date'] = day.isoformat()
+    url = reverse('statistics')
+    return f'{url}?{urlencode(params)}' if params else url
+
+
+def period_words(period, first):
+    """ "this week", "last week" or "that week" (and the same for months): under the KPI numbers
+    and in "Most logged this week" (Figma)."""
+    this_first = period_bounds(period, timezone.localdate())[0]
+    if first == this_first:
+        return f'this {period}'
+    if first == period_bounds(period, this_first - timedelta(days=1))[0]:
+        return f'last {period}'
+    return f'that {period}'
+
+
+def period_label(period, first, last):
+    """ "12–18 October", "27 October – 2 November" or "October 2026"."""
+    if period == 'month':
+        return f'{first:%B %Y}'
+    if first.month == last.month:
+        return f'{first.day}–{last.day} {last:%B}'
+    return f'{first.day} {first:%B} – {last.day} {last:%B}'
+
+
+def period_stats(meals, first, last, period):
+    """Everything the Statistics cards show, from the period's logged meals (plain loops)."""
+    today = timezone.localdate()
+    by_day = {}
+    for meal in meals:
+        by_day.setdefault(timezone.localdate(meal.eaten_at), []).append(meal)
+    days_logged = len(by_day)
+
+    # The chart's top: a little above the highest day, and never under 1,000, so a light day
+    # doesn't fill the card. Grid lines at every 1,000 below it (Figma: 1,000 and 2,000).
+    highest = max((sum(meal.kcal_max for meal in day_meals) for day_meals in by_day.values()), default=0)
+    top = max(1000, highest) * 1.1
+
+    days = []
+    this = first
+    while this <= last:
+        day_meals = by_day.get(this, [])
+        kcal_min = sum(meal.kcal_min for meal in day_meals)
+        kcal_max = sum(meal.kcal_max for meal in day_meals)
+        if this > today:
+            said = 'not yet'
+        elif day_meals:
+            said = f'{kcal_min:,}–{kcal_max:,} kcal'
+        else:
+            said = 'nothing logged'
+        if period == 'week':
+            axis = WEEKDAY_SHORT[this.weekday()]
+        else:
+            axis = str(this.day) if this.day in MONTH_AXIS_DAYS else ''
+        days.append({
+            'date': this,
+            'axis': axis,
+            'spoken': f'{this:%A} {this.day} {this:%B}: {said}',
+            'has_meals': bool(day_meals),
+            'is_future': this > today,
+            # One bar up to the highest estimate (in % of the chart), its top part the lighter
+            # "Possible range" (in % of the bar), the rest the solid "Lowest estimate"
+            'bar_pct': f'{kcal_max / top * 100:.1f}',
+            'range_pct': f'{(kcal_max - kcal_min) / kcal_max * 100:.1f}' if kcal_max else '0',
+        })
+        this += timedelta(days=1)
+
+    grid = [{'value': value, 'pct': f'{value / top * 100:.1f}'}
+            for value in range(1000, int(top) + 1, 1000)]
+
+    stats = {
+        'days': days,
+        'grid': grid,
+        'days_logged': days_logged,
+        'days_total': len(days),
+        'meal_count': len(meals),
+        'kcal_min': 0,
+        'kcal_max': 0,
+        'macros': [],
+        'most_logged': most_logged(meals),
+    }
+    if not days_logged:
+        return stats
+
+    # Averages a day, over the days with a logged meal: kcal rounded to 10, grams to 5
+    stats['kcal_min'] = round_to(sum(meal.kcal_min for meal in meals) / days_logged, 10)
+    stats['kcal_max'] = round_to(sum(meal.kcal_max for meal in meals) / days_logged, 10)
+    macros = []
+    for key, name in MACRO_NAMES:
+        grams_min = sum(getattr(meal, f'{key}_min') for meal in meals) / days_logged
+        grams_max = sum(getattr(meal, f'{key}_max') for meal in meals) / days_logged
+        macros.append({
+            'key': key,
+            'name': name,
+            'min': round_to(grams_min, 5),
+            'max': round_to(grams_max, 5),
+            # the middle of the range, in kcal, for the share
+            'energy': (grams_min + grams_max) / 2 * KCAL_PER_GRAM[key],
+        })
+    stats['macros'] = macro_shares(macros)
+    return stats
+
+
+def macro_shares(macros):
+    """Each macro's share of the energy in whole %, adding up to 100 (the last one takes the rest).
+    With 65–75 / 155–175 / 50–60 g this gives Figma's 20 / 46 / 34."""
+    energy = sum(macro['energy'] for macro in macros)
+    used = 0
+    for macro in macros:
+        if not energy:
+            macro['pct'] = 0
+        elif macro is macros[-1]:
+            macro['pct'] = 100 - used
+        else:
+            macro['pct'] = round(macro['energy'] / energy * 100)
+            used += macro['pct']
+    return macros
+
+
+def most_logged(meals):
+    """Figma "Most logged this week": meal names logged at least twice (case doesn't matter),
+    the most often first, then the latest. Each shows its latest photo, else its slot's pastel."""
+    groups = {}
+    for meal in meals:   # in time order, so the last meal of a group is its latest
+        name = (meal.title or '').strip()
+        if name:
+            groups.setdefault(name.casefold(), []).append(meal)
+
+    rows = []
+    for same in groups.values():
+        if len(same) < 2:
+            continue
+        latest = same[-1]
+        photos = [meal.photo for meal in same if meal.photo]
+        rows.append({
+            'title': latest.title.strip(),
+            'count': len(same),
+            'photo': photos[-1] if photos else None,
+            'tint': SLOT_TINTS.get(latest.slot, 'sky'),
+            'latest': latest.eaten_at,
+        })
+    rows.sort(key=lambda row: (row['count'], row['latest']), reverse=True)
+    return rows[:MOST_LOGGED_COUNT]
 
 
 @login_required
