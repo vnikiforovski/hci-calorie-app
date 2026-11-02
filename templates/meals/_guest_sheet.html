@@ -1,0 +1,26 @@
+{% load static %}
+{# "Keep this meal?" (Figma "Overlay · Guest save"): opened by a guest's Log on Result (FR2, T7).   #}
+{# No forms of its own: the buttons submit Result's logForm (with the slot) or discardForm.           #}
+{# views.log_meal keeps the draft for the account; signals.keep_guest_meal logs it after sign-in.   #}
+<div class="offcanvas offcanvas-bottom z-sheet z-guest-sheet" tabindex="-1" id="guestSheet" aria-labelledby="guestSheetTitle">
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+
+    <div class="z-guest-sheet-body">
+        <img class="z-guest-sheet-cookie" src="{% static 'img/logo.svg' %}" alt="">
+        <h2 id="guestSheetTitle">Keep this meal?</h2>
+        <p class="text-body-secondary">Make a free account to save meals to your diary, see your week and log favorites in one tap.</p>
+
+        <div class="z-guest-sheet-actions">
+            <button type="submit" form="logForm" name="then" value="signup" class="btn btn-primary btn-lg w-100">Create a free account</button>
+            {# Same as Just checking: the draft is thrown away #}
+            <button type="submit" form="discardForm" class="btn btn-outline-secondary btn-lg w-100">Not now, I was just checking</button>
+        </div>
+
+        <p class="z-caption text-body-secondary mb-0">Without an account nothing is stored.</p>
+        {# Not in Figma: a way in for someone who already has an account #}
+        <p class="z-auth-switch mt-1 mb-0">
+            Already have an account?
+            <button type="submit" form="logForm" name="then" value="sign_in" class="z-link-btn">Sign in</button>
+        </p>
+    </div>
+</div>

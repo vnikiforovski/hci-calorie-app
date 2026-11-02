@@ -19,6 +19,7 @@
         {% if next and next != '/' %}
             <p class="text-body-secondary">Sign in to continue.</p>
         {% endif %}
+        {% include 'meals/_keep_note.html' %}
 
         <form method="post" action="{% url 'sign_in' %}" novalidate data-auth-form>
             {% csrf_token %}

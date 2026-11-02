@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import login
@@ -20,6 +21,10 @@ def home(request):
     Home is still the temporary list from chunk 9; chunk 14 builds the real one."""
     if not request.user.is_authenticated:
         return render(request, 'meals/welcome.html')
+    kept = pop_kept_meal(request)
+    if kept:
+        # Signed in from "Keep this meal?": the guest's meal is logged (signals.keep_guest_meal)
+        request.session['toast'] = logged_toast(kept)
     meals = (Meal.objects
              .filter(user=request.user, status='logged', deleted_at__isnull=True)
              .prefetch_related('items')[:20])
@@ -72,10 +77,35 @@ def signup_details(request):
 
 
 def welcome_home(request):
-    """The end of sign-up: Home, with a one-time "Welcome to Zalak, Ana" toast."""
+    """The end of sign-up: Home, with a one-time "Welcome to Zalak, Ana" toast.
+    After a guest's Log it also says where the kept meal went, with Undo."""
     name = request.user.first_name
-    request.session['toast'] = {'text': f'Welcome to Zalak, {name}' if name else 'Welcome to Zalak'}
+    text = f'Welcome to Zalak, {name}' if name else 'Welcome to Zalak'
+    kept = pop_kept_meal(request)
+    if kept:
+        toast = logged_toast(kept)
+        toast['text'] = f'{text} · {toast["text"]}'
+    else:
+        toast = {'text': text}
+    request.session['toast'] = toast
     return redirect('home')
+
+
+def pop_kept_meal(request):
+    """The guest meal that signals.keep_guest_meal logged at sign-up or sign-in, once, or None."""
+    meal_id = request.session.pop('kept_meal_id', None)
+    if meal_id is None:
+        return None
+    return Meal.objects.filter(id=meal_id, user=request.user, status='logged',
+                               deleted_at__isnull=True).first()
+
+
+def logged_toast(meal):
+    """ "Logged to lunch · Undo", after Log and after a guest's meal was kept."""
+    return {
+        'text': f'Logged to {meal.slot}',
+        'undo_url': reverse('undo_log', args=[meal.id]),
+    }
 
 
 def get_own_meal(request, meal_id):
@@ -131,8 +161,20 @@ def result(request, meal_id):
     return render(request, 'meals/result.html', context)
 
 
+GUEST_DRAFT_HOURS = 24
+
+
+def delete_old_guest_drafts():
+    """Guest drafts nobody came back to for a day are deleted. A queryset delete still sends
+    post_delete for each meal, so signals.remove_photo_file removes their photos too."""
+    cutoff = timezone.now() - timedelta(hours=GUEST_DRAFT_HOURS)
+    Meal.objects.filter(user=None, status='draft', created_at__lt=cutoff).delete()
+
+
 def set_owner(request, meal):
-    """A signed-in user owns the meal; a guest owns it through their session (FR2)."""
+    """A signed-in user owns the meal; a guest owns it through their session (FR2).
+    Called for every new draft, which is when old guest drafts are cleaned up."""
+    delete_old_guest_drafts()
     if request.user.is_authenticated:
         meal.user = request.user
     else:
@@ -545,22 +587,32 @@ def answer_question(request, meal_id, item_id):
 @require_POST
 def log_meal(request, meal_id):
     """Log on Result: the draft becomes a logged meal in the chosen slot (FR23).
-    The pre_save signal counts it in Profile.meals_logged."""
-    if not request.user.is_authenticated:
-        raise Http404   # until chunk 13, where a guest's Log opens "Keep this meal?"
+    The pre_save signal counts it in Profile.meals_logged.
+    A guest gets here from "Keep this meal?" (FR2, T7): the draft waits for the account."""
     meal = get_own_draft(request, meal_id)
 
     slot = request.POST.get('slot')
     if slot in SLOT_ICONS:
         meal.slot = slot
+
+    if not request.user.is_authenticated:
+        meal.save()   # still a draft, but in the slot the guest picked
+        # login() will give the session a new key, so the draft's id and today's key are
+        # kept in the session now; signals.keep_guest_meal logs the meal after sign-up / sign-in
+        request.session['guest_meal'] = {
+            'id': meal.id,
+            'session_key': request.session.session_key,
+            'slot': meal.slot,
+        }
+        if request.POST.get('then') == 'sign_in':
+            return redirect('sign_in')
+        return redirect('signup')
+
     meal.status = 'logged'
     meal.save()
 
     # Shown once on the next page by the toast context processor
-    request.session['toast'] = {
-        'text': f'Logged to {meal.slot}',
-        'undo_url': reverse('undo_log', args=[meal.id]),
-    }
+    request.session['toast'] = logged_toast(meal)
     return redirect('home')
 
 
@@ -580,6 +632,9 @@ def just_checking(request, meal_id):
     """Just checking on Result: the draft is thrown away (FR34). Nothing was logged.
     The post_delete signal removes the photo file."""
     meal = get_own_draft(request, meal_id)
+    waiting = request.session.get('guest_meal')
+    if waiting and waiting['id'] == meal.id:
+        del request.session['guest_meal']   # nothing is waiting for an account any more
     meal.delete()
     return redirect('home')
 

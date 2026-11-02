@@ -198,7 +198,7 @@ class MealItem(models.Model):
 
 ### Phase B: accounts, guest flow, Home, meal detail, Diary (30 Oct – 1 Nov)
 
-- [ ] **12. Welcome, sign up (2 steps), sign in/out** (30 Oct)
+- [x] **12. Welcome, sign up (2 steps), sign in/out** (30 Oct)
   - Work: e-mail as the username; Profile via a `post_save` signal; LoginView/LogoutView; `@login_required`.
   - Decided 2 Nov: the account is made and signed in at step 1 (the password never waits in the session), so step 2 has no back arrow and "Skip for now" is the way out. No "Forgot password?" (no e-mail sending). Name is required. Sign out sits on the Profile placeholder until chunk 18. `/` shows Welcome to guests and Home to users; Diary, Statistics and Profile send a guest to Sign in.
   - Added beyond Figma: show/hide password, a live "At least 8 characters" tick, calm password messages that say what to do, errors that clear once the field is changed, a wrong password keeps the e-mail and focuses the password, "Sign in instead" under a taken e-mail, a short hint under each activity level, a "Welcome to Zalak, Ana" toast on Home, and a centered card at 1440.
@@ -208,8 +208,10 @@ class MealItem(models.Model):
 - [ ] **13. Guest flow (T7) + guest draft cleanup** (30 Oct)
   - Work: a guest's draft is tied to the session; Log → the "Keep this meal?" sheet → sign-up → the draft is assigned and logged; guest drafts older than 24 h are deleted on each new draft.
   - Note from chunk 12: Django's `login()` gives the session a new key, so read the guest's `session_key` (or keep the meal id in the session) *before* signing in, or the draft can't be found afterwards. Same for Sign in from the sheet.
-  - Files: `views.py`, `templates/meals/result.html`, `templates/meals/_guest_sheet.html`
-  - Pattern: `commit=False`, session
+  - Decided 2 Nov: the guest's Log opens the sheet; "Create a free account" submits the Log form (so the slot goes along) and `log_meal` keeps the draft's id + session key in `session['guest_meal']`. A `user_logged_in` signal in `signals.py` logs it after any sign-in (sign-up step 1, Sign in, "Sign in instead"), so the meal is safe before step 2. The toast is "Welcome to Zalak, Ana · Logged to lunch" after sign-up and "Logged to lunch" after sign-in, both with Undo. "Not now, I was just checking" is Just checking.
+  - Added beyond Figma: "Already have an account? Sign in" on the sheet, and "Your meal will be logged to lunch once you're in." on Sign up and Sign in while a meal waits.
+  - Files: `views.py`, `signals.py`, `templates/meals/result.html`, `_guest_sheet.html`, `_keep_note.html`, `signup_1.html`, `registration/login.html`, `zalak.css`
+  - Pattern: `commit=False`, session, signals
   - Test: in a private window, check → Log → create an account → the meal is on Home and the counter is 1; an old guest draft (backdated in admin) disappears.
 - [ ] **14. Home** (31 Oct)
   - Work: the week strip (`?date=`, arrows, date picker); the Eaten today card (range, bar by slot); macro cards; four slots (one queryset per slot) with an "N meals" sheet; "+" per slot and the corner "+" → the Add meal sheet (offcanvas-bottom); the first-day empty state.

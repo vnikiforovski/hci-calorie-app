@@ -18,6 +18,8 @@
         <p class="visually-hidden">Step 1 of 2</p>
         <div class="z-stepbar" aria-hidden="true"><span class="is-done"></span><span></span></div>
 
+        {% include 'meals/_keep_note.html' %}
+
         <form method="post" action="{% url 'signup' %}" class="z-auth-form-fill" novalidate data-auth-form>
             {% csrf_token %}
 

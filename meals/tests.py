@@ -1,6 +1,7 @@
 import copy
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
+import os
 import shutil
 import tempfile
 from io import BytesIO
@@ -679,20 +680,26 @@ class LogTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class GuestLogTests(TestCase):
-    """Chunk 9: a guest can use Just checking; Log waits for the guest flow (chunk 13)."""
+    """Chunk 9: a guest can use Just checking. Chunk 13: a guest's Log opens "Keep this meal?"."""
 
     def setUp(self):
         with patch('meals.services.ai._ask_model', return_value=good_answer()):
             self.client.post(reverse('text_input'), {'text': 'tavče gravče', 'slot': 'lunch'})
         self.meal = Meal.objects.get()
 
-    def test_log_is_inactive_for_a_guest(self):
+    def test_log_opens_the_keep_sheet_for_a_guest(self):
         page = self.client.get(reverse('result', args=[self.meal.id]))
-        self.assertContains(page, 'id="logButton" disabled')
-        response = self.client.post(reverse('log_meal', args=[self.meal.id]), {'slot': 'lunch'})
-        self.assertEqual(response.status_code, 404)
-        self.meal.refresh_from_db()
-        self.assertEqual(self.meal.status, 'draft')
+        self.assertContains(page, 'data-bs-target="#guestSheet"')
+        self.assertContains(page, 'id="guestSheet"')
+        self.assertContains(page, 'Keep this meal?')
+        self.assertNotContains(page, 'id="logButton" disabled')
+
+    def test_a_signed_in_user_gets_no_sheet(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        meal = make_draft(user=user)
+        self.client.force_login(user)
+        page = self.client.get(reverse('result', args=[meal.id]))
+        self.assertNotContains(page, 'id="guestSheet"')
 
     def test_guest_just_checking(self):
         response = self.client.post(reverse('just_checking', args=[self.meal.id]))
@@ -703,6 +710,148 @@ class GuestLogTests(TestCase):
         self.client.cookies.clear()
         response = self.client.post(reverse('just_checking', args=[self.meal.id]))
         self.assertEqual(response.status_code, 404)
+
+
+class GuestFlowTests(TestCase):
+    """Chunk 13 (T7): a guest checks a meal, taps Log, makes an account or signs in,
+    and the same meal is logged, counted once."""
+
+    def setUp(self):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče', 'slot': 'lunch'})
+        self.meal = Meal.objects.get()
+
+    def keep(self, then='signup', slot='dinner'):
+        return self.client.post(reverse('log_meal', args=[self.meal.id]), {'slot': slot, 'then': then})
+
+    def sign_up(self):
+        return self.client.post(reverse('signup'), {
+            'first_name': 'Ana', 'email': 'ana@example.com', 'password': 'tavce-gravce-42', 'agree': 'on'})
+
+    def test_create_account_keeps_the_draft_in_the_chosen_slot(self):
+        response = self.keep()
+        self.assertRedirects(response, reverse('signup'))
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.status, 'draft')   # nothing is logged before the account exists
+        self.assertEqual(self.meal.slot, 'dinner')
+        self.assertEqual(self.client.session['guest_meal']['id'], self.meal.id)
+
+    def test_sign_in_from_the_sheet_goes_to_sign_in(self):
+        self.assertRedirects(self.keep(then='sign_in'), reverse('sign_in'))
+
+    def test_sign_up_and_sign_in_say_the_meal_is_waiting(self):
+        self.keep()
+        line = 'Your meal will be logged to dinner once you'
+        self.assertContains(self.client.get(reverse('signup')), line)
+        self.assertContains(self.client.get(reverse('sign_in')), line)
+
+    def test_no_waiting_line_without_a_kept_meal(self):
+        self.assertNotContains(self.client.get(reverse('signup')), 'Your meal will be logged')
+
+    def test_sign_up_logs_the_meal_and_counts_it_once(self):
+        self.keep()
+        self.assertRedirects(self.sign_up(), reverse('signup_details'))
+        user = User.objects.get(email='ana@example.com')
+        self.meal.refresh_from_db()
+        # Logged at step 1 already, so it is safe even if step 2 is never finished
+        self.assertEqual(self.meal.user, user)
+        self.assertEqual(self.meal.status, 'logged')
+        self.assertEqual(self.meal.session_key, '')
+        self.assertEqual(self.meal.slot, 'dinner')
+        self.assertEqual(user.profile.meals_logged, 1)
+
+        home = self.client.post(reverse('signup_details'), {'skip': ''}, follow=True)
+        self.assertContains(home, 'Welcome to Zalak, Ana · Logged to dinner')
+        self.assertContains(home, reverse('undo_log', args=[self.meal.id]))
+        self.assertNotIn('guest_meal', self.client.session)
+
+    def test_sign_in_logs_the_meal_with_a_toast(self):
+        user = User.objects.create_user('ana@example.com', email='ana@example.com', password='tavce-gravce-42')
+        self.keep(then='sign_in')
+        home = self.client.post(reverse('sign_in'),
+                                {'username': 'ana@example.com', 'password': 'tavce-gravce-42'}, follow=True)
+        self.assertContains(home, 'Logged to dinner')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.user, user)
+        self.assertEqual(self.meal.status, 'logged')
+        user.profile.refresh_from_db()
+        self.assertEqual(user.profile.meals_logged, 1)
+
+    def test_undo_after_keeping_brings_the_users_draft_back(self):
+        self.keep()
+        self.sign_up()
+        self.client.post(reverse('undo_log', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.status, 'draft')
+        self.assertEqual(Profile.objects.get(user=self.meal.user).meals_logged, 0)
+
+    def test_another_guests_meal_is_never_claimed(self):
+        other = make_draft(session_key='someone-else')
+        self.keep()
+        session = self.client.session
+        session['guest_meal'] = {'id': other.id, 'session_key': session.session_key, 'slot': 'lunch'}
+        session.save()
+        self.sign_up()
+        other.refresh_from_db()
+        self.assertIsNone(other.user)
+        self.assertEqual(other.status, 'draft')
+
+    def test_signing_in_without_a_kept_meal_changes_nothing(self):
+        self.sign_up()
+        self.meal.refresh_from_db()
+        self.assertIsNone(self.meal.user)
+        self.assertEqual(self.meal.status, 'draft')
+
+    def test_not_now_discards_the_meal(self):
+        self.keep()
+        response = self.client.post(reverse('just_checking', args=[self.meal.id]))
+        self.assertRedirects(response, reverse('home'))
+        self.assertFalse(Meal.objects.exists())
+        self.assertNotIn('guest_meal', self.client.session)
+
+    def test_another_guest_cannot_keep_it(self):
+        self.client.cookies.clear()
+        self.assertEqual(self.keep().status_code, 404)
+
+
+class GuestDraftCleanupTests(TestCase):
+    """Chunk 13: each new draft deletes guest drafts older than 24 h."""
+
+    def backdate(self, meal, hours):
+        # created_at is auto_now_add, so only update() can move it
+        Meal.objects.filter(id=meal.id).update(created_at=timezone.now() - timedelta(hours=hours))
+
+    def new_draft(self):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče', 'slot': 'lunch'})
+
+    def test_old_guest_drafts_go_and_the_rest_stay(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        old_guest = make_draft(session_key='old')
+        recent_guest = make_draft(session_key='recent')
+        old_user_draft = make_draft(user=user)
+        old_logged = make_draft(user=user, status='logged')
+        self.backdate(old_guest, 25)
+        self.backdate(recent_guest, 23)
+        self.backdate(old_user_draft, 48)
+        self.backdate(old_logged, 48)
+
+        self.new_draft()
+
+        self.assertFalse(Meal.objects.filter(id=old_guest.id).exists())
+        for meal in (recent_guest, old_user_draft, old_logged):
+            self.assertTrue(Meal.objects.filter(id=meal.id).exists())
+        self.assertEqual(Meal.objects.count(), 4)   # the three kept + the new one
+
+    def test_an_old_guest_photo_file_is_removed(self):
+        use_temp_media(self)
+        meal = make_draft(session_key='old')
+        meal.photo.save('plate.jpg', SimpleUploadedFile('plate.jpg', b'not really a jpeg'))
+        path = meal.photo.path
+        self.assertTrue(os.path.exists(path))
+        self.backdate(meal, 30)
+        self.new_draft()
+        self.assertFalse(os.path.exists(path))
 
 
 class UnitMathsTests(TestCase):

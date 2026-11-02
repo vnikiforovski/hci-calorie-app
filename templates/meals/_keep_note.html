@@ -1,0 +1,8 @@
+{# Sign up and Sign in after a guest's Log (T7): the checked meal is not lost. Not in Figma.  #}
+{# request.session.guest_meal is set by views.log_meal and used by signals.keep_guest_meal. #}
+{% if request.session.guest_meal %}
+    <p class="z-keep-note">
+        <i class="bi bi-check-circle" aria-hidden="true"></i>
+        <span>Your meal will be logged to {{ request.session.guest_meal.slot }} once you're in.</span>
+    </p>
+{% endif %}

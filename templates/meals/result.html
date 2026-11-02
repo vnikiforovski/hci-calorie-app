@@ -116,17 +116,24 @@
         {% if meal.status == 'draft' %}
             <div class="z-actions-buttons">
                 {# Just checking throws the draft away; nothing is saved (FR34) #}
-                <form method="post" action="{% url 'just_checking' meal.id %}">
+                <form method="post" action="{% url 'just_checking' meal.id %}" id="discardForm">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline-secondary btn-lg w-100">Just checking</button>
                 </form>
-                {# Log saves it to the slot picked above (FR23) #}
+                {# Log saves it to the slot picked above (FR23). A guest's Log asks "Keep this meal?" first #}
+                {# (FR2, T7): the sheet's buttons submit this form, so the slot goes with them.             #}
                 <form method="post" action="{% url 'log_meal' meal.id %}" id="logForm">
                     {% csrf_token %}
-                    {# A guest's Log opens "Keep this meal?" in chunk 13; until then it is inactive #}
-                    <button type="submit" class="btn btn-primary btn-lg w-100" id="logButton"{% if not user.is_authenticated %} disabled{% endif %}>
-                        Log to <span id="logSlotLabel">{{ slot }}</span>
-                    </button>
+                    {% if user.is_authenticated %}
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="logButton">
+                            Log to <span id="logSlotLabel">{{ slot }}</span>
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn btn-primary btn-lg w-100" id="logButton"
+                                data-bs-toggle="offcanvas" data-bs-target="#guestSheet" aria-controls="guestSheet">
+                            Log to <span id="logSlotLabel">{{ slot }}</span>
+                        </button>
+                    {% endif %}
                 </form>
             </div>
         {% else %}
@@ -137,6 +144,10 @@
         {% endif %}
         <p class="z-caption text-body-secondary text-center mb-0">Estimate, not medical advice</p>
     </div>
+
+    {% if meal.status == 'draft' and not user.is_authenticated %}
+        {% include 'meals/_guest_sheet.html' %}
+    {% endif %}
 {% endblock %}
 
 {% block scripts %}

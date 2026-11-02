@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.contrib.auth.signals import user_logged_in
 from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 
@@ -53,3 +54,24 @@ def create_profile(sender, instance, created, raw=False, **kwargs):
     # or createsuperuser. Only on create, so a later save (e.g. last_login) does nothing.
     if created and not raw:
         Profile.objects.create(user=instance)
+
+
+@receiver(user_logged_in)
+def keep_guest_meal(sender, request, user, **kwargs):
+    # T7: a guest tapped Log, then made an account or signed in. One receiver catches every
+    # way in: sign-up's login(), the LoginView and "Sign in instead". login() gave the session
+    # a new key but kept its data, so the draft is found by what log_meal saved before.
+    waiting = request.session.pop('guest_meal', None) if request is not None else None
+    if not waiting:
+        return
+    meal = Meal.objects.filter(
+        id=waiting['id'], user=None, session_key=waiting['session_key'],
+        status='draft', deleted_at__isnull=True,
+    ).first()
+    if meal is None:
+        return   # discarded or cleaned up in the meantime
+    meal.user = user
+    meal.session_key = ''
+    meal.status = 'logged'
+    meal.save()   # count_logged_meals above counts it, like any other Log
+    request.session['kept_meal_id'] = meal.id   # Home shows "Logged to lunch · Undo"
