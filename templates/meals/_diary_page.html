@@ -1,0 +1,65 @@
+{% load humanize %}
+{# One Diary page (Figma "Diary · Today / Yesterday / Mon 12"), built by views.diary_page.          #}
+{# Used once on phones and twice on the desktop spread. A meal opens Meal detail, which goes back here. #}
+<section class="z-diary-page{% if page.is_today %} is-today{% endif %}" aria-labelledby="page-{{ page.date|date:'Ymd' }}">
+    {% if page.is_today %}<span class="z-ribbon" aria-hidden="true"></span>{% endif %}
+
+    <header class="z-page-head">
+        <p class="z-page-kicker">{{ page.kicker }}</p>
+        <h2 class="z-page-date" id="page-{{ page.date|date:'Ymd' }}">{{ page.date|date:'j F' }}</h2>
+        <p class="z-small text-body-secondary mb-0">{{ page.count }}</p>
+    </header>
+
+    {% if page.meals or page.empty_slots %}
+        <ol class="z-page-rows">
+            {% for meal in page.meals %}
+                <li>
+                    <a class="z-page-row" href="{% url 'result' meal.id %}?from=diary">
+                        <span class="z-page-time">{{ meal.eaten_at|time:'H:i' }}</span>
+                        {% if meal.photo %}
+                            <span class="z-polaroid"><img src="{{ meal.photo.url }}" alt=""></span>
+                        {% else %}
+                            <span class="z-polaroid z-polaroid-{{ meal.tint }}" aria-hidden="true"><span class="z-mini-plate"></span></span>
+                        {% endif %}
+                        <span class="z-page-text">
+                            <span class="z-page-slot">{{ meal.get_slot_display }}</span>
+                            <span class="z-page-title">{{ meal.title|default:'Meal' }}</span>
+                            <span class="z-page-kcal">{{ meal.kcal_min|intcomma }}–{{ meal.kcal_max|intcomma }} kcal</span>
+                        </span>
+                    </a>
+                </li>
+            {% endfor %}
+            {# Today only: the slots still empty, to add to (Figma "Diary · Today", Dinner) #}
+            {% for value, label in page.empty_slots %}
+                <li>
+                    <button type="button" class="z-page-row z-page-row-empty" data-bs-toggle="offcanvas" data-bs-target="#addMealSheet"
+                            aria-controls="addMealSheet" data-slot="{{ value }}" data-day="" data-day-label="">
+                        <span class="z-page-time" aria-hidden="true">—</span>
+                        <span class="z-polaroid z-polaroid-add" aria-hidden="true"><i class="bi bi-plus-lg"></i></span>
+                        <span class="z-page-text">
+                            <span class="z-page-slot">{{ label }}</span>
+                            <span class="z-page-title">Nothing yet</span>
+                            <span class="z-page-kcal">Tap to add it</span>
+                        </span>
+                    </button>
+                </li>
+            {% endfor %}
+        </ol>
+    {% else %}
+        {# A past day without meals: not in Figma. The meal goes to this day (past-day logging, chunk 14). #}
+        <div class="z-page-blank">
+            <p class="text-body-secondary">Nothing logged this day.</p>
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#addMealSheet"
+                    aria-controls="addMealSheet" data-day="{{ page.date|date:'Y-m-d' }}" data-day-label="{{ page.date|date:'D j' }}">
+                <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a meal to this day
+            </button>
+        </div>
+    {% endif %}
+
+    {% if page.meals %}
+        <footer class="z-page-foot">
+            <span class="z-page-foot-label">{% if page.is_today %}Eaten so far{% else %}Eaten this day{% endif %}</span>
+            <span><span class="z-num z-page-total">{{ page.kcal_min|intcomma }}–{{ page.kcal_max|intcomma }}</span> <span class="z-small text-body-secondary">kcal</span></span>
+        </footer>
+    {% endif %}
+</section>

@@ -1,0 +1,45 @@
+{# The meal's name, total range, neutral line and macro bars, on Result and Meal detail.     #}
+{# With `form` (Meal detail) a pencil opens the name field under the title (Bootstrap collapse). #}
+<section class="card z-summary mt-3">
+    <div class="card-body">
+        <div class="z-title-row">
+            <h1 class="mb-2">{{ meal.title|default:'Your meal' }}</h1>
+            {% if form %}
+                <button type="button" class="z-icon-btn z-rename-btn" data-bs-toggle="collapse" data-bs-target="#renameField"
+                        aria-expanded="{% if form.title.errors %}true{% else %}false{% endif %}" aria-controls="renameField" aria-label="Rename this meal">
+                    <i class="bi bi-pencil" aria-hidden="true"></i>
+                </button>
+            {% endif %}
+        </div>
+        {% if form %}
+            <div class="collapse{% if form.title.errors %} show{% endif %}" id="renameField">
+                <div class="z-rename">
+                    <label class="form-label z-small" for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                    {{ form.title }}
+                    <p class="z-caption text-body-secondary mt-1 mb-0">Leave it empty to use Zalak's name. Saved with Save changes.</p>
+                </div>
+            </div>
+        {% endif %}
+        <p class="mb-1">
+            <span class="z-num z-total">{{ meal.kcal_min }}–{{ meal.kcal_max }}</span>
+            <span class="text-body-secondary">kcal</span>
+        </p>
+        {% if meal.description %}
+            <p class="text-body-secondary mb-0">{{ meal.description }}</p>
+        {% endif %}
+
+        {# Each bar: solid up to the min, faded up to the max, sized against the largest macro #}
+        <ul class="z-macro-rows">
+            {% for row in meal.macro_rows %}
+                <li class="z-macro-row">
+                    <span class="z-macro-name"><span class="z-dot z-bg-{{ row.key }}" aria-hidden="true"></span>{{ row.name }}</span>
+                    <span class="z-range-track" aria-hidden="true">
+                        <span class="z-range-band z-bg-{{ row.key }}" style="width: {{ row.max_pct }}%"></span>
+                        <span class="z-range-fill z-bg-{{ row.key }}" style="width: {{ row.min_pct }}%"></span>
+                    </span>
+                    <span class="z-macro-value z-tabular">{{ row.min }}–{{ row.max }} g</span>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>

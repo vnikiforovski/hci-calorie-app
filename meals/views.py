@@ -11,7 +11,7 @@ from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import MealItemForm, PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm
+from .forms import MealDetailForm, MealItemForm, PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm
 from .models import Meal, MealItem, Profile, slot_for_time
 from .services.ai import AnalysisError, analyze_photo, analyze_text, estimate_item
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
@@ -110,15 +110,23 @@ def parse_month(value, day):
     return min(first, this_month), True
 
 
-def home_url(day=None, month=None):
-    """Home for a day (and a calendar month). Today is plain "/", so the URL stays clean."""
+def day_url(view_name, day=None, month=None):
+    """A page for a day (and a calendar month). Today needs no ?date=, so the URL stays clean."""
     params = {}
     if day and day != timezone.localdate():
         params['date'] = day.isoformat()
     if month:
         params['month'] = month.strftime('%Y-%m')
-    url = reverse('home')
+    url = reverse(view_name)
     return f'{url}?{urlencode(params)}' if params else url
+
+
+def home_url(day=None, month=None):
+    return day_url('home', day, month)
+
+
+def diary_url(day=None, month=None):
+    return day_url('diary', day, month)
 
 
 def greeting():
@@ -173,9 +181,10 @@ def week_strip(day):
     }
 
 
-def calendar_month(logged, first, selected):
+def calendar_month(logged, first, selected, url_for=home_url):
     """The "Jump to a date" month (Figma): weeks from Monday, None outside the month,
-    a dot on days with logged meals, future days not links."""
+    a dot on days with logged meals, future days not links. url_for makes the links:
+    home_url on Home, diary_url in the Diary."""
     today = timezone.localdate()
     weeks = calendar.Calendar(firstweekday=0).monthdatescalendar(first.year, first.month)
     times = logged.filter(eaten_at__date__range=(weeks[0][0], weeks[-1][-1])).values_list('eaten_at', flat=True)
@@ -190,7 +199,7 @@ def calendar_month(logged, first, selected):
                 continue
             row.append({
                 'date': this,
-                'url': home_url(this),
+                'url': url_for(this),
                 'has_meals': this in meal_days,
                 'is_selected': this == selected,
                 'is_today': this == today,
@@ -203,10 +212,11 @@ def calendar_month(logged, first, selected):
     return {
         'first': first,
         'weeks': rows,
-        'prev_url': home_url(selected, previous),
+        'prev_url': url_for(selected, previous),
         'prev_month': previous,
-        'next_url': home_url(selected, following) if following <= today else None,
+        'next_url': url_for(selected, following) if following <= today else None,
         'next_month': following,
+        'today_url': url_for(),
     }
 
 
@@ -321,8 +331,12 @@ def steps_for(meal):
 
 
 def result(request, meal_id):
+    """One URL for a meal: a draft shows Result (Log / Just checking), a logged meal shows
+    Meal detail (chunk 15). So every item change, which comes back here, works for both."""
     meal = get_own_meal(request, meal_id)
-    if meal.status == 'draft' and not meal.items.exists():
+    if meal.status == 'logged':
+        return render_meal_detail(request, meal, MealDetailForm(instance=meal))
+    if not meal.items.exists():
         # A draft without items has no Result yet: show the way forward instead
         if (meal.ai_response or {}).get('status') == 'no_food':
             return redirect('no_food', meal_id=meal.id)
@@ -348,6 +362,125 @@ def delete_old_guest_drafts():
     post_delete for each meal, so signals.remove_photo_file removes their photos too."""
     cutoff = timezone.now() - timedelta(hours=GUEST_DRAFT_HOURS)
     Meal.objects.filter(user=None, status='draft', created_at__lt=cutoff).delete()
+
+
+# ---------- Meal detail (chunk 15): a logged meal's slot, time, name and photo; delete with Undo ----------
+
+def day_name(day):
+    """ "Today", "Yesterday" or "Sun 1": for the time pill and the time sheet."""
+    today = timezone.localdate()
+    if day == today:
+        return 'Today'
+    if day == today - timedelta(days=1):
+        return 'Yesterday'
+    return f'{day:%a} {day.day}'
+
+
+def get_own_logged_meal(request, meal_id):
+    meal = get_own_meal(request, meal_id)
+    if meal.status != 'logged':
+        raise Http404   # a draft is still on Result
+    return meal
+
+
+# Where Meal detail goes back to (its back arrow, Save changes, Delete and Undo)
+MEAL_PAGES = {'home': home_url, 'diary': diary_url}
+
+
+def meal_back_url(request, meal):
+    """Meal detail goes back to the page it was opened from, Home or the Diary, on the meal's day.
+    The links say which with ?from=…; the session keeps it for this meal, so coming back from
+    Edit item (or Save, Delete and Undo, which are POSTs) still knows."""
+    came_from = request.GET.get('from')
+    if came_from in MEAL_PAGES:
+        request.session['meal_from'] = {'id': meal.id, 'page': came_from}
+    saved = request.session.get('meal_from') or {}
+    page = saved['page'] if saved.get('id') == meal.id else 'home'
+    return MEAL_PAGES[page](timezone.localdate(meal.eaten_at))
+
+
+def render_meal_detail(request, meal, form):
+    """Figma "Meal detail". The time sheet changes the time on the meal's own day (no day switch,
+    decided 2 Nov); the hidden time in the form only changes when Done is pressed."""
+    eaten = timezone.localtime(meal.eaten_at)
+    logged = timezone.localtime(meal.created_at)
+    minutes = sorted(set(range(0, 60, 5)) | {eaten.minute, logged.minute})
+    back_url = meal_back_url(request, meal)
+    context = {
+        'meal': meal,
+        'form': form,
+        'items': meal.items_with_bars,
+        'slot': meal.slot,
+        'slot_icon': SLOT_ICONS[meal.slot],
+        'slot_options': SLOT_OPTIONS,
+        'add_item_error': request.session.pop('add_item_error', None),
+        'eaten': eaten,
+        'day_label': day_name(eaten.date()),
+        'time_label': f'{day_name(eaten.date())}, {eaten:%H:%M}',
+        'hours': [f'{hour:02d}' for hour in range(24)],
+        'minutes': [f'{minute:02d}' for minute in minutes],
+        'logged_at': logged,
+        # "Use the time it was logged" only makes sense on the day it was logged
+        'show_logged_time': logged.date() == eaten.date(),
+        'now': timezone.localtime(),
+        'back_url': back_url,
+        'back_label': 'Back to the Diary' if back_url.startswith(reverse('diary')) else 'Back to Home',
+    }
+    return render(request, 'meals/meal_detail.html', context)
+
+
+@require_POST
+def save_meal(request, meal_id):
+    """Save changes on Meal detail (FR25): slot, time, name and photo, then back to Home or the Diary.
+    The items are not here: each item change is saved straight away."""
+    meal = get_own_logged_meal(request, meal_id)
+    old_photo = meal.photo.name if meal.photo else ''
+    old_eaten = timezone.localtime(meal.eaten_at).replace(second=0, microsecond=0)
+
+    form = MealDetailForm(request.POST, request.FILES, instance=meal)
+    if not form.is_valid():
+        # A fresh copy for the page: is_valid() already put the posted values on `meal`
+        return render_meal_detail(request, get_own_logged_meal(request, meal_id), form)
+
+    meal = form.save(commit=False)
+    if form.cleaned_data['eaten_at'] != old_eaten:
+        meal.eaten_at = form.cleaned_data['eaten_at']   # untouched: the exact time stays
+    if not meal.title:
+        # An emptied name gives back Zalak's, so a meal is never untitled (decided 1 Nov)
+        answer = meal.ai_response if isinstance(meal.ai_response, dict) else {}
+        meal.title = answer.get('title', '')
+    if form.cleaned_data['remove_photo'] and not request.FILES.get('photo'):
+        meal.photo = None
+    meal.save()
+    if old_photo and old_photo != (meal.photo.name if meal.photo else ''):
+        Meal._meta.get_field('photo').storage.delete(old_photo)   # replaced or removed: the file goes
+
+    request.session['toast'] = {'text': 'Changes saved'}
+    return redirect(meal_back_url(request, meal))   # on the meal's (maybe new) day
+
+
+@require_POST
+def delete_meal(request, meal_id):
+    """Delete meal (FR25): a soft delete, so Undo is one update. Back to Home or the Diary."""
+    meal = get_own_logged_meal(request, meal_id)
+    meal.deleted_at = timezone.now()
+    meal.save()
+    request.session['toast'] = {
+        'text': 'Meal deleted',
+        'undo_url': reverse('undo_delete_meal', args=[meal.id]),
+    }
+    return redirect(meal_back_url(request, meal))
+
+
+@require_POST
+def undo_delete_meal(request, meal_id):
+    """Undo in the "Meal deleted" toast. get_own_meal skips deleted meals, so this looks itself."""
+    if not request.user.is_authenticated:
+        raise Http404
+    meal = get_object_or_404(Meal, id=meal_id, user=request.user, deleted_at__isnull=False)
+    meal.deleted_at = None
+    meal.save()
+    return redirect(meal_back_url(request, meal))
 
 
 def set_owner(request, meal):
@@ -858,7 +991,101 @@ def no_food(request, meal_id):
 
 @login_required
 def diary(request):
-    return render(request, 'coming_soon.html', {'title': 'Diary'})
+    """The Diary (chunk 16, FR26): one page per day, like a book; ?date= picks the day.
+    Phones show that page; the desktop shows the day before beside it (Figma "Desktop · Diary").
+    The arrows go one day on phones and two on the desktop, back as far as you like, never past today."""
+    today = timezone.localdate()
+    day = parse_day(request.GET.get('date')) or today
+    logged = Meal.objects.filter(user=request.user, status='logged', deleted_at__isnull=True)
+    first_day = first_logged_day(logged)
+
+    left_day = day - timedelta(days=1)
+    month, calendar_open = parse_month(request.GET.get('month'), day)
+
+    # Phones: one day back or on. Desktop: the spread before or after this one, two days away.
+    # Back always works, like turning back the pages of a paper diary (changed 2 Nov: there was
+    # a "Start" at the first logged meal). Forward stops at today.
+    phone_next = desk_next = None
+    if day < today:
+        phone_next = nav_link(day + timedelta(days=1))
+        desk_next = nav_link(min(day + timedelta(days=2), today), spread=True)
+
+    context = {
+        'day': day,
+        # Not 'page': base.html already uses that name for the current URL
+        'right_page': diary_page(logged, day, first_day),
+        # The desktop's left page: always the day before
+        'left_page': diary_page(logged, left_day, first_day),
+        'spread_name': f'{day_name(left_day)} – {day_name(day)}',
+        'phone_prev': nav_link(left_day),
+        'phone_next': phone_next,
+        'desk_prev': nav_link(day - timedelta(days=2), spread=True),
+        'desk_next': desk_next,
+        'calendar': calendar_month(logged, month, day, diary_url),
+        'calendar_open': calendar_open,
+        # The corner "+" adds to the day on screen, as on Home
+        'add_day': day if day != today else None,
+    }
+    return render(request, 'meals/diary.html', context)
+
+
+def nav_link(day, spread=False):
+    """A Diary arrow: the URL and its words, "Wed 14" or, for the desktop spread, "Mon 12 – Tue 13"."""
+    label = day_name(day)
+    if spread:
+        label = f'{day_name(day - timedelta(days=1))} – {label}'
+    return {'url': diary_url(day), 'label': label}
+
+
+def first_logged_day(logged):
+    """The day of the first logged meal (today for a new account): its page says "First page"."""
+    first = logged.order_by('eaten_at').values_list('eaten_at', flat=True).first()
+    return timezone.localtime(first).date() if first else timezone.localdate()
+
+
+# The slot colors of the Diary's polaroids when a meal has no photo
+SLOT_TINTS = {'breakfast': 'butter', 'lunch': 'peach', 'snack': 'sky', 'dinner': 'lilac'}
+
+
+def diary_page(logged, day, first_day):
+    """One Diary page: the day's logged meals in time order (one queryset per page), its words
+    and its total. Today also lists the slots that are still empty, to add to them."""
+    today = timezone.localdate()
+    meals = list(logged.filter(eaten_at__date=day).prefetch_related('items').order_by('eaten_at'))
+    for meal in meals:
+        meal.tint = SLOT_TINTS.get(meal.slot, 'sky')
+
+    if day == today:
+        kicker = f'{day:%A} · Today'
+    elif day == today - timedelta(days=1):
+        kicker = f'{day:%A} · Yesterday'
+    elif day == first_day:
+        kicker = f'{day:%A} · First page'
+    else:
+        kicker = f'{day:%A}'
+
+    count = f'{len(meals)} meal{"s" if len(meals) != 1 else ""}'
+    if day == today:
+        count = f'{count} so far' if meals else 'Nothing yet today'
+    elif not meals:
+        count = 'Nothing logged'
+    elif day == first_day:
+        count = f'{count} · your first day with Zalak'
+
+    used = {meal.slot for meal in meals}
+    return {
+        'date': day,
+        'is_today': day == today,
+        'is_first': day == first_day,
+        'kicker': kicker,
+        'count': count,
+        'meals': meals,
+        'empty_slots': [(value, label) for value, label, icon in SLOT_OPTIONS if value not in used]
+                       if day == today else [],
+        'kcal_min': sum(meal.kcal_min for meal in meals),
+        'kcal_max': sum(meal.kcal_max for meal in meals),
+        'name': day_name(day),
+    }
 
 
 @login_required

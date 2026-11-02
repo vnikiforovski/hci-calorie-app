@@ -213,23 +213,28 @@ class MealItem(models.Model):
   - Files: `views.py`, `signals.py`, `templates/meals/result.html`, `_guest_sheet.html`, `_keep_note.html`, `signup_1.html`, `registration/login.html`, `zalak.css`
   - Pattern: `commit=False`, session, signals
   - Test: in a private window, check → Log → create an account → the meal is on Home and the counter is 1; an old guest draft (backdated in admin) disappears.
-- [ ] **14. Home** (31 Oct)
+- [x] **14. Home** (31 Oct)
   - Work: the week strip (`?date=`, arrows, date picker); the Eaten today card (range, bar by slot); macro cards; four slots (one queryset per slot) with an "N meals" sheet; "+" per slot and the corner "+" → the Add meal sheet (offcanvas-bottom); the first-day empty state.
   - Decided 2 Nov: "+" on a past day logs to that day (the Add sheet carries `day=`; the input pages keep it in a hidden field; the draft gets that day at the current clock time; Log returns to `?date=` of that day). Jump to a date is the Figma calendar sheet, built in Python with the `calendar` module (dots on days with meals, no future days, months by `?month=`), reused by the Diary.
   - Adapted from Figma: arrows at the ends of the week strip (docs/05; Figma has none); the date beside "Meals" opens the calendar; the Add meal sheet is on every signed-in page (the corner "+" and the sidebar's "Add a meal"), a GET form, so slot and day work without JS. Left out: water, the desktop "On average" chart (chunk 17), "Your meals" and Recent in the sheet (chunk 22). One meal in a slot opens Result until chunk 15 brings Meal detail. `django.contrib.humanize` for `1,230`.
   - Files: `settings.py`, `context_processors.py`, `views.py`, `templates/base.html`, `templates/meals/home.html`, `_slot.html`, `_slot_body.html`, `_slot_sheet.html`, `_add_meal_sheet.html`, `_date_sheet.html`, `text_input.html`, `photo_input.html`, `static/js/add_meal_sheet.js`, `static/js/home.js`, `zalak.css`
   - Pattern: index grouped by specialty, `__date` lookups
   - Test: log 3 meals in different slots; switch days; check a new account's empty state.
-- [ ] **15. Meal detail: edit + delete with Undo** (31 Oct)
+- [x] **15. Meal detail: edit + delete with Undo** (31 Oct)
   - Work: change the slot and time; rename the meal title; add, replace or remove the photo; edit items (reusing Edit item); soft delete + Undo toast.
   - Title (adaptation beyond Figma, decided 1 Nov): a small field in the same ModelForm as slot and time, saved with Save changes; an emptied title falls back to the AI's (`ai_response['title']`), so a meal is never untitled. The description line stays the AI's.
   - Photo (adaptation beyond Figma, decided 1 Nov): add a photo to a typed meal, replace it, or remove it, without asking the AI again (the numbers stay). Reuses `shrink_photo` from `forms.py`; the old file is deleted from `media/` on replace and remove.
-  - Files: `views.py`, `forms.py`, `templates/meals/meal_detail.html`
+  - Decided 2 Nov: Meal detail lives at the same URL as Result (`/meal/<id>/` shows Result for a draft and Meal detail once logged), so Edit item, Add item, Delete item and the question chips come back to it unchanged. Result and Meal detail share `_slot_dropdown.html`, `_meal_summary.html` and `_meal_items.html`. Save changes goes to Home on the meal's day with "Changes saved"; Delete meal is a soft delete with "Meal deleted · Undo" on that Home. Item changes still save on their own.
+  - Time sheet (Figma "Overlay · Time"): the hour : minute wheel as in Figma (changed 2 Nov from two native selects): scroll-snap columns, 5 rows visible, minutes in 5-minute steps, one row per mouse-wheel notch, arrow keys (each column is a spinbutton); no day switch (removed 2 Nov: the sheet only changes the time on the meal's own day); "Use the time it was logged" uses `created_at`. Done fills hidden fields, so an untouched time is saved exactly. A future time is refused.
+  - Left out for now: the heart and Log again (chunk 22), Tell Zalak (chunk 24); the slot stays Result's dropdown, not the Figma sheet. Delete doesn't lower `meals_logged` (it counts Log actions).
+  - Files: `forms.py`, `views.py`, `urls.py`, `templates/meals/meal_detail.html`, `_time_sheet.html`, `_slot_dropdown.html`, `_meal_summary.html`, `_meal_items.html`, `result.html`, `static/js/meal_detail.js`, `slot_select.js`, `zalak.css`
   - Pattern: `has_delete_permission`, PRG, ImageField + `request.FILES`
   - Test: change the time, rename the title (shows on Meal detail and Home), add a photo to a typed meal, replace it (the old file is gone from `media/`), remove it, then delete + Undo (FR25).
 - [ ] **16. Simple Diary** (1 Nov)
   - Work: one page per day with meal photos, time, name and range, plus the day total; arrows and a date jump; meal → meal detail. Replaces the "Coming soon" page. No book animation.
-  - Files: `views.py`, `templates/meals/diary.html`
+  - Decided 2 Nov: the arrows step through every calendar day (an empty past day says "Nothing logged this day" with "Add a meal to this day"); back always works (changed 2 Nov: no "Start" at the first logged meal, whose page is only labelled "First page"); nothing after today. The desktop is Figma's two-page spread (the day before | the chosen day), its arrows two days at a time. Meal detail goes back where it was opened from (Home or the Diary, `?from=` kept in the session per meal), also after Save, Delete and Undo. Today's page lists its empty slots at the end ("Nothing yet · Tap to add it"). The calendar sheet is shared with Home (`calendar_month(..., url_for)`), and the Add meal sheet takes the day from the button that opens it (`data-day`).
+  - Left out: the "Your meals" tab and button (chunk 22), the page dots, the book animation (Could). Thumbnails without a photo are a pastel square with a small CSS plate. The page keeps a fixed minimum size (phones: the screen between header and arrows, at least 32rem; desktop book: at least 38rem); a busy day grows longer.
+  - Files: `views.py`, `templates/meals/diary.html`, `_diary_page.html`, `_diary_nav.html`, `_date_sheet.html`, `_add_meal_sheet.html`, `home.html`, `static/js/date_sheet.js` (was `home.js`), `add_meal_sheet.js`, `zalak.css`
   - Pattern: date filters
   - Test: browse back a week and open a meal.
 

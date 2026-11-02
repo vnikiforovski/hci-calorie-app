@@ -2549,3 +2549,294 @@ a.z-cal-day:hover { background: var(--z-tint); color: var(--z-ink); }
     .z-home-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.75rem; align-items: start; }
     .z-home-meals { margin-top: 0; }
 }
+
+/* ---------- Meal detail (chunk 15, Figma "Meal detail", "Overlay · Time") ---------- */
+
+/* The hero shows the photo or the icon; meal_detail.js switches data-state */
+.z-detail-hero[data-state="photo"] .z-when-none,
+.z-detail-hero[data-state="none"] .z-when-photo { display: none; }
+
+/* Add / Replace / Remove photo: small white pills under the photo */
+.z-photo-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
+.z-photo-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 44px;
+    padding: 0 1rem;
+    border: 1px solid var(--z-line);
+    border-radius: 50rem;
+    background: var(--z-card);
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+.z-photo-btn:hover { background: var(--z-tint); }
+
+/* Slot and time pills side by side */
+.z-detail-pills { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+/* The title with its Rename pencil */
+.z-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.z-rename-btn { flex: none; margin-top: -0.25rem; font-size: 1rem; }
+.z-rename { margin-bottom: 0.75rem; }
+
+/* Two buttons stacked: Save changes over Delete meal */
+.z-detail-hero ~ .z-result { padding-bottom: 13rem; }
+
+/* The wheel (Figma "Overlay · Time"): 5 rows of 48 px show; the middle one, in the sage band,
+   is the choice. Two empty rows of padding let the first and last value reach the middle. */
+.z-wheel-pick {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--z-line);
+    border-radius: 18px;
+    background: var(--z-card);
+}
+.z-wheel-band {
+    position: absolute;
+    top: 50%;
+    left: 1rem;
+    right: 1rem;
+    height: 48px;
+    margin-top: -24px;
+    border-radius: 12px;
+    background: var(--z-tint);
+}
+.z-wheel {
+    position: relative;                  /* above the band */
+    width: 5rem;
+    height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+    border-radius: 12px;
+    /* rows fade towards the edges, like a drum */
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent);
+    mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent);
+}
+.z-wheel::-webkit-scrollbar { display: none; }
+.z-wheel:focus-visible {
+    outline: none;
+    -webkit-mask-image: none;            /* a visible ring needs the edges */
+    mask-image: none;
+    box-shadow: inset 0 0 0 3px var(--z-ink);
+}
+.z-wheel-list { margin: 0; padding: 96px 0; list-style: none; }
+.z-wheel-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 48px;
+    scroll-snap-align: center;
+    color: var(--z-muted);
+    font-family: var(--z-font-heading);
+    font-size: 1.375rem;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    user-select: none;
+}
+.z-wheel-item.is-selected { color: var(--z-ink); font-size: 2.125rem; font-weight: 600; }
+.z-time-colon { position: relative; font-family: var(--z-font-heading); font-size: 2.125rem; font-weight: 600; }
+.z-time-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    margin-top: 0.5rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+.z-time-reset:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Diary (chunk 16, Figma "Diary · Today", "Desktop · Diary") ---------- */
+
+.z-diary-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+.z-diary-head h1 { font-size: 1.75rem; }
+.z-diary-head-actions { display: flex; gap: 0.5rem; }
+
+/* A paper page: a sage spine on the left and two sheets peeking out behind it */
+.z-diary-page {
+    position: relative;
+    margin-right: 8px;
+    padding: 1.25rem 1.25rem 1rem;
+    border: 1px solid var(--z-line);
+    border-left: 10px solid var(--z-tint);
+    border-radius: 18px;
+    background: var(--z-card);
+    box-shadow:
+        4px 4px 0 -1px var(--z-card), 4px 4px 0 0 var(--z-line),
+        8px 8px 0 -1px var(--z-card), 8px 8px 0 0 var(--z-line);
+}
+/* Today's page carries the bookmark ribbon */
+.z-ribbon {
+    position: absolute;
+    top: -6px;
+    right: 2.5rem;
+    width: 22px;
+    height: 80px;
+    background: var(--z-ink);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+}
+.z-page-head { padding-right: 3rem; padding-bottom: 0.75rem; }
+.z-page-kicker {
+    margin: 0 0 0.25rem;
+    color: var(--z-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.z-page-date { margin: 0 0 0.125rem; font-size: 1.75rem; }
+
+.z-page-rows { margin: 0; padding: 0; list-style: none; }
+.z-page-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.875rem 0;
+    border: 0;
+    border-top: 1px solid var(--z-line);
+    background: none;
+    color: var(--z-ink);
+    text-align: left;
+    text-decoration: none;
+}
+.z-page-row:hover { color: var(--z-ink); }
+.z-page-row:hover .z-page-title { text-decoration: underline; text-underline-offset: 3px; }
+.z-page-time { flex: 0 0 2.75rem; font-size: 0.875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.z-page-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.z-page-slot {
+    color: var(--z-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.z-page-title { font-weight: 600; line-height: 1.3; }
+.z-page-kcal { color: var(--z-muted); font-size: 0.8125rem; }
+.z-page-row-empty .z-page-title { color: var(--z-muted); font-weight: 500; }
+
+/* Polaroids: the photo in a white frame, slightly tilted; without a photo a pastel square + a small plate */
+.z-polaroid {
+    flex: 0 0 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border: 4px solid #fff;
+    background: var(--z-card);
+    box-shadow: 0 1px 5px rgba(30, 58, 48, 0.18);
+    transform: rotate(-3deg);
+    overflow: hidden;
+}
+.z-page-rows li:nth-child(even) .z-polaroid { transform: rotate(2deg); }
+.z-polaroid img { width: 100%; height: 100%; object-fit: cover; }
+.z-polaroid-butter { background: var(--z-butter); }
+.z-polaroid-peach { background: var(--z-peach); }
+.z-polaroid-sky { background: var(--z-sky); }
+.z-polaroid-lilac { background: var(--z-lilac); }
+.z-mini-plate {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--z-line);
+    background:
+        radial-gradient(circle at 38% 42%, #9C4A26 0 3px, transparent 3.5px),
+        radial-gradient(circle at 62% 58%, #E2533A 0 3px, transparent 3.5px),
+        radial-gradient(circle at 44% 68%, #8CC56B 0 2.5px, transparent 3px),
+        #fff;
+}
+.z-page-rows li .z-polaroid-add {
+    border: 2px dashed var(--z-line);
+    background: none;
+    box-shadow: none;
+    transform: none;
+    color: var(--z-ink);
+    font-size: 1.25rem;
+}
+
+/* A day without meals */
+.z-page-blank { padding: 2rem 0 1.25rem; border-top: 1px solid var(--z-line); text-align: center; }
+
+.z-page-foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--z-line);
+}
+.z-page-foot-label {
+    color: var(--z-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+.z-page-total { font-size: 1.25rem; }
+
+/* The arrows under the page */
+.z-diary-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-top: 1.5rem; }
+.z-page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 48px;
+    padding: 0 1.125rem;
+    border: 1px solid var(--z-line);
+    border-radius: 50rem;
+    background: var(--z-card);
+    color: var(--z-ink);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
+.z-page-btn-space { min-width: 6rem; }
+.z-diary-nav-here { color: var(--z-muted); font-size: 0.875rem; text-align: center; }
+
+@media (max-width: 991.98px) {
+    .z-book-left,
+    .z-diary-nav.z-desktop-only { display: none; }
+
+    /* A page never shrinks with fewer meals: it fills the screen between the Diary header and the
+       arrows (17.5rem = header + arrows + bottom bar + paddings), and never goes under 32rem.
+       The arrows stay in one place; a busy day makes the page longer and the screen scrolls.
+       100vh first for older browsers; 100dvh follows the phone's moving address bar. */
+    .z-book-right .z-diary-page {
+        min-height: max(32rem, calc(100vh - 17.5rem));
+        min-height: max(32rem, calc(100dvh - 17.5rem));
+    }
+}
+
+@media (min-width: 992px) {
+    /* The open book: the day before on the left, the chosen day on the right, a sage gutter between */
+    .z-book {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border: 1px solid var(--z-line);
+        border-radius: 18px;
+        background: var(--z-card);
+        box-shadow: 0 4px 0 -1px var(--z-card), 0 4px 0 0 var(--z-line);
+        /* The open book keeps its size: the screen minus the header and the arrows, at least 38rem.
+           Both pages share the height (grid), and the totals stay right under the last meal. */
+        min-height: max(38rem, calc(100vh - 13rem));
+    }
+    .z-book .z-diary-page { height: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+    .z-book-left .z-diary-page { border-right: 12px solid var(--z-tint); border-radius: 18px 0 0 18px; }
+    .z-book-right .z-diary-page { border-radius: 0 18px 18px 0; }
+    .z-diary-page { padding: 1.5rem 1.75rem 1.25rem; }
+}

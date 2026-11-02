@@ -1,9 +1,9 @@
-{# One meal slot on Home (Figma "Slot/…"). The row opens what is in it: one meal opens the meal  #}
-{# (Result for now; Meal detail in chunk 15), several open the slot sheet, none opens nothing.    #}
+{# One meal slot on Home (Figma "Slot/…"). The row opens what is in it: one meal opens Meal detail #}
+{# (?from=home, so it comes back here), several open the slot sheet, none opens nothing.          #}
 {# The "+" opens the Add meal sheet with this slot chosen (add_meal_sheet.js reads data-slot).    #}
 <li class="z-slot-row">
     {% if slot.meals|length == 1 %}
-        <a class="z-slot-main" href="{% url 'result' slot.meals.0.id %}">
+        <a class="z-slot-main" href="{% url 'result' slot.meals.0.id %}?from=home">
             {% include 'meals/_slot_body.html' %}
         </a>
     {% elif slot.meals %}

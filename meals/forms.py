@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from io import BytesIO
 
 from django import forms
@@ -7,6 +8,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import UploadedFile
+from django.utils import timezone
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .models import Meal, MealItem, Profile
@@ -59,6 +61,19 @@ def shrink_photo(upload):
     return ContentFile(buffer.getvalue(), name=f'{uuid.uuid4().hex}.jpg')
 
 
+def clean_uploaded_photo(photo):
+    """A new upload is checked and shrunk; anything else (no new file) is returned as it is.
+    Used by Photo + note and by Meal detail."""
+    if not isinstance(photo, UploadedFile):
+        return photo
+    if photo.size > PHOTO_MAX_BYTES:
+        raise forms.ValidationError('That photo is too large. Try another one.')
+    try:
+        return shrink_photo(photo)
+    except (UnidentifiedImageError, OSError):
+        raise forms.ValidationError("Zalak can't read that file. Try another photo.")
+
+
 class PhotoMealForm(forms.ModelForm):
     class Meta:
         model = Meal
@@ -90,18 +105,60 @@ class PhotoMealForm(forms.ModelForm):
         self.fields['photo'].required = True   # the model allows none (text meals)
 
     def clean_photo(self):
-        photo = self.cleaned_data['photo']
-        if not isinstance(photo, UploadedFile):
-            return photo                       # no new file: the draft keeps its photo
-        if photo.size > PHOTO_MAX_BYTES:
-            raise forms.ValidationError('That photo is too large. Try another one.')
-        try:
-            return shrink_photo(photo)
-        except (UnidentifiedImageError, OSError):
-            raise forms.ValidationError("Zalak can't read that file. Try another photo.")
+        # No new file: the draft keeps its photo
+        return clean_uploaded_photo(self.cleaned_data['photo'])
 
     def clean_text(self):
         return self.cleaned_data['text'].strip()   # the note is optional
+
+
+class MealDetailForm(forms.ModelForm):
+    """Meal detail (chunk 15): the slot, the title and the photo of a logged meal, plus when it
+    was eaten. The day and the time come from the time sheet (meal_detail.js) as two hidden
+    fields; the view puts cleaned_data['eaten_at'] on the meal. The items save on their own."""
+    eaten_day = forms.DateField(widget=forms.HiddenInput)
+    eaten_time = forms.TimeField(widget=forms.HiddenInput)
+    remove_photo = forms.BooleanField(required=False, widget=forms.HiddenInput)
+
+    class Meta:
+        model = Meal
+        fields = ['slot', 'title', 'photo']
+        widgets = {
+            'slot': forms.HiddenInput(),   # set by the slot dropdown (slot_select.js)
+            # form="mealForm": the fields sit around the page, the form is the bottom bar's
+            'title': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off',
+                                            'placeholder': 'e.g. Sunday lunch', 'form': 'mealForm'}),
+            # Visually hidden: the Add / Replace photo buttons open it (meal_detail.js)
+            'photo': forms.FileInput(attrs={'accept': 'image/*', 'class': 'visually-hidden', 'tabindex': '-1',
+                                            'form': 'mealForm'}),
+        }
+        labels = {'title': 'Meal name'}
+        error_messages = {
+            'photo': {'invalid_image': "Zalak can't read that file. Try another photo."},
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            eaten = timezone.localtime(self.instance.eaten_at)
+            self.initial['eaten_day'] = eaten.date()
+            self.initial['eaten_time'] = eaten.time().replace(second=0, microsecond=0)
+
+    def clean_title(self):
+        return self.cleaned_data['title'].strip()   # empty: the view gives back Zalak's title
+
+    def clean_photo(self):
+        return clean_uploaded_photo(self.cleaned_data['photo'])
+
+    def clean(self):
+        cleaned = super().clean()
+        day, time = cleaned.get('eaten_day'), cleaned.get('eaten_time')
+        if day and time:
+            eaten_at = timezone.make_aware(datetime.combine(day, time))
+            if eaten_at > timezone.now():
+                raise forms.ValidationError("That time hasn't come yet. Pick an earlier one.")
+            cleaned['eaten_at'] = eaten_at
+        return cleaned
 
 
 class MealItemForm(forms.ModelForm):

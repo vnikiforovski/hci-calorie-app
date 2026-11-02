@@ -29,90 +29,15 @@
     </section>
 
     <div class="z-result">
-        {# Slot dropdown: the hidden input belongs to the Log form below (form="logForm") #}
-        <div class="dropdown z-slot">
-            <input type="hidden" name="slot" id="slotInput" value="{{ slot }}" form="logForm">
-            <button type="button" class="z-slot-pill" data-bs-toggle="dropdown" aria-expanded="false">
-                <i id="slotIcon" class="bi {{ slot_icon }}" aria-hidden="true"></i>
-                <span class="visually-hidden">Meal slot:</span>
-                <span id="slotLabel">{{ slot|capfirst }}</span>
-                <i class="bi bi-chevron-down z-slot-chevron" aria-hidden="true"></i>
-            </button>
-            <ul class="dropdown-menu z-slot-menu">
-                {% for value, label, icon in slot_options %}
-                    <li>
-                        <button type="button" class="dropdown-item z-slot-option {% if value == slot %}active{% endif %}"
-                                data-value="{{ value }}" data-label="{{ label }}" data-icon="{{ icon }}"
-                                {% if value == slot %}aria-current="true"{% endif %}>
-                            <span class="z-slot-option-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
-                            {{ label }}
-                            <i class="bi bi-check-lg z-slot-check" aria-hidden="true"></i>
-                        </button>
-                    </li>
-                {% endfor %}
-            </ul>
-        </div>
+        {# The hidden slot input belongs to the Log form below #}
+        {% include 'meals/_slot_dropdown.html' with form_id='logForm' %}
 
-        <section class="card z-summary mt-3">
-            <div class="card-body">
-                <h1 class="mb-2">{{ meal.title|default:'Your meal' }}</h1>
-                <p class="mb-1">
-                    <span class="z-num z-total">{{ meal.kcal_min }}–{{ meal.kcal_max }}</span>
-                    <span class="text-body-secondary">kcal</span>
-                </p>
-                {% if meal.description %}
-                    <p class="text-body-secondary mb-0">{{ meal.description }}</p>
-                {% endif %}
-
-                {# Each bar: solid up to the min, faded up to the max, sized against the largest macro #}
-                <ul class="z-macro-rows">
-                    {% for row in meal.macro_rows %}
-                        <li class="z-macro-row">
-                            <span class="z-macro-name"><span class="z-dot z-bg-{{ row.key }}" aria-hidden="true"></span>{{ row.name }}</span>
-                            <span class="z-range-track" aria-hidden="true">
-                                <span class="z-range-band z-bg-{{ row.key }}" style="width: {{ row.max_pct }}%"></span>
-                                <span class="z-range-fill z-bg-{{ row.key }}" style="width: {{ row.min_pct }}%"></span>
-                            </span>
-                            <span class="z-macro-value z-tabular">{{ row.min }}–{{ row.max }} g</span>
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </section>
-
-        <div class="d-flex justify-content-between align-items-baseline mt-4 mb-2">
-            <h2 class="mb-0">What Zalak saw</h2>
-            <span class="z-small text-body-secondary">{{ items|length }} item{{ items|length|pluralize }}</span>
-        </div>
-        {% for item in items %}
-            {% include 'meals/_item_card.html' %}
-        {% endfor %}
-
-        {# "Add something Zalak missed" (FR20): one small AI call. A failure brings the name back with a message. #}
-        <form method="post" action="{% url 'add_item' meal.id %}" class="z-add-item" id="add-item">
-            {% csrf_token %}
-            <div class="z-add-row{% if add_item_error %} has-error{% endif %}">
-                <label class="visually-hidden" for="addItemName">Add something Zalak missed</label>
-                <input type="text" class="z-add-input" id="addItemName" name="name" maxlength="100" autocomplete="off"
-                       placeholder="Add something Zalak missed" value="{{ add_item_error.name|default:'' }}"
-                       {% if add_item_error %}aria-describedby="addItemError"{% endif %}>
-                {% if add_item_error %}
-                    <button type="submit" class="z-add-retry">Try again</button>
-                {% else %}
-                    <button type="submit" class="z-add-btn" aria-label="Add">
-                        <i class="bi bi-plus-lg" aria-hidden="true"></i>
-                    </button>
-                {% endif %}
-            </div>
-            {% if add_item_error %}
-                <p class="z-add-error" id="addItemError" role="alert">
-                    <i class="bi bi-info-circle" aria-hidden="true"></i> {{ add_item_error.message }}
-                </p>
-            {% endif %}
-        </form>
+        {% include 'meals/_meal_summary.html' %}
+        {% include 'meals/_meal_items.html' %}
     </div>
 
     <div class="z-actions">
+        {# Only drafts come here: a logged meal opens Meal detail (views.result) #}
         {% if meal.status == 'draft' %}
             <div class="z-actions-buttons">
                 {# Just checking throws the draft away; nothing is saved (FR34) #}
@@ -135,11 +60,6 @@
                         </button>
                     {% endif %}
                 </form>
-            </div>
-        {% else %}
-            {# A logged meal (e.g. the browser's Back after Log): editing it comes with meal detail (chunk 15) #}
-            <div class="z-actions-buttons z-actions-one">
-                <a class="btn btn-outline-secondary btn-lg" href="{% url 'home' %}">Back to Home</a>
             </div>
         {% endif %}
         <p class="z-caption text-body-secondary text-center mb-0">Estimate, not medical advice</p>

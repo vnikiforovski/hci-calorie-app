@@ -1,25 +1,37 @@
 // Add meal sheet (chunk 14, templates/meals/_add_meal_sheet.html).
-// A slot's "+" (data-slot="dinner") opens the sheet with that slot chosen; the corner "+" opens it
-// with the slot from the time and the "picked from the time" hint. Choosing a chip updates
-// "Add to …". The slot itself travels in the form (a radio), so this file only keeps the words in step.
+// The button that opens the sheet can choose for it:
+//   data-slot="dinner"                      a slot's "+" (Home), "Add another snack", "Tap to add it" (Diary)
+//   data-day="2026-11-01" data-day-label="Sun 1"   "Add a meal to this day" (Diary); data-day="" means today
+// Without them the sheet uses the page's defaults: the slot from the time and, on a past day of Home or
+// the Diary, that day. The "picked from the time" hint shows only when the clock really chose the slot.
+// The slot and day travel in the form (a radio and a hidden input); this file keeps the words in step.
 (function () {
     const sheet = document.getElementById('addMealSheet');
     if (!sheet) return;
 
-    const label = sheet.querySelector('[data-add-slot-label]');
-    const hint = document.getElementById('addSlotHint');   // missing on a past day
+    const slotLabel = sheet.querySelector('[data-add-slot-label]');
+    const dayLabel = sheet.querySelector('[data-add-day-label]');
+    const dayInput = sheet.querySelector('input[name="day"]');
+    const hint = document.getElementById('addSlotHint');
     const radios = sheet.querySelectorAll('input[name="slot"]');
 
     function choose(slot, fromTime) {
         radios.forEach(function (radio) { radio.checked = radio.value === slot; });
-        label.textContent = slot;
-        if (hint) hint.hidden = !fromTime;
+        slotLabel.textContent = slot;
+        hint.hidden = !fromTime || dayInput.value !== '';
+    }
+
+    function setDay(day, label) {
+        dayInput.value = day;
+        dayLabel.textContent = day ? ' · ' + label : '';
     }
 
     // Bootstrap passes the button that opened the sheet as relatedTarget
     sheet.addEventListener('show.bs.offcanvas', function (event) {
-        const slot = event.relatedTarget && event.relatedTarget.dataset.slot;
-        choose(slot || sheet.dataset.defaultSlot, !slot);
+        const trigger = event.relatedTarget ? event.relatedTarget.dataset : {};
+        if ('day' in trigger) setDay(trigger.day, trigger.dayLabel || '');
+        else setDay(sheet.dataset.defaultDay, sheet.dataset.defaultDayLabel);
+        choose(trigger.slot || sheet.dataset.defaultSlot, !trigger.slot);
     });
 
     radios.forEach(function (radio) {

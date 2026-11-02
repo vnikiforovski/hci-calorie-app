@@ -1,6 +1,6 @@
 {# "Jump to a date" (Figma "Overlay · Jump to a date"), built by views.calendar_month.          #}
-{# Days are links to Home for that day; future days are not. ‹ › reload Home with ?month=, and #}
-{# home.js opens the sheet again (data-open-on-load). Reused by the Diary in chunk 16.          #}
+{# Days link to that day on this page; future days are not links. ‹ › reload with ?month=, and #}
+{# date_sheet.js opens the sheet again (data-open-on-load). Home and the Diary both use it.    #}
 <div class="offcanvas offcanvas-bottom z-sheet z-date-sheet" tabindex="-1" id="dateSheet" aria-labelledby="dateSheetTitle"
      {% if calendar_open %}data-open-on-load{% endif %}>
     <div class="z-sheet-handle" aria-hidden="true"></div>
@@ -65,7 +65,7 @@
             </tbody>
         </table>
 
-        <a class="z-cal-today" href="{% url 'home' %}">
+        <a class="z-cal-today" href="{{ calendar.today_url }}">
             <i class="bi bi-record-circle" aria-hidden="true"></i> Go to today
         </a>
     </div>

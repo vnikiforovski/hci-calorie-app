@@ -17,7 +17,7 @@
         <ul class="card z-slot-meals">
             {% for meal in slot.meals %}
                 <li>
-                    <a class="z-slot-meal" href="{% url 'result' meal.id %}">
+                    <a class="z-slot-meal" href="{% url 'result' meal.id %}?from=home">
                         {% if meal.photo %}
                             <img class="z-slot-thumb" src="{{ meal.photo.url }}" alt="">
                         {% else %}

@@ -643,10 +643,11 @@ class LogTests(TestCase):
         self.assertEqual(self.log(slot='lunch').status_code, 404)
         self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)
 
-    def test_logged_meal_result_has_no_log_button(self):
+    def test_logged_meal_opens_meal_detail_without_log(self):
+        # Chunk 15: the same URL shows Meal detail once the meal is logged
         self.log(slot='lunch')
         page = self.client.get(reverse('result', args=[self.meal.id]))
-        self.assertContains(page, 'Back to Home')
+        self.assertTemplateUsed(page, 'meals/meal_detail.html')
         self.assertNotContains(page, reverse('log_meal', args=[self.meal.id]))
 
     def test_only_posts_change_anything(self):
@@ -1764,11 +1765,11 @@ class HomeTests(TestCase):
         apple = self.log('snack', title='Apple')
         coffee = self.log('snack', title='Coffee')
         page = self.home()
-        self.assertContains(page, f'href="{reverse("result", args=[lunch.id])}"')
+        self.assertContains(page, f'href="{reverse("result", args=[lunch.id])}?from=home"')
         self.assertContains(page, 'id="slotSheet-snack"')
         self.assertNotContains(page, 'id="slotSheet-lunch"')
         for meal in (apple, coffee):
-            self.assertContains(page, f'href="{reverse("result", args=[meal.id])}"')
+            self.assertContains(page, f'href="{reverse("result", args=[meal.id])}?from=home"')
         self.assertContains(page, 'Add another snack')
 
     def test_add_sheet_is_on_every_signed_in_page(self):
@@ -1835,3 +1836,301 @@ class PastDayTests(TestCase):
                              {'photo': jpeg(), 'slot': 'lunch', 'day': self.yesterday.isoformat()})
         meal = Meal.objects.get()
         self.assertEqual(timezone.localtime(meal.eaten_at).date(), self.yesterday)
+
+
+class MealDetailTests(TestCase):
+    """Chunk 15: Meal detail edits a logged meal's slot, time, name and photo; delete with Undo."""
+
+    def setUp(self):
+        use_temp_media(self)
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(user=self.user, slot='lunch', status='logged',
+                               ai_response={'status': 'ok', 'title': 'Chicken'})
+        self.url = reverse('result', args=[self.meal.id])
+
+    def save(self, **changes):
+        eaten = timezone.localtime(self.meal.eaten_at)
+        data = {'slot': self.meal.slot, 'title': self.meal.title,
+                'eaten_day': eaten.date().isoformat(), 'eaten_time': eaten.strftime('%H:%M'),
+                'remove_photo': ''}
+        data.update(changes)
+        return self.client.post(reverse('save_meal', args=[self.meal.id]), data)
+
+    def test_logged_meal_shows_meal_detail_and_a_draft_shows_result(self):
+        page = self.client.get(self.url)
+        self.assertTemplateUsed(page, 'meals/meal_detail.html')
+        self.assertContains(page, 'Save changes')
+        self.assertContains(page, 'Delete meal')
+        self.assertContains(page, 'When did you eat it?')
+        # The wheel: two spinbuttons that start on the saved hour and minute
+        eaten = timezone.localtime(self.meal.eaten_at)
+        self.assertContains(page, 'role="spinbutton"', count=2)
+        self.assertContains(page, f'aria-valuetext="{eaten:%H}"')
+        self.assertContains(page, f'is-selected" data-value="{eaten:%M}"')
+        draft = make_draft(user=self.user)
+        self.assertTemplateUsed(self.client.get(reverse('result', args=[draft.id])), 'meals/result.html')
+
+    def test_someone_elses_meal_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+        self.assertEqual(self.save(title='Mine now').status_code, 404)
+        self.assertEqual(self.client.post(reverse('delete_meal', args=[self.meal.id])).status_code, 404)
+
+    def test_a_draft_cannot_be_saved_or_deleted_here(self):
+        draft = make_draft(user=self.user)
+        self.assertEqual(self.client.post(reverse('save_meal', args=[draft.id])).status_code, 404)
+        self.assertEqual(self.client.post(reverse('delete_meal', args=[draft.id])).status_code, 404)
+
+    def test_change_slot_and_time(self):
+        # The time sheet changes the time on the meal's own day: here a meal from yesterday
+        yesterday = timezone.localdate() - timedelta(days=1)
+        noon = timezone.make_aware(datetime(yesterday.year, yesterday.month, yesterday.day, 12, 0))
+        Meal.objects.filter(id=self.meal.id).update(eaten_at=noon)
+        self.meal.refresh_from_db()
+        response = self.save(slot='snack', eaten_time='21:40')
+        # Not fetched here: that would show (and use up) the toast before the check below
+        self.assertRedirects(response, f'/?date={yesterday.isoformat()}', fetch_redirect_response=False)
+        self.meal.refresh_from_db()
+        eaten = timezone.localtime(self.meal.eaten_at)
+        self.assertEqual((eaten.date(), eaten.hour, eaten.minute), (yesterday, 21, 40))
+        self.assertEqual(self.meal.slot, 'snack')
+        home = self.client.get(response.url)
+        self.assertContains(home, 'Changes saved')
+
+    def test_an_untouched_time_stays_exactly(self):
+        exact = timezone.now().replace(second=45, microsecond=123000) - timedelta(hours=1)
+        Meal.objects.filter(id=self.meal.id).update(eaten_at=exact)
+        self.meal.refresh_from_db()
+        self.save(title='Lunch at work')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.eaten_at, exact)
+        self.assertEqual(self.meal.title, 'Lunch at work')
+
+    def test_a_future_time_is_refused(self):
+        tomorrow = timezone.localdate() + timedelta(days=1)
+        before = self.meal.eaten_at
+        page = self.save(eaten_day=tomorrow.isoformat(), eaten_time='08:00', title='Changed')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'That time hasn')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.eaten_at, before)
+        self.assertEqual(self.meal.title, 'Chicken')
+
+    def test_an_emptied_name_gives_back_zalaks(self):
+        self.save(title='   ')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.title, 'Chicken')
+
+    def test_add_replace_and_remove_a_photo(self):
+        self.save(photo=jpeg())
+        self.meal.refresh_from_db()
+        first = self.meal.photo.path
+        self.assertTrue(os.path.exists(first))
+
+        self.save(photo=jpeg('again.jpg'))
+        self.meal.refresh_from_db()
+        self.assertTrue(os.path.exists(self.meal.photo.path))
+        self.assertFalse(os.path.exists(first))   # the replaced file is gone
+
+        second = self.meal.photo.path
+        self.save(remove_photo='1')
+        self.meal.refresh_from_db()
+        self.assertFalse(self.meal.photo)
+        self.assertFalse(os.path.exists(second))
+
+    def test_a_bad_photo_is_refused(self):
+        page = self.save(photo=SimpleUploadedFile('note.jpg', b'not a picture'))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'Try another photo')
+        self.meal.refresh_from_db()
+        self.assertFalse(self.meal.photo)
+
+    def test_delete_and_undo(self):
+        response = self.client.post(reverse('delete_meal', args=[self.meal.id]))
+        self.assertRedirects(response, reverse('home'), fetch_redirect_response=False)
+        self.meal.refresh_from_db()
+        self.assertIsNotNone(self.meal.deleted_at)
+        home = self.client.get(reverse('home'))
+        self.assertContains(home, 'Meal deleted')
+        self.assertEqual(home.context['totals']['kcal_max'], 0)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+        self.client.post(reverse('undo_delete_meal', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertIsNone(self.meal.deleted_at)
+        self.assertEqual(self.client.get(reverse('home')).context['totals']['kcal_max'], 260)
+
+    def test_undo_delete_is_only_for_the_owner(self):
+        self.client.post(reverse('delete_meal', args=[self.meal.id]))
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        self.client.force_login(other)
+        response = self.client.post(reverse('undo_delete_meal', args=[self.meal.id]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_editing_an_item_comes_back_to_meal_detail(self):
+        item = self.meal.items.get()
+        response = self.client.post(reverse('edit_item', args=[self.meal.id, item.id]),
+                                    {'name': 'Chicken breast', 'amount': '200', 'unit': 'g'}, follow=True)
+        self.assertTemplateUsed(response, 'meals/meal_detail.html')
+        item.refresh_from_db()
+        self.assertEqual(item.grams, 200)
+
+    def test_time_sheet_has_no_day_switch(self):
+        # Removed 2 Nov: the sheet only changes the time, on the meal's own day
+        page = self.client.get(self.url)
+        self.assertNotContains(page, 'name="time_day"')
+        self.assertContains(page, 'data-day-label="Today"')
+        self.assertContains(page, 'Use the time it was logged')
+        # A meal on another day than it was logged: going back to the logged time makes no sense
+        Meal.objects.filter(id=self.meal.id).update(eaten_at=timezone.now() - timedelta(days=3))
+        self.assertNotContains(self.client.get(self.url), 'Use the time it was logged')
+
+
+class DiaryTests(TestCase):
+    """Chunk 16: the Diary, a page per day; the desktop shows the day before beside it."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.today = timezone.localdate()
+
+    def log(self, slot, day=None, hour=12, minute=0, title='Chicken', user=None, **fields):
+        meal = make_draft(user=user or self.user, slot=slot, status='logged', **fields)
+        day = day or self.today
+        when = timezone.make_aware(datetime(day.year, day.month, day.day, hour, minute))
+        Meal.objects.filter(id=meal.id).update(eaten_at=when, title=title)
+        meal.refresh_from_db()
+        return meal
+
+    def diary(self, **params):
+        return self.client.get(reverse('diary'), params)
+
+    def test_today_lists_meals_in_time_order_with_a_link_each(self):
+        lunch = self.log('lunch', hour=13, minute=10, title='Tavce gravce')
+        breakfast = self.log('breakfast', hour=8, minute=30, title='Yogurt')
+        page = self.diary()
+        self.assertTemplateUsed(page, 'meals/diary.html')
+        self.assertEqual(page.context['right_page']['meals'], [breakfast, lunch])
+        self.assertContains(page, f'href="{reverse("result", args=[lunch.id])}?from=diary"')
+        self.assertContains(page, '08:30')
+        self.assertEqual(page.context['right_page']['count'], '2 meals so far')
+        self.assertContains(page, 'Eaten so far')
+        self.assertContains(page, '460–520')
+
+    def test_only_this_users_logged_meals_of_that_day(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        make_draft(user=self.user, slot='lunch')
+        self.log('lunch', deleted_at=timezone.now())
+        self.log('lunch', user=other)
+        self.log('lunch', day=self.today - timedelta(days=1))
+        self.assertEqual(self.diary().context['right_page']['meals'], [])
+
+    def test_today_offers_its_empty_slots(self):
+        self.log('breakfast', hour=8)
+        page = self.diary()
+        self.assertEqual([value for value, label in page.context['right_page']['empty_slots']], ['lunch', 'snack', 'dinner'])
+        self.assertContains(page, 'Tap to add it', count=3)
+        self.assertContains(page, 'data-slot="dinner"')
+
+    def test_a_past_day(self):
+        yesterday = self.today - timedelta(days=1)
+        self.log('breakfast', day=self.today - timedelta(days=5))   # the first page is earlier
+        self.log('dinner', day=yesterday, hour=19)
+        page = self.diary(date=yesterday.isoformat())
+        self.assertEqual(page.context['right_page']['kicker'], f'{yesterday:%A} · Yesterday')
+        self.assertEqual(page.context['right_page']['count'], '1 meal')
+        self.assertEqual(page.context['right_page']['empty_slots'], [])   # only today offers them
+        self.assertContains(page, 'Eaten this day')
+        self.assertEqual(page.context['phone_next'], {'url': '/diary/', 'label': 'Today'})
+        self.assertEqual(page.context['add_day'], yesterday)
+
+    def test_future_or_odd_dates_show_today(self):
+        for value in [(self.today + timedelta(days=2)).isoformat(), 'soon']:
+            self.assertEqual(self.diary(date=value).context['day'], self.today)
+
+    def test_the_first_page(self):
+        first = self.today - timedelta(days=3)
+        self.log('lunch', day=first)
+        page = self.diary(date=first.isoformat())
+        self.assertEqual(page.context['right_page']['kicker'], f'{first:%A} · First page')
+        self.assertEqual(page.context['right_page']['count'], '1 meal · your first day with Zalak')
+        # Back still works before it (changed 2 Nov: no "Start"), and the left page is the day before
+        before = first - timedelta(days=1)
+        self.assertEqual(page.context['phone_prev']['url'], f'/diary/?date={before.isoformat()}')
+        self.assertEqual(page.context['left_page']['date'], before)
+        self.assertNotContains(page, 'Start')
+
+    def test_back_works_from_today_with_no_meals_before(self):
+        # A new account: today is the only day with meals, and yesterday is still one tap away
+        self.log('lunch')
+        page = self.diary()
+        yesterday = self.today - timedelta(days=1)
+        self.assertEqual(page.context['phone_prev'], {'url': f'/diary/?date={yesterday.isoformat()}', 'label': 'Yesterday'})
+        self.assertEqual(page.context['left_page']['date'], yesterday)
+        older = self.diary(date=(self.today - timedelta(days=30)).isoformat())
+        self.assertIsNotNone(older.context['phone_prev'])
+
+    def test_meal_detail_goes_back_to_the_diary(self):
+        yesterday = self.today - timedelta(days=1)
+        meal = self.log('dinner', day=yesterday, hour=19)
+        diary_day = f'/diary/?date={yesterday.isoformat()}'
+        page = self.client.get(reverse('result', args=[meal.id]), {'from': 'diary'})
+        self.assertEqual(page.context['back_url'], diary_day)
+        self.assertContains(page, 'aria-label="Back to the Diary"')
+        # Still after editing an item (which comes back without ?from=)
+        item = meal.items.get()
+        self.client.post(reverse('edit_item', args=[meal.id, item.id]), {'name': 'Chicken', 'amount': '200', 'unit': 'g'})
+        self.assertEqual(self.client.get(reverse('result', args=[meal.id])).context['back_url'], diary_day)
+        # Save changes and Delete go back there too
+        eaten = timezone.localtime(meal.eaten_at)
+        response = self.client.post(reverse('save_meal', args=[meal.id]), {
+            'slot': 'dinner', 'title': 'Soup', 'eaten_day': eaten.date().isoformat(),
+            'eaten_time': eaten.strftime('%H:%M'), 'remove_photo': ''})
+        self.assertRedirects(response, diary_day, fetch_redirect_response=False)
+        response = self.client.post(reverse('delete_meal', args=[meal.id]))
+        self.assertRedirects(response, diary_day, fetch_redirect_response=False)
+        response = self.client.post(reverse('undo_delete_meal', args=[meal.id]))
+        self.assertRedirects(response, diary_day, fetch_redirect_response=False)
+
+    def test_meal_detail_opened_from_home_goes_back_home(self):
+        meal = self.log('lunch')
+        self.client.get(reverse('result', args=[meal.id]), {'from': 'diary'})
+        page = self.client.get(reverse('result', args=[meal.id]), {'from': 'home'})
+        self.assertEqual(page.context['back_url'], '/')
+        self.assertContains(page, 'aria-label="Back to Home"')
+        # Home and the Diary say where their links come from
+        self.assertContains(self.client.get(reverse('home')), f'{reverse("result", args=[meal.id])}?from=home')
+        self.assertContains(self.diary(), f'{reverse("result", args=[meal.id])}?from=diary')
+
+    def test_an_empty_past_day_offers_to_add_to_it(self):
+        self.log('lunch', day=self.today - timedelta(days=6))
+        empty = self.today - timedelta(days=2)
+        page = self.diary(date=empty.isoformat())
+        self.assertContains(page, 'Nothing logged this day.')
+        self.assertContains(page, f'data-day="{empty.isoformat()}"')
+        self.assertNotContains(page, 'Eaten this day')
+
+    def test_nothing_ahead_of_today(self):
+        page = self.diary()
+        self.assertIsNone(page.context['phone_next'])
+        self.assertIsNone(page.context['desk_next'])
+
+    def test_desktop_spread(self):
+        self.log('lunch', day=self.today - timedelta(days=10))
+        day = self.today - timedelta(days=4)
+        page = self.diary(date=day.isoformat())
+        self.assertEqual(page.context['left_page']['date'], day - timedelta(days=1))
+        # The arrows move two days: back to (day-3, day-2), on to (day+1, day+2)
+        self.assertEqual(page.context['desk_prev']['url'], f'/diary/?date={(day - timedelta(days=2)).isoformat()}')
+        self.assertEqual(page.context['desk_next']['url'], f'/diary/?date={(day + timedelta(days=2)).isoformat()}')
+        self.assertEqual(page.context['phone_prev']['url'], f'/diary/?date={(day - timedelta(days=1)).isoformat()}')
+
+    def test_calendar_links_go_to_the_diary(self):
+        page = self.diary(month='2026-01')
+        self.assertTrue(page.context['calendar_open'])
+        self.assertContains(page, 'href="/diary/?date=2026-01-15"')
+        self.assertEqual(page.context['calendar']['today_url'], '/diary/')
+        # Home's calendar still links to Home
+        self.assertEqual(self.client.get(reverse('home')).context['calendar']['today_url'], '/')

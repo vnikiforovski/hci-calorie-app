@@ -1,0 +1,24 @@
+{# The slot pill + dropdown, on Result and Meal detail. slot_select.js copies the choice into the hidden #}
+{# input, which belongs to the page's form: form_id is "logForm" on Result and "mealForm" on Meal detail. #}
+<div class="dropdown z-slot">
+    <input type="hidden" name="slot" id="slotInput" value="{{ slot }}" form="{{ form_id }}">
+    <button type="button" class="z-slot-pill" data-bs-toggle="dropdown" aria-expanded="false">
+        <i id="slotIcon" class="bi {{ slot_icon }}" aria-hidden="true"></i>
+        <span class="visually-hidden">Meal slot:</span>
+        <span id="slotLabel">{{ slot|capfirst }}</span>
+        <i class="bi bi-chevron-down z-slot-chevron" aria-hidden="true"></i>
+    </button>
+    <ul class="dropdown-menu z-slot-menu">
+        {% for value, label, icon in slot_options %}
+            <li>
+                <button type="button" class="dropdown-item z-slot-option {% if value == slot %}active{% endif %}"
+                        data-value="{{ value }}" data-label="{{ label }}" data-icon="{{ icon }}"
+                        {% if value == slot %}aria-current="true"{% endif %}>
+                    <span class="z-slot-option-icon" aria-hidden="true"><i class="bi {{ icon }}"></i></span>
+                    {{ label }}
+                    <i class="bi bi-check-lg z-slot-check" aria-hidden="true"></i>
+                </button>
+            </li>
+        {% endfor %}
+    </ul>
+</div>

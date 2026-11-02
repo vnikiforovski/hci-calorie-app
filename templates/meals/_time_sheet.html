@@ -1,0 +1,54 @@
+{# "When did you eat it?" (Figma "Overlay · Time") on Meal detail: an hour : minute wheel on the meal's  #}
+{# own day (the Yesterday / Today switch was dropped, 2 Nov). Nothing here is sent: Done (meal_detail.js) #}
+{# copies the time into the meal form's hidden field, and opening the sheet again starts from there.     #}
+<div class="offcanvas offcanvas-bottom z-sheet" tabindex="-1" id="timeSheet" aria-labelledby="timeSheetTitle"
+     data-day="{{ eaten|date:'Y-m-d' }}" data-day-label="{{ day_label }}"
+     data-now="{{ now|date:'Y-m-d' }}T{{ now|time:'H:i' }}">
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+    <div class="z-sheet-title">
+        <div>
+            <h2 class="mb-0" id="timeSheetTitle">When did you eat it?</h2>
+            <p class="z-small text-body-secondary mb-0">It was logged at {{ logged_at|time:'H:i' }}</p>
+        </div>
+        <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+    </div>
+
+    <div class="z-sheet-body">
+        {# Figma's wheel, as on phones: five rows show, the middle one (in the band) is the choice. #}
+        {# Each column is a spinbutton: scroll, swipe, tap a row, or use the arrow keys.           #}
+        <div class="z-wheel-pick">
+            <span class="z-wheel-band" aria-hidden="true"></span>
+            {% with hour_now=eaten|time:'H' minute_now=eaten|time:'i' %}
+                <div class="z-wheel" id="timeHour" role="spinbutton" tabindex="0" aria-label="Hour"
+                     aria-valuemin="0" aria-valuemax="23" aria-valuenow="{{ hour_now }}" aria-valuetext="{{ hour_now }}">
+                    <ol class="z-wheel-list" aria-hidden="true">
+                        {% for hour in hours %}
+                            <li class="z-wheel-item{% if hour == hour_now %} is-selected{% endif %}" data-value="{{ hour }}">{{ hour }}</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+                <span class="z-time-colon" aria-hidden="true">:</span>
+                <div class="z-wheel" id="timeMinute" role="spinbutton" tabindex="0" aria-label="Minute"
+                     aria-valuemin="0" aria-valuemax="59" aria-valuenow="{{ minute_now }}" aria-valuetext="{{ minute_now }}">
+                    <ol class="z-wheel-list" aria-hidden="true">
+                        {% for minute in minutes %}
+                            <li class="z-wheel-item{% if minute == minute_now %} is-selected{% endif %}" data-value="{{ minute }}">{{ minute }}</li>
+                        {% endfor %}
+                    </ol>
+                </div>
+            {% endwith %}
+        </div>
+
+        {% if show_logged_time %}
+            <button type="button" class="z-time-reset" id="timeReset"
+                    data-hour="{{ logged_at|time:'H' }}" data-minute="{{ logged_at|time:'i' }}">
+                <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Use the time it was logged ({{ logged_at|time:'H:i' }})
+            </button>
+        {% endif %}
+        <p class="z-field-error" id="timeError" role="alert" hidden>That time hasn't come yet. Pick an earlier one.</p>
+
+        <button type="button" class="btn btn-primary btn-lg w-100 mt-3" id="timeDone">Done</button>
+    </div>
+</div>

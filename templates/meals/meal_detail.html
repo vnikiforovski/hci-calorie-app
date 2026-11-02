@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ meal.title|default:'Meal' }}{% endblock %}
+
+{# Meal detail (chunk 15, Figma "Meal detail"): a logged meal, at the same URL as Result (views.result).  #}
+{# Slot, time, name and photo are saved with Save changes (MealDetailForm, the form in the bottom bar);   #}
+{# the fields elsewhere on the page join it with form="mealForm". Item changes save straight away.       #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    {# data-state says what the hero shows; meal_detail.js changes it when a photo is chosen or removed #}
+    <section class="z-hero z-detail-hero" id="mealHero" data-state="{% if meal.photo %}photo{% else %}none{% endif %}">
+        <div class="z-hero-top">
+            <a class="z-icon-btn" href="{{ back_url }}" aria-label="{{ back_label }}">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+            <span class="z-chip"><i class="bi bi-stars" aria-hidden="true"></i> AI estimate</span>
+        </div>
+
+        <div class="z-plate z-when-photo">
+            <img class="z-hero-photo" id="mealPhoto" {% if meal.photo %}src="{{ meal.photo.url }}"{% endif %}
+                 alt="Photo of {{ meal.title|default:'the meal' }}">
+        </div>
+        <div class="z-when-none">
+            <div class="z-hero-icon" aria-hidden="true"><i class="bi bi-fork-knife"></i></div>
+            {% if meal.text and not meal.photo %}
+                <p class="z-hero-text">{{ meal.text }}</p>
+            {% endif %}
+        </div>
+
+        {# Not in Figma (decided 1 Nov): change the photo without asking Zalak again; the numbers stay #}
+        <div class="z-photo-actions">
+            <button type="button" class="z-photo-btn z-when-none" data-photo-pick>
+                <i class="bi bi-camera" aria-hidden="true"></i> Add a photo
+            </button>
+            <button type="button" class="z-photo-btn z-when-photo" data-photo-pick>
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Replace photo
+            </button>
+            <button type="button" class="z-photo-btn z-when-photo" id="photoRemove">
+                <i class="bi bi-x-lg" aria-hidden="true"></i> Remove photo
+            </button>
+        </div>
+        <p class="z-caption text-center mt-2 mb-0" id="photoNote" role="status"></p>
+        {% for error in form.photo.errors %}
+            <p class="z-field-error text-center" role="alert">{{ error }}</p>
+        {% endfor %}
+    </section>
+
+    <div class="z-result">
+        <div class="z-detail-pills">
+            {% include 'meals/_slot_dropdown.html' with form_id='mealForm' %}
+            <button type="button" class="z-slot-pill" data-bs-toggle="offcanvas" data-bs-target="#timeSheet" aria-controls="timeSheet">
+                <i class="bi bi-clock" aria-hidden="true"></i>
+                <span class="visually-hidden">Eaten:</span>
+                <span id="timeLabel">{{ time_label }}</span>
+                <i class="bi bi-chevron-down z-slot-chevron" aria-hidden="true"></i>
+            </button>
+        </div>
+        <p class="z-caption text-body-secondary mt-2 mb-0">Logged at {{ logged_at|time:'H:i' }}. Tap the time if you ate earlier or later.</p>
+
+        {% for error in form.non_field_errors %}
+            <div class="z-form-alert mt-3" role="alert">
+                <i class="bi bi-info-circle" aria-hidden="true"></i>
+                <span>{{ error }}</span>
+            </div>
+        {% endfor %}
+
+        {% include 'meals/_meal_summary.html' %}
+        {% include 'meals/_meal_items.html' %}
+    </div>
+
+    <div class="z-actions">
+        <div class="z-actions-buttons z-actions-one">
+            <form method="post" action="{% url 'save_meal' meal.id %}" enctype="multipart/form-data" id="mealForm" novalidate>
+                {% csrf_token %}
+                {# Written by the time sheet's Done; untouched, the saved time stays exactly as it was #}
+                <input type="hidden" name="eaten_day" id="eatenDay" value="{{ eaten|date:'Y-m-d' }}">
+                <input type="hidden" name="eaten_time" id="eatenTime" value="{{ eaten|time:'H:i' }}">
+                <input type="hidden" name="remove_photo" id="removePhoto" value="">
+                {{ form.photo }}
+                <button type="submit" class="btn btn-primary btn-lg w-100">Save changes</button>
+            </form>
+            {# Red only for delete (docs/06). A soft delete with Undo, so no "Are you sure?" #}
+            <form method="post" action="{% url 'delete_meal' meal.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger btn-lg w-100">
+                    <i class="bi bi-trash" aria-hidden="true"></i> Delete meal
+                </button>
+            </form>
+        </div>
+        <p class="z-caption text-body-secondary text-center mb-0">Estimate, not medical advice</p>
+    </div>
+
+    {% include 'meals/_time_sheet.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/slot_select.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/add_item.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/meal_detail.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

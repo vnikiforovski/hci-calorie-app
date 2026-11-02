@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Diary{% endblock %}
+
+{# The Diary (chunk 16, FR26), Figma "Diary · …" and "Desktop · Diary": a book with a page per day.   #}
+{# Phones show the chosen day; the desktop opens the book on the day before and the chosen day.       #}
+{# The page has its own header (Diary, the month, the calendar), so the logo header is left out.      #}
+{% block header %}{% endblock %}
+
+{% block content %}
+    <div class="z-diary">
+        <div class="z-diary-head">
+            <div>
+                <h1 class="mb-0">Diary</h1>
+                <p class="text-body-secondary mb-0">{{ day|date:'F Y' }}</p>
+            </div>
+            <div class="z-diary-head-actions">
+                <button type="button" class="z-icon-btn" data-bs-toggle="offcanvas" data-bs-target="#dateSheet"
+                        aria-controls="dateSheet" aria-label="Jump to a date">
+                    <i class="bi bi-calendar3" aria-hidden="true"></i>
+                </button>
+                <a class="z-icon-btn z-mobile-only" href="{% url 'profile' %}" aria-label="Profile">
+                    <i class="bi bi-person" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="z-book">
+            {# Desktop only: the left page, the day before #}
+            <div class="z-book-left z-desktop-only">
+                {% include 'meals/_diary_page.html' with page=left_page %}
+            </div>
+            <div class="z-book-right">
+                {% include 'meals/_diary_page.html' with page=right_page %}
+            </div>
+        </div>
+
+        {# Phones: a day back or on; the desktop: the spread before or after, two days away #}
+        {% include 'meals/_diary_nav.html' with prev=phone_prev next=phone_next here=right_page.name extra_class='z-mobile-only' %}
+        {% include 'meals/_diary_nav.html' with prev=desk_prev next=desk_next here=spread_name extra_class='z-desktop-only' %}
+    </div>
+
+    {% include 'meals/_date_sheet.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/date_sheet.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}
