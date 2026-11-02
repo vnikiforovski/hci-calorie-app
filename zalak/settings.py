@@ -100,7 +100,8 @@ WSGI_APPLICATION = 'zalak.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # ZALAK_DB=demo.sqlite3 in .env: a separate database for the demo (chunk 20), so the dev data stays
+        'NAME': BASE_DIR / os.environ.get('ZALAK_DB', 'db.sqlite3'),
     }
 }
 
@@ -153,7 +154,7 @@ STATICFILES_DIRS = [
 
 # Added as ?v= to our own CSS and JS links (meals/context_processors.py).
 # Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
-STATIC_VERSION = '25'
+STATIC_VERSION = '26'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

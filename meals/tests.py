@@ -2481,3 +2481,41 @@ class PassTests(TestCase):
 
     def test_the_style_page_is_gone(self):
         self.assertEqual(self.client.get('/style/').status_code, 404)
+
+
+class DemoFixtureTests(TestCase):
+    """Chunk 20: meals/fixtures/demo.json, Ana's meals from Mon 26 Oct to Tue 3 Nov."""
+    fixtures = ['demo']
+
+    def setUp(self):
+        self.ana = User.objects.get(username='ana@zalak.demo')
+
+    def test_ana_signs_in_with_the_demo_password(self):
+        self.assertTrue(self.client.login(username='ana@zalak.demo', password='zalak-demo-2026'))
+
+    def test_every_meal_is_complete(self):
+        meals = Meal.objects.filter(user=self.ana)
+        self.assertEqual(meals.count(), 33)
+        self.assertEqual(Profile.objects.get(user=self.ana).meals_logged, 33)
+        days = sorted({timezone.localtime(meal.eaten_at).date() for meal in meals})
+        self.assertEqual((days[0].isoformat(), days[-1].isoformat()), ('2026-10-26', '2026-11-03'))
+        self.assertEqual(len(days), 9)
+        photos = os.path.join(os.path.dirname(__file__), 'fixtures', 'demo_photos')
+        for meal in meals:
+            self.assertEqual(meal.status, 'logged')
+            self.assertTrue(meal.items.exists(), meal.title)
+            self.assertEqual(len(meal.ai_response['items']), meal.items.count(), meal.title)
+            if meal.photo:
+                self.assertTrue(os.path.exists(os.path.join(photos, os.path.basename(meal.photo.name))), meal.photo.name)
+
+    def test_the_pages_open_with_her_week(self):
+        self.client.force_login(self.ana)
+        monday = '2026-10-26'
+        self.assertEqual(self.client.get(reverse('home'), {'date': monday}).context['week_chart']['days_logged'], 7)
+        self.assertEqual(len(self.client.get(reverse('diary'), {'date': monday}).context['right_page']['meals']), 4)
+        stats = self.client.get(reverse('statistics'), {'date': monday}).context['stats']
+        self.assertEqual(stats['days_logged'], 7)
+        self.assertEqual([(row['title'], row['count']) for row in stats['most_logged']][:2],
+                         [('Yogurt with honey and walnuts', 4), ('Coffee with milk', 3)])
+        meal = Meal.objects.filter(user=self.ana).first()
+        self.assertTemplateUsed(self.client.get(reverse('result', args=[meal.id])), 'meals/meal_detail.html')

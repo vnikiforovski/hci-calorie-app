@@ -2630,8 +2630,12 @@ a.z-cal-day:hover { background: var(--z-tint); color: var(--z-ink); }
 .z-rename-btn { flex: none; margin-top: -0.25rem; font-size: 1rem; }
 .z-rename { margin-bottom: 0.75rem; }
 
-/* Two buttons stacked: Save changes over Delete meal */
-.z-detail-hero ~ .z-result { padding-bottom: 13rem; }
+/* Two buttons stacked: Save changes over Delete meal, so more room under the items (on the
+   desktop they sit side by side, see .z-actions-pair) */
+.z-result-layout.is-detail .z-result-items { padding-bottom: 13rem; }
+@media (min-width: 992px) {
+    .z-result-layout.is-detail .z-result-items { padding-bottom: 9rem; }
+}
 
 /* The wheel (Figma "Overlay · Time"): 5 rows of 48 px show; the middle one, in the sage band,
    is the choice. Two empty rows of padding let the first and last value reach the middle. */

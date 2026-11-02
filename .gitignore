@@ -62,6 +62,9 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 media/
+# Demo (chunk 20): the demo database, and the original photos (meals/fixtures/demo_photos/ has the small copies)
+demo.sqlite3
+demo_photos_src/
 
 # Flask stuff:
 instance/
