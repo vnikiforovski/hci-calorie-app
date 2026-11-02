@@ -47,6 +47,7 @@
     --z-card: #FFFFFF;
     --z-tint: #E2ECDC;
     --z-line: #DCE5D5;
+    --z-field-line: #7E9486;       /* a field's edge: 3.25:1 on white, 3.03:1 on the page (WCAG 1.4.11, chunk 19) */
     --z-accent: #F0A93B;           /* only for actions */
     --z-accent-pressed: #D9902A;
 
@@ -272,7 +273,7 @@ h3 { font-size: 1rem; }
     --bs-border-radius: 12px;
     min-height: 48px;
     font-size: 1rem;                /* 16 px stops phones zooming in */
-    border-color: var(--z-line);
+    border-color: var(--z-field-line);
     background-color: var(--z-card);
 }
 .form-control:focus,
@@ -318,6 +319,7 @@ h3 { font-size: 1rem; }
 .z-logo {
     display: inline-flex;
     align-items: center;
+    min-height: 44px;
     gap: 0.5rem;
     font-family: var(--z-font-heading);
     font-size: 1.625rem;
@@ -687,21 +689,36 @@ h3 { font-size: 1rem; }
     margin: 0 auto 0.5rem;
 }
 
-@media (min-width: 992px) {
-    /* Centered column until the two-column desktop Result (chunk 19) */
-    .z-hero,
-    .z-result {
-        max-width: 640px;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    .z-hero { margin-top: 0; border-radius: 24px; }
+/* Phones: the top part overlaps the hero as one sheet, the items follow without a seam */
+.z-result-top { padding-bottom: 0; }
+.z-result-items { padding-bottom: 10rem; }          /* room for the fixed action bar */
 
-    /* The band is its own card, the content sits below it */
-    .z-result { margin-top: 1rem; padding: 0 0 10rem; border-radius: 0; background: none; }
-    .z-hero-photo { width: 340px; height: 340px; }
+@media (min-width: 992px) {
+    /* Two columns (chunk 19, docs/05: "on Result, the photo on the left and the items on the
+       right"): photo, slot and totals stay in view on the left while the items scroll */
+    .z-main:has(.z-result-layout) { max-width: 1120px; }
+    .z-result-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+        gap: 2rem;
+        align-items: start;
+    }
+    .z-hero { margin: 0; border-radius: 24px; }
+    .z-result { margin: 1rem 0 0; padding: 0; border-radius: 0; background: none; }
+    .z-result-items { padding-bottom: 9rem; }
+    .z-result-items > :first-child { margin-top: 0 !important; }   /* "What Zalak saw" lines up with the hero */
+    .z-hero-photo { width: 280px; height: 280px; }
 
     .has-sidebar .z-actions { left: var(--z-sidebar-width); }
+}
+/* Sticky only when the side fits the screen above the action bar. Meal detail's side (photo
+   buttons, time, title field) is too tall for that, so it scrolls with the page. */
+@media (min-width: 992px) and (min-height: 820px) {
+    .z-result-layout:not(.is-detail) .z-result-side { position: sticky; top: 1rem; }
+}
+/* Meal detail on the desktop: Save changes | Delete meal side by side, so the bar stays low */
+@media (min-width: 992px) {
+    .z-actions-buttons.z-actions-pair { grid-template-columns: 1fr 1fr; }
 }
 
 /* ---------- Text input (chunk 4) ---------- */
@@ -725,7 +742,7 @@ h3 { font-size: 1rem; }
     flex-wrap: wrap;
     gap: 0.5rem;
 }
-button.z-chip { cursor: pointer; }
+button.z-chip { min-height: 44px; cursor: pointer; }   /* the detail chips are buttons: 44 px (NFR13) */
 button.z-chip:hover { background: var(--z-tint); }
 
 /* Room for the fixed action bar; a bar with one button (or buttons stacked) */
@@ -1294,7 +1311,7 @@ button.z-chip:hover { background: var(--z-tint); }
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 6px;
 }
 .z-photo-tips {
     display: grid;
@@ -1308,8 +1325,8 @@ button.z-chip:hover { background: var(--z-tint); }
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.875rem 0.5rem;
+    gap: 8px;
+    padding: 14px 12px;
     border: 1px solid var(--z-line);
     border-radius: 16px;
     background: var(--z-card);
@@ -1342,8 +1359,12 @@ button.z-chip:hover { background: var(--z-tint); }
     text-align: center;
 }
 .z-analyzing-body { width: 100%; margin: auto 0; }   /* vertically centered, Cancel at the bottom */
-.z-analyzing-title { font-size: 1.5rem; margin-bottom: 0.25rem; }
-.z-analyzing-cancel { min-width: 160px; }
+.z-analyzing-title { margin-bottom: 10px; font-size: 1.25rem; line-height: 1.2; }   /* Figma Heading/H2 20 px */
+.z-analyzing-sub { margin: 0; color: var(--z-muted); font-size: 0.8125rem; line-height: 1.35; }
+.z-analyzing-cancel { min-width: 160px; border-width: 1.5px; }
+/* After a failed analysis (chunk 19): the overlay fades to the page */
+.z-analyzing.is-intro { transition: opacity 0.3s ease-out; }
+.z-analyzing.is-leaving { opacity: 0; }
 
 /* Figma "Cookie (bites = progress)": the cookie (inline SVG in _analyzing.html) loses one bite
    per step. Bites are real holes cut by an SVG mask, so they work on any background.
@@ -1352,7 +1373,7 @@ button.z-chip:hover { background: var(--z-tint); }
     position: relative;
     width: 140px;
     height: 140px;
-    margin: 0 auto 2.5rem;
+    margin: 0 auto 40px;                 /* Figma: cookie 200-340, title at 380 */
 }
 .z-cookie-svg {
     display: block;
@@ -1425,18 +1446,22 @@ button.z-chip:hover { background: var(--z-tint); }
 
 /* Steps: icon + word. Waiting = empty circle, now = turning dashed caramel ring, done = ink check */
 .z-steps {
-    gap: 0.25rem;
-    margin: 1.5rem 0 1.25rem;
-    padding: 0.875rem 1.25rem;
+    gap: 14px;
+    max-width: 310px;                    /* Figma: 310 wide, 40 px in from the edges */
+    margin: 38px auto 32px;
+    padding: 18px 20px;
+    border-radius: 20px;
     list-style: none;
     text-align: left;
 }
 .z-step {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    min-height: 36px;
+    gap: 12px;
+    min-height: 24px;
     color: var(--z-muted);
+    font-size: 0.9375rem;
+    line-height: 1.4;
 }
 .z-step-icon {
     display: inline-flex;
@@ -1456,6 +1481,9 @@ button.z-chip:hover { background: var(--z-tint); }
     animation: z-turn 3s linear infinite;
 }
 .z-step.is-done { color: var(--z-ink); }
+/* Figma "Failed": a peach tile with "!" (calm: ink, not red) */
+.z-step.is-failed { color: var(--z-ink); font-weight: 600; }
+.z-step.is-failed .z-step-icon { border: 0; border-radius: 12px; background: var(--z-peach); color: var(--z-ink); }
 .z-step.is-done .z-step-icon {
     border-color: var(--z-ink);
     background: var(--z-ink);
@@ -1464,6 +1492,8 @@ button.z-chip:hover { background: var(--z-tint); }
 @keyframes z-turn { to { transform: rotate(360deg); } }
 
 .z-progress {
+    max-width: 310px;
+    margin: 0 auto;
     height: 6px;
     overflow: hidden;
     border-radius: 3px;
@@ -1487,17 +1517,32 @@ button.z-chip:hover { background: var(--z-tint); }
     .z-progress-bar { transition: none; }
 }
 
+/* After a failed analysis (chunk 19) the page opens with the cookie already bitten: no snapping
+   bites, chomp or falling crumbs. After the bite rules above, so it wins. */
+.z-analyzing.is-intro .z-bite,
+.z-analyzing.is-intro .z-crumb,
+.z-analyzing.is-intro .z-cookie-svg { animation: none; }
+.z-analyzing.is-intro .z-crumb-fade { display: none; }
+
 /* ---------- Error and No food pages (chunk 6) ---------- */
 
 /* Calm tone (docs/06): ink text, an icon, soft caramel tint, never red */
-.z-state { text-align: center; }
+.z-state { padding: 4px 8px 0; text-align: center; }   /* with .z-main's 16 px: Figma's 24 px gutter */
 .z-state-top { display: flex; justify-content: flex-end; }
-.z-state h1 { margin: 1.75rem 0 0.75rem; }
+.z-state h1 { margin: 14px 0; font-size: 1.75rem; line-height: 1.15; letter-spacing: -0.005em; }   /* Figma H1 28 px */
 .z-state-text {
     max-width: 30rem;
-    margin: 0 auto 1rem;
+    margin: 0 auto 14px;
     color: var(--z-muted);
+    font-size: 0.9375rem;
+    line-height: 1.4;
 }
+.z-state .z-seen { color: var(--z-muted); font-size: 0.8125rem; }
+.z-state .z-seen .z-tag { padding: 5px 10px; font-size: 0.8125rem; line-height: 1.35; }
+.z-tips-label { margin: 20px 0 10px; color: var(--z-muted); font-family: var(--z-font-body); font-size: 0.75rem; font-weight: 700; line-height: 1.3; letter-spacing: 0.06em; text-align: left; }
+/* Figma has no line above these buttons, and 20 px between them */
+.z-actions-plain { padding-left: 1.5rem; padding-right: 1.5rem; border-top: 0; }
+.z-actions-plain .z-actions-buttons { gap: 20px; }
 .z-icon-btn-tint { background: var(--z-tint); }
 
 .z-tag {
@@ -1682,7 +1727,7 @@ button.z-chip:hover { background: var(--z-tint); }
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    min-height: 36px;
+    min-height: 44px;                    /* NFR13 (chunk 19), was 36 */
     padding: 0.25rem 0.875rem;
     border: 0;
     border-radius: 50rem;
@@ -1791,7 +1836,7 @@ button.z-chip:hover { background: var(--z-tint); }
 }
 .z-segment {
     flex: 1;
-    min-height: 40px;
+    min-height: 44px;
     padding: 0.375rem 0.5rem;
     border: 0;
     border-radius: 50rem;
@@ -2105,6 +2150,7 @@ a.z-link-btn { display: inline-flex; align-items: center; justify-content: cente
 
 /* "Estimates, not medical advice" checkbox: ink square, the label is the tap target */
 .z-agree { display: flex; align-items: flex-start; gap: 0.75rem; margin-top: 1.25rem; padding-left: 0; }
+.z-agree .form-check-label { min-height: 44px; }   /* the whole label is the target */
 .z-agree .form-check-input {
     flex: none;
     float: none;
@@ -2139,7 +2185,8 @@ a.z-link-btn { display: inline-flex; align-items: center; justify-content: cente
 /* The fieldset carries the top space: a legend's own top margin is unreliable */
 .z-activity { min-width: 0; margin: 1.25rem 0 0; padding: 0; border: 0; }
 .z-activity legend.z-field-label { float: none; width: auto; margin: 0 0 0.5rem; padding: 0; font-size: 0.8125rem; }
-.z-segment {
+/* Scoped (chunk 19): the unscoped rule overrode the Unit sheet's tabs, which also use .z-segment */
+.z-activity .z-segment {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 4px;
@@ -2263,7 +2310,7 @@ a.z-week-day:hover { background: var(--z-tint); color: var(--z-ink); }
 .z-week-num { font-size: 0.9375rem; font-weight: 600; }
 .z-week-day.is-selected,
 .z-week-day.is-selected:hover { background: var(--z-ink); color: #fff; }
-.z-week-day.is-future { color: var(--z-muted); opacity: 0.5; }
+.z-week-day.is-future { color: var(--z-muted); }   /* no opacity: muted is the lightest text at 4.5:1 (chunk 19) */
 
 /* First-day card: peach, the cookie and a calm invitation */
 .z-first-day {
@@ -2514,7 +2561,7 @@ a.z-cal-arrow:hover { background: var(--z-tint); color: var(--z-ink); }
 a.z-cal-day:hover { background: var(--z-tint); color: var(--z-ink); }
 .z-cal-day.is-selected,
 .z-cal-day.is-selected:hover { background: var(--z-ink); color: #fff; }
-.z-cal-day.is-future { color: var(--z-muted); opacity: 0.5; }
+.z-cal-day.is-future { color: var(--z-muted); }
 .z-cal-dot {
     position: absolute;
     bottom: 6px;
@@ -2546,8 +2593,10 @@ a.z-cal-day:hover { background: var(--z-tint); color: var(--z-ink); }
     .z-home-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 2rem; margin: 0.5rem 0 1.75rem; }
     .z-home-greeting { margin-bottom: 0.25rem; font-size: 1.875rem; }
     .z-week { flex: 0 0 440px; margin: 0; }
+    .z-week-arrow { flex-basis: 44px; }   /* 44 px on the desktop; phones keep 36 so 7 days fit (chunk 19) */
     .z-home-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.75rem; align-items: start; }
     .z-home-meals { margin-top: 0; }
+    .z-home-week { margin-top: 1rem; }   /* Figma "Desktop · Home": the week chart under the macro cards */
 }
 
 /* ---------- Meal detail (chunk 15, Figma "Meal detail", "Overlay · Time") ---------- */
@@ -2944,7 +2993,6 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
     text-align: center;
     white-space: nowrap;
 }
-.z-chart-day.is-future .z-chart-axis { opacity: 0.5; }
 
 /* A month: thin bars close together, a day number only every week */
 .z-chart.is-month .z-chart-days { gap: 2px; }

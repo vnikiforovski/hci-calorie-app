@@ -67,5 +67,4 @@ urlpatterns = [
     path('meal/<int:meal_id>/save/', views.save_meal, name='save_meal'),
     path('meal/<int:meal_id>/delete/', views.delete_meal, name='delete_meal'),
     path('meal/<int:meal_id>/undo-delete/', views.undo_delete_meal, name='undo_delete_meal'),
-    path('style/', views.style, name='style'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

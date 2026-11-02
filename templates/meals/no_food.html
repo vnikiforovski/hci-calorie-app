@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}No food found{% endblock %}
 
@@ -27,7 +28,7 @@
                 </p>
             {% endif %}
 
-            <h2 class="z-small fw-semibold text-start mt-4 mb-2">For the next photo</h2>
+            <h2 class="z-tips-label">For the next photo</h2>
             <ul class="z-photo-tips">
                 <li><span class="z-tip-icon z-tint-peach" aria-hidden="true"><i class="bi bi-bounding-box-circles"></i></span>Whole plate in the corners</li>
                 <li><span class="z-tip-icon z-tint-butter" aria-hidden="true"><i class="bi bi-brightness-high"></i></span>Good light or flash</li>
@@ -36,7 +37,7 @@
         {% endif %}
     </div>
 
-    <div class="z-actions">
+    <div class="z-actions z-actions-plain">
         <div class="z-actions-buttons z-actions-one">
             {% if meal.photo %}
                 <a class="btn btn-primary btn-lg" href="{% url 'edit_photo' meal.id %}">Take another photo</a>
@@ -46,4 +47,11 @@
             {% endif %}
         </div>
     </div>
+
+    {# Only for the failed-step moment straight after the analysis (views.failed_step) #}
+    {% include 'meals/_analyzing.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
 {% endblock %}

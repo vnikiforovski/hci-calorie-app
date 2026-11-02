@@ -1,6 +1,10 @@
 {# Analyzing overlay (docs/05, Figma "Analyzing 1-3 of 3"). Hidden until analyzing.js shows it  #}
 {# the moment a form[data-analyzing] is sent. "steps" comes from the view (TEXT_STEPS).          #}
-<div class="z-analyzing" id="analyzing" role="dialog" aria-modal="true" aria-labelledby="analyzingTitle" hidden>
+{# "failed" (chunk 19, Figma "Analyzing · Connection lost / No food"): straight after a failed     #}
+{# analysis the page opens with this overlay showing the failed step, then analyzing.js fades it   #}
+{# away. It only repeats what the page's h1 says, so screen readers skip it (aria-hidden).        #}
+<div class="z-analyzing{% if failed %} is-intro{% endif %}" id="analyzing"
+     {% if failed %}aria-hidden="true" inert data-stage="{{ failed.index|add:1 }}" data-failed{% else %}role="dialog" aria-modal="true" aria-labelledby="analyzingTitle"{% endif %} hidden>
     <div class="z-analyzing-inner">
         <div class="z-analyzing-body">
             {# Figma "Cookie (bites = progress)": every step takes one more bite and drops crumbs.  #}
@@ -63,24 +67,40 @@
                 <span class="z-crumb z-crumb-3 z-crumb-fade" style="left: 150px; top: 105px; --fx: -11px; --fy: -47px;"></span>
             </div>
             <h2 class="z-analyzing-title" id="analyzingTitle">Zalak is taking a bite…</h2>
-            <p class="z-small text-body-secondary mb-0">This takes a few seconds</p>
+            <p class="z-analyzing-sub">This takes a few seconds</p>
 
             {# Each step: an icon (dashed = now, check = done, empty = waiting) plus its word #}
             <ol class="card z-steps">
                 {% for step in steps %}
-                    <li class="z-step">
-                        <span class="z-step-icon" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
-                        {{ step }}
-                    </li>
+                    {% if failed and forloop.counter0 == failed.index %}
+                        <li class="z-step is-failed" data-word="{{ step }}">
+                            <span class="z-step-icon" aria-hidden="true"><i class="bi bi-exclamation-lg"></i></span>
+                            {{ failed.words }}
+                        </li>
+                    {% else %}
+                        <li class="z-step{% if failed and forloop.counter0 < failed.index %} is-done{% endif %}" data-word="{{ step }}">
+                            <span class="z-step-icon" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                            {{ step }}
+                        </li>
+                    {% endif %}
                 {% endfor %}
             </ol>
             <p class="visually-hidden" id="analyzingNow" aria-live="polite"></p>
 
             <div class="z-progress" aria-hidden="true">
-                <div class="z-progress-bar" id="analyzingBar"></div>
+                <div class="z-progress-bar" id="analyzingBar"{% if failed %} style="width: {{ failed.bar }}%"{% endif %}></div>
             </div>
         </div>
 
         <button type="button" class="btn btn-outline-secondary btn-lg z-analyzing-cancel" id="analyzingCancel">Cancel</button>
     </div>
 </div>
+{% if failed %}
+    {# Shown before the page is first drawn, so the page doesn't flash first. Not with reduced motion. #}
+    <script>
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            document.getElementById('analyzing').hidden = false;
+            document.body.classList.add('z-no-scroll');
+        }
+    </script>
+{% endif %}

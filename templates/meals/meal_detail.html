@@ -10,6 +10,9 @@
 {% block bottom_nav %}{% endblock %}
 
 {% block content %}
+    {# Phones: one column. Desktop (chunk 19): photo, slot, time and totals left; the items right (as Result). #}
+    <div class="z-result-layout is-detail">
+    <div class="z-result-side">
     {# data-state says what the hero shows; meal_detail.js changes it when a photo is chosen or removed #}
     <section class="z-hero z-detail-hero" id="mealHero" data-state="{% if meal.photo %}photo{% else %}none{% endif %}">
         <div class="z-hero-top">
@@ -48,7 +51,7 @@
         {% endfor %}
     </section>
 
-    <div class="z-result">
+    <div class="z-result z-result-top">
         <div class="z-detail-pills">
             {% include 'meals/_slot_dropdown.html' with form_id='mealForm' %}
             <button type="button" class="z-slot-pill" data-bs-toggle="offcanvas" data-bs-target="#timeSheet" aria-controls="timeSheet">
@@ -68,11 +71,16 @@
         {% endfor %}
 
         {% include 'meals/_meal_summary.html' %}
+    </div>
+    </div>{# .z-result-side #}
+
+    <div class="z-result-items">
         {% include 'meals/_meal_items.html' %}
     </div>
+    </div>{# .z-result-layout #}
 
     <div class="z-actions">
-        <div class="z-actions-buttons z-actions-one">
+        <div class="z-actions-buttons z-actions-one z-actions-pair">
             <form method="post" action="{% url 'save_meal' meal.id %}" enctype="multipart/form-data" id="mealForm" novalidate>
                 {% csrf_token %}
                 {# Written by the time sheet's Done; untouched, the saved time stays exactly as it was #}

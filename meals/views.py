@@ -64,10 +64,17 @@ def home(request):
             'share': (slot['kcal_min'] + slot['kcal_max']) // 2}
            for slot in slots if slot['kcal_max']]
 
+    # Desktop only (Figma "Desktop · Home"): the Statistics week chart for the week on screen
+    monday, sunday = period_bounds('week', day)
+    week_meals = list(logged.filter(eaten_at__date__range=(monday, sunday))
+                      .prefetch_related('items').order_by('eaten_at'))
+
     month, calendar_open = parse_month(request.GET.get('month'), day)
     context = {
         'day': day,
         'is_today': day == today,
+        'week_chart': period_stats(week_meals, monday, sunday, 'week'),
+        'week_empty': empty_period_text('week', monday),
         'eaten_label': eaten_label(day, today),
         'greeting': greeting(),
         'week': week_strip(day),
@@ -582,13 +589,14 @@ def analyze_meal(meal):
             data = analyze_text(meal.text)
     except AnalysisError as error:
         # The draft and its input stay saved, so nothing is lost (FR29)
-        return redirect(reverse('analysis_error', args=[meal.id]) + f'?why={error.kind}')
+        # fresh=1: the page opens with the overlay showing the failed step first (chunk 19)
+        return redirect(reverse('analysis_error', args=[meal.id]) + f'?why={error.kind}&fresh=1')
 
     if data['status'] == 'no_food':
         meal.ai_response = data
         meal.save()
         meal.items.all().delete()
-        return redirect('no_food', meal_id=meal.id)
+        return redirect(reverse('no_food', args=[meal.id]) + '?fresh=1')
 
     apply_analysis(meal, data)
     return redirect('result', meal_id=meal.id)
@@ -734,8 +742,24 @@ def analysis_error(request, meal_id):
         'meal': meal,
         'why': why,
         'steps': steps_for(meal),
+        'failed': failed_step(request, 0 if why == 'connection' else 1,
+                              'Connection lost' if why == 'connection' else 'Something went wrong'),
     }
     return render(request, 'meals/error.html', context)
+
+
+# How far the progress bar had got, per failed step (Figma "Analyzing · Connection lost": 28 %,
+# "Analyzing · No food": 60 %)
+FAILED_BAR = [28, 60, 90]
+
+
+def failed_step(request, index, words):
+    """Figma "Analyzing · Connection lost / No food": straight after a failed analysis (?fresh=1)
+    the page opens with the overlay still up, the steps before done and this one marked "!" with
+    its words; analyzing.js then fades it to the page. None on a later visit or a reload."""
+    if request.GET.get('fresh') != '1':
+        return None
+    return {'index': index, 'words': words, 'bar': FAILED_BAR[index]}
 
 
 def portion_data(item):
@@ -986,6 +1010,8 @@ def no_food(request, meal_id):
         'meal': meal,
         'reason': answer.get('no_food_reason', ''),
         'seen': answer.get('seen', []),
+        'steps': steps_for(meal),
+        'failed': failed_step(request, 1, 'No food found in the photo' if meal.photo else 'No food found in what you wrote'),
     }
     return render(request, 'meals/no_food.html', context)
 
@@ -1131,6 +1157,7 @@ def statistics(request):
         'prev_url': stats_url(period, period_bounds(period, previous)[0]),
         'next_url': stats_url(period, last + timedelta(days=1)) if last < today else None,
         'stats': period_stats(meals, first, last, period),
+        'empty_text': empty_period_text(period, first),
     }
     return render(request, 'meals/statistics.html', context)
 
@@ -1164,6 +1191,12 @@ def period_words(period, first):
     if first == period_bounds(period, this_first - timedelta(days=1))[0]:
         return f'last {period}'
     return f'that {period}'
+
+
+def empty_period_text(period, first):
+    """ "Nothing logged this week yet." or "Nothing logged last week." for an empty chart."""
+    words = period_words(period, first)
+    return f'Nothing logged {words}{" yet" if words.startswith("this") else ""}.'
 
 
 def period_label(period, first, last):
@@ -1417,12 +1450,3 @@ def help_about(request):
 def add_meal(request):
     # Until the Add meal sheet (chunk 14), "+" goes straight to Text and voice
     return redirect('text_input')
-
-
-# Temporary style page (remove in chunk 19).
-
-def style(request):
-    swatches = ['bg', 'card', 'tint', 'line', 'accent', 'ink', 'muted',
-                'water', 'protein', 'carbs', 'fat',
-                'peach', 'butter', 'lilac', 'sky', 'danger', 'danger-bg']
-    return render(request, 'style.html', {'swatches': swatches})

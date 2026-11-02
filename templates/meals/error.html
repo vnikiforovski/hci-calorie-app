@@ -26,13 +26,15 @@
             <p class="z-state-text">Something went wrong on Zalak's side. Your meal is saved as a draft, nothing is lost.</p>
         {% endif %}
 
-        <p class="z-small">
+        {# Figma "Analyzing · Offline": what is waiting, the slot and time and, for a photo, its note #}
+        <p class="z-seen z-small">
             <span class="text-body-secondary">Waiting:</span>
             <span class="z-tag">{{ meal.get_slot_display }} · {{ meal.created_at|time:'H:i' }}</span>
+            {% if meal.photo and meal.text %}<span class="z-tag">note: {{ meal.text|truncatechars:32 }}</span>{% endif %}
         </p>
     </div>
 
-    <div class="z-actions">
+    <div class="z-actions z-actions-plain">
         <div class="z-actions-buttons z-actions-one">
             {# A POST, because trying again makes a new AI call; the overlay shows while it runs #}
             <form method="post" action="{% url 'retry' meal.id %}" data-analyzing>

@@ -24,9 +24,11 @@
                     {% for d in week.days %}
                         <li>
                             {% if d.is_future %}
-                                <span class="z-week-day is-future" aria-label="{{ d.date|date:'l j F' }}, not yet">
+                                {# A plain span can't carry aria-label (axe, chunk 19): the words are hidden text #}
+                                <span class="z-week-day is-future">
                                     <span class="z-week-name" aria-hidden="true">{{ d.short }}</span>
                                     <span class="z-week-num" aria-hidden="true">{{ d.date.day }}</span>
+                                    <span class="visually-hidden">{{ d.date|date:'l j F' }}, not yet</span>
                                 </span>
                             {% else %}
                                 <a class="z-week-day{% if d.is_selected %} is-selected{% endif %}" href="{{ d.url }}"
@@ -98,6 +100,11 @@
                         </li>
                     {% endfor %}
                 </ul>
+
+                {# Desktop only (Figma "Desktop · Home"): the Statistics chart for the week on screen #}
+                <div class="z-desktop-only z-home-week">
+                    {% include 'meals/_kcal_chart.html' with stats=week_chart empty_text=week_empty %}
+                </div>
             </div>
 
             <section class="z-home-meals" aria-labelledby="mealsTitle">

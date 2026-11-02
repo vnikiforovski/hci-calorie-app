@@ -67,7 +67,7 @@
 
     // While the overlay is open: Escape cancels, and Tab stays on Cancel (the only button)
     document.addEventListener('keydown', function (event) {
-        if (overlay.hidden) {
+        if (overlay.hidden || overlay.classList.contains('is-intro')) {
             return;
         }
         if (event.key === 'Escape') {
@@ -77,6 +77,57 @@
             cancelButton.focus();
         }
     });
+
+    // Figma "Analyzing · Connection lost / No food" (chunk 19): straight after a failed analysis the
+    // page opens with the overlay showing the failed step (_analyzing.html shows it before the first
+    // paint). After a moment it fades to the page; a tap or a key skips the wait. It is aria-hidden and
+    // inert meanwhile: the page's h1 says the same. Afterwards the overlay is the normal one again,
+    // ready for Try again.
+    var INTRO_MS = 1200;
+    var introTimer = null;
+
+    // Back to a clean overlay: dialog semantics, a whole cookie, every step waiting
+    function resetOverlay() {
+        overlay.hidden = true;
+        overlay.classList.remove('is-intro', 'is-leaving');
+        document.body.classList.remove('z-no-scroll');
+        overlay.removeAttribute('data-failed');
+        overlay.removeAttribute('aria-hidden');
+        overlay.removeAttribute('inert');
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'analyzingTitle');
+        delete overlay.dataset.stage;
+        steps.forEach(function (step) {
+            step.classList.remove('is-done', 'is-now', 'is-failed');
+            step.querySelector('.z-step-icon i').className = 'bi bi-check-lg';
+            step.lastChild.textContent = ' ' + step.dataset.word + ' ';   // the failed step had other words
+        });
+        bar.style.width = '0%';
+    }
+
+    function endIntro() {
+        if (!overlay.classList.contains('is-intro') || overlay.classList.contains('is-leaving')) {
+            return;
+        }
+        clearTimeout(introTimer);
+        overlay.classList.add('is-leaving');   // fades out (zalak.css)
+        setTimeout(resetOverlay, 300);
+    }
+
+    if (overlay.hasAttribute('data-failed')) {
+        // Drop ?fresh=1, so a reload shows the page straight away
+        var url = new URL(window.location.href);
+        url.searchParams.delete('fresh');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+        if (overlay.hidden) {
+            resetOverlay();   // reduced motion: the intro was never shown
+        } else {
+            introTimer = setTimeout(endIntro, INTRO_MS);
+            overlay.addEventListener('click', endIntro);
+            document.addEventListener('keydown', endIntro, {once: true});
+        }
+    }
 
     // Back from Result can restore this page from the browser cache: don't leave the overlay open
     window.addEventListener('pageshow', function (event) {

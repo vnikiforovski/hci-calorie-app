@@ -8,6 +8,10 @@
 {% block bottom_nav %}{% endblock %}
 
 {% block content %}
+    {# Phones: one column, as before. Desktop (chunk 19, docs/05): the photo, slot and totals on the  #}
+    {# left, staying in view, and the items on the right. No Figma frame for a desktop Result.         #}
+    <div class="z-result-layout">
+    <div class="z-result-side">
     <section class="z-hero">
         <div class="z-hero-top">
             <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Back to Home">
@@ -28,13 +32,18 @@
         {% endif %}
     </section>
 
-    <div class="z-result">
+    <div class="z-result z-result-top">
         {# The hidden slot input belongs to the Log form below #}
         {% include 'meals/_slot_dropdown.html' with form_id='logForm' %}
 
         {% include 'meals/_meal_summary.html' %}
+    </div>
+    </div>{# .z-result-side #}
+
+    <div class="z-result-items">
         {% include 'meals/_meal_items.html' %}
     </div>
+    </div>{# .z-result-layout #}
 
     <div class="z-actions">
         {# Only drafts come here: a logged meal opens Meal detail (views.result) #}

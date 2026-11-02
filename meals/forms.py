@@ -84,6 +84,7 @@ class PhotoMealForm(forms.ModelForm):
                 'accept': 'image/*',
                 'class': 'visually-hidden',
                 'tabindex': '-1',
+                'aria-label': 'Choose a photo',   # the buttons open it; a name for screen readers anyway
             }),
             'text': forms.Textarea(attrs={
                 'class': 'form-control z-meal-text',
@@ -130,6 +131,7 @@ class MealDetailForm(forms.ModelForm):
                                             'placeholder': 'e.g. Sunday lunch', 'form': 'mealForm'}),
             # Visually hidden: the Add / Replace photo buttons open it (meal_detail.js)
             'photo': forms.FileInput(attrs={'accept': 'image/*', 'class': 'visually-hidden', 'tabindex': '-1',
+                                            'aria-label': 'Choose a photo',
                                             'form': 'mealForm'}),
         }
         labels = {'title': 'Meal name'}

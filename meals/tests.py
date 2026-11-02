@@ -135,7 +135,7 @@ class TextInputViewTests(TestCase):
     def test_failure_goes_to_error_page_and_keeps_the_text(self, ask_model):
         response = self.client.post(self.url, {'text': 'tavče gravče', 'slot': 'lunch'}, follow=True)
         meal = Meal.objects.get()
-        self.assertRedirects(response, reverse('analysis_error', args=[meal.id]) + '?why=failed')
+        self.assertRedirects(response, reverse('analysis_error', args=[meal.id]) + '?why=failed&fresh=1')
         self.assertContains(response, "Couldn't analyze this")
         self.assertContains(response, 'tavče gravče')                # the input is shown (FR29)
         self.assertEqual(meal.text, 'tavče gravče')                   # and kept in the draft
@@ -150,7 +150,7 @@ class TextInputViewTests(TestCase):
         ask_model.return_value = NO_FOOD
         response = self.client.post(self.url, {'text': 'my shoe', 'slot': 'lunch'}, follow=True)
         meal = Meal.objects.get()
-        self.assertRedirects(response, reverse('no_food', args=[meal.id]))
+        self.assertRedirects(response, reverse('no_food', args=[meal.id]) + '?fresh=1')
         self.assertContains(response, 'That looks like a shoe.')
         self.assertEqual(meal.items.count(), 0)
 
@@ -231,7 +231,7 @@ class RecoveryTests(TestCase):
     def test_try_again_can_fail_again(self, ask_model):
         meal = self.make_failed_draft()
         response = self.client.post(reverse('retry', args=[meal.id]))
-        self.assertRedirects(response, reverse('analysis_error', args=[meal.id]) + '?why=failed')
+        self.assertRedirects(response, reverse('analysis_error', args=[meal.id]) + '?why=failed&fresh=1')
 
     @patch('meals.services.ai._ask_model')
     def test_try_again_needs_a_post(self, ask_model):
@@ -2421,3 +2421,63 @@ class ProfileTests(TestCase):
         response = self.client.post(reverse('signup_details'), {'weight_kg': '78.4'})
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Profile.objects.get(user=self.user).weight_kg, Decimal('78.4'))
+
+
+class PassTests(TestCase):
+    """Chunk 19: the failed step after an analysis, the desktop layouts, the style page gone."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+
+    def test_a_failed_analysis_opens_with_the_failed_step(self):
+        meal = make_draft(user=self.user, slot='lunch')
+        page = self.client.get(reverse('analysis_error', args=[meal.id]), {'why': 'connection', 'fresh': '1'})
+        self.assertEqual(page.context['failed'], {'index': 0, 'words': 'Connection lost', 'bar': 28})
+        self.assertContains(page, 'data-failed')
+        self.assertContains(page, 'z-step is-failed')
+        self.assertContains(page, 'style="width: 28%"')
+        # The intro repeats the page's h1, so screen readers skip it
+        self.assertContains(page, 'aria-hidden="true" inert')
+
+        # A later visit (or a reload, which drops fresh) goes straight to the page
+        later = self.client.get(reverse('analysis_error', args=[meal.id]), {'why': 'connection'})
+        self.assertIsNone(later.context['failed'])
+        self.assertNotContains(later, 'data-failed')
+        self.assertContains(later, 'role="dialog"')   # the overlay is still there for Try again
+
+    def test_no_food_marks_the_second_step(self):
+        meal = make_draft(user=self.user, slot='lunch')
+        Meal.objects.filter(id=meal.id).update(ai_response={'status': 'no_food', 'no_food_reason': '', 'seen': []})
+        meal.items.all().delete()
+        page = self.client.get(reverse('no_food', args=[meal.id]), {'fresh': '1'})
+        self.assertEqual(page.context['failed']['index'], 1)
+        self.assertContains(page, 'No food found in what you wrote')
+        self.assertContains(page, 'z-step is-done')   # the first step was done
+
+    def test_the_error_page_shows_the_photo_note(self):
+        use_temp_media(self)
+        meal = make_draft(user=self.user, slot='lunch')
+        Meal.objects.filter(id=meal.id).update(input_method='photo', text='cooked in butter')
+        meal.refresh_from_db()
+        meal.photo.save('plate.jpg', SimpleUploadedFile('plate.jpg', b'x'))
+        page = self.client.get(reverse('analysis_error', args=[meal.id]))
+        self.assertContains(page, 'note: cooked in butter')
+
+    def test_home_has_the_week_chart_for_the_desktop(self):
+        meal = make_draft(user=self.user, slot='lunch', status='logged')
+        page = self.client.get(reverse('home'))
+        chart = page.context['week_chart']
+        self.assertEqual(chart['days_total'], 7)
+        self.assertEqual((chart['kcal_min'], chart['kcal_max']), (meal.kcal_min, meal.kcal_max))
+        self.assertContains(page, 'z-home-week')
+        self.assertContains(page, 'kcal a day')
+
+    def test_result_and_meal_detail_have_the_two_part_layout(self):
+        meal = make_draft(user=self.user, slot='lunch')
+        self.assertContains(self.client.get(reverse('result', args=[meal.id])), 'z-result-layout')
+        Meal.objects.filter(id=meal.id).update(status='logged')
+        self.assertContains(self.client.get(reverse('result', args=[meal.id])), 'z-result-layout')
+
+    def test_the_style_page_is_gone(self):
+        self.assertEqual(self.client.get('/style/').status_code, 404)

@@ -59,48 +59,7 @@
         </ul>
 
         <div class="z-stats-cols">
-            {# Calories per day: one bar per day, solid to the lowest estimate, lighter up to the highest #}
-            <section class="z-stats-card" aria-labelledby="averageTitle">
-                <h2 class="z-stats-kicker" id="averageTitle">On average</h2>
-                {% if stats.days_logged %}
-                    <p class="z-stats-average">
-                        <span class="z-num">{{ stats.kcal_min|intcomma }}–{{ stats.kcal_max|intcomma }}</span>
-                        <span class="z-stats-unit">kcal a day</span>
-                    </p>
-                {% else %}
-                    <p class="z-stats-empty">Nothing logged {{ words }}{% if not next_url %} yet{% endif %}.</p>
-                {% endif %}
-
-                <div class="z-chart{% if period == 'month' %} is-month{% endif %}">
-                    <div class="z-chart-grid" aria-hidden="true">
-                        {% for line in stats.grid %}
-                            <span class="z-chart-line" style="bottom: {{ line.pct }}%">
-                                <span class="z-chart-line-label">{{ line.value|intcomma }}</span>
-                            </span>
-                        {% endfor %}
-                    </div>
-                    <ol class="z-chart-days" aria-label="Calories per day">
-                        {% for d in stats.days %}
-                            <li class="z-chart-day{% if d.is_future %} is-future{% endif %}">
-                                <span class="z-chart-plot" aria-hidden="true">
-                                    {% if d.has_meals %}
-                                        <span class="z-chart-bar" style="height: {{ d.bar_pct }}%">
-                                            <span class="z-chart-range" style="height: {{ d.range_pct }}%"></span>
-                                        </span>
-                                    {% endif %}
-                                </span>
-                                <span class="z-chart-axis" aria-hidden="true">{{ d.axis }}</span>
-                                <span class="visually-hidden">{{ d.spoken }}</span>
-                            </li>
-                        {% endfor %}
-                    </ol>
-                </div>
-
-                <ul class="z-chart-legend" aria-hidden="true">
-                    <li><span class="z-chart-key is-low"></span>Lowest estimate</li>
-                    <li><span class="z-chart-key is-range"></span>Possible range</li>
-                </ul>
-            </section>
+            {% if period == 'month' %}{% include 'meals/_kcal_chart.html' with is_month=True %}{% else %}{% include 'meals/_kcal_chart.html' %}{% endif %}
 
             {% if stats.days_logged %}
                 <div class="z-stats-side">
