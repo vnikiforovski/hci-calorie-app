@@ -1,12 +1,14 @@
 from decimal import Decimal
 
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import MealItemForm, PhotoMealForm, TextMealForm
+from .forms import MealItemForm, PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm
 from .models import Meal, MealItem, Profile, slot_for_time
 from .services.ai import AnalysisError, analyze_photo, analyze_text, estimate_item
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
@@ -14,13 +16,66 @@ from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURE
 
 
 def home(request):
-    """Temporary Home (chunk 9): a plain list of the logged meals. Chunk 14 builds the real one."""
-    meals = []
-    if request.user.is_authenticated:
-        meals = (Meal.objects
-                 .filter(user=request.user, status='logged', deleted_at__isnull=True)
-                 .prefetch_related('items')[:20])
+    """The landing page. A guest gets Welcome (chunk 12); a signed-in user gets Home.
+    Home is still the temporary list from chunk 9; chunk 14 builds the real one."""
+    if not request.user.is_authenticated:
+        return render(request, 'meals/welcome.html')
+    meals = (Meal.objects
+             .filter(user=request.user, status='logged', deleted_at__isnull=True)
+             .prefetch_related('items')[:20])
     return render(request, 'meals/home.html', {'meals': meals})
+
+
+# ---------- Accounts (chunk 12). Sign in and Sign out are Django's LoginView / LogoutView (urls.py). ----------
+
+def signup(request):
+    """Create account, step 1. The account is made here and signed in, so step 2 only
+    fills in the Profile (and the password never waits in the session)."""
+    if request.user.is_authenticated:
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = SignUpForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.username = user.email             # Zalak signs in with the e-mail
+            user.set_password(form.cleaned_data['password'])   # stored hashed (NFR18)
+            user.save()                            # the post_save signal creates the Profile
+            login(request, user)
+            return redirect('signup_details')
+    else:
+        form = SignUpForm()
+    context = {
+        'form': form,
+        # The e-mail already has an account: offer "Sign in instead" under the message
+        'email_taken': form.has_error('email', 'taken'),
+    }
+    return render(request, 'meals/signup_1.html', context)
+
+
+@login_required
+def signup_details(request):
+    """Create account, step 2 ("A bit about you"): height, weight and activity, all optional.
+    Finish saves them; "Skip for now" saves nothing. Both end on Home with a welcome toast."""
+    profile, created = Profile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        if 'skip' in request.POST:
+            return welcome_home(request)
+        form = ProfileDetailsForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            return welcome_home(request)
+    else:
+        form = ProfileDetailsForm(instance=profile)
+    return render(request, 'meals/signup_2.html', {'form': form})
+
+
+def welcome_home(request):
+    """The end of sign-up: Home, with a one-time "Welcome to Zalak, Ana" toast."""
+    name = request.user.first_name
+    request.session['toast'] = {'text': f'Welcome to Zalak, {name}' if name else 'Welcome to Zalak'}
+    return redirect('home')
 
 
 def get_own_meal(request, meal_id):
@@ -541,17 +596,22 @@ def no_food(request, meal_id):
 
 
 # Placeholders until their chunk is built, so the navigation never breaks.
+# They are personal pages, so a guest is sent to Sign in first (LOGIN_URL in settings).
 
+@login_required
 def diary(request):
     return render(request, 'coming_soon.html', {'title': 'Diary'})
 
 
+@login_required
 def statistics(request):
     return render(request, 'coming_soon.html', {'title': 'Statistics'})
 
 
+@login_required
 def profile(request):
-    return render(request, 'coming_soon.html', {'title': 'Profile'})
+    # Sign out lives here until chunk 18 builds the real Profile page
+    return render(request, 'coming_soon.html', {'title': 'Profile', 'sign_out': True})
 
 
 def add_meal(request):

@@ -200,11 +200,14 @@ class MealItem(models.Model):
 
 - [ ] **12. Welcome, sign up (2 steps), sign in/out** (30 Oct)
   - Work: e-mail as the username; Profile via a `post_save` signal; LoginView/LogoutView; `@login_required`.
-  - Files: `forms.py`, `views.py`, `signals.py`, `urls.py`, `templates/registration/*`, `welcome.html`, `signup_1.html`, `signup_2.html`
+  - Decided 2 Nov: the account is made and signed in at step 1 (the password never waits in the session), so step 2 has no back arrow and "Skip for now" is the way out. No "Forgot password?" (no e-mail sending). Name is required. Sign out sits on the Profile placeholder until chunk 18. `/` shows Welcome to guests and Home to users; Diary, Statistics and Profile send a guest to Sign in.
+  - Added beyond Figma: show/hide password, a live "At least 8 characters" tick, calm password messages that say what to do, errors that clear once the field is changed, a wrong password keeps the e-mail and focuses the password, "Sign in instead" under a taken e-mail, a short hint under each activity level, a "Welcome to Zalak, Ana" toast on Home, and a centered card at 1440.
+  - Files: `forms.py`, `views.py`, `signals.py`, `urls.py`, `settings.py`, `templates/base.html`, `templates/registration/login.html`, `welcome.html`, `signup_1.html`, `signup_2.html`, `_field.html`, `home.html`, `coming_soon.html`, `static/js/auth.js`, `zalak.css`
   - Pattern: ModelForm, signals
   - Test: create an account, Skip step 2, sign out, sign in.
 - [ ] **13. Guest flow (T7) + guest draft cleanup** (30 Oct)
   - Work: a guest's draft is tied to the session; Log → the "Keep this meal?" sheet → sign-up → the draft is assigned and logged; guest drafts older than 24 h are deleted on each new draft.
+  - Note from chunk 12: Django's `login()` gives the session a new key, so read the guest's `session_key` (or keep the meal id in the session) *before* signing in, or the draft can't be found afterwards. Same for Sign in from the sheet.
   - Files: `views.py`, `templates/meals/result.html`, `templates/meals/_guest_sheet.html`
   - Pattern: `commit=False`, session
   - Test: in a private window, check → Log → create an account → the meal is on Home and the counter is 1; an old guest draft (backdated in admin) disappears.

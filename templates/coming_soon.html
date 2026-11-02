@@ -11,4 +11,15 @@
         </div>
     </div>
     <a class="btn btn-outline-secondary mt-4" href="{% url 'home' %}">Back to Home</a>
+
+    {# Profile only, until chunk 18 builds the real page. Red: sign out is one of the two red actions. #}
+    {% if sign_out %}
+        <p class="z-small text-body-secondary mt-5 mb-2">Signed in as {{ user.email|default:user.username }}</p>
+        <form method="post" action="{% url 'sign_out' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger btn-lg">
+                <i class="bi bi-box-arrow-right" aria-hidden="true"></i> Sign out
+            </button>
+        </form>
+    {% endif %}
 {% endblock %}

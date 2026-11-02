@@ -1,4 +1,5 @@
-from django.db.models.signals import pre_save, post_delete
+from django.contrib.auth.models import User
+from django.db.models.signals import pre_save, post_save, post_delete
 from django.dispatch import receiver
 
 from .models import Meal, Profile, slot_for_time
@@ -27,7 +28,8 @@ def count_logged_meals(sender, instance, raw=False, **kwargs):
     if old_status == instance.status:
         return
 
-    # get_or_create: the Profile signal for new users only arrives in chunk 12
+    # get_or_create, not get: accounts made before chunk 12 (e.g. the first superuser)
+    # never went through create_profile below
     profile, created = Profile.objects.get_or_create(user_id=instance.user_id)
     if old_status == 'draft' and instance.status == 'logged':
         profile.meals_logged += 1
@@ -43,3 +45,11 @@ def remove_photo_file(sender, instance, **kwargs):
     # so the photo file in media/ can go too. Just checking leaves nothing behind.
     if instance.photo:
         instance.photo.delete(save=False)
+
+
+@receiver(post_save, sender=User)
+def create_profile(sender, instance, created, raw=False, **kwargs):
+    # Every new account gets its Profile, however it was made: sign-up, the admin
+    # or createsuperuser. Only on create, so a later save (e.g. last_login) does nothing.
+    if created and not raw:
+        Profile.objects.create(user=instance)

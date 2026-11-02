@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Welcome{% endblock %}
+
+{# Figma "Welcome": the landing page for guests. Its own logo, so no guest header. #}
+{# z-wide lets the page use two columns at 1440.                                   #}
+{% block body_class %}z-wide{% endblock %}
+{% block guest_header %}{% endblock %}
+
+{% block content %}
+    <div class="z-welcome">
+        {# The cookie on a peach-to-butter circle, with a few floating dots #}
+        <div class="z-welcome-art" aria-hidden="true">
+            <span class="z-welcome-dot z-welcome-dot-sky"></span>
+            <span class="z-welcome-dot z-welcome-dot-lilac"></span>
+            <span class="z-welcome-dot z-welcome-dot-butter"></span>
+            <span class="z-welcome-dot z-welcome-dot-peach"></span>
+            <div class="z-welcome-circle">
+                <img class="z-welcome-cookie" src="{% static 'img/logo.svg' %}" alt="">
+            </div>
+        </div>
+
+        <div class="z-welcome-text">
+            <div class="z-logo">
+                <img src="{% static 'img/logo.svg' %}" alt="">zalak
+            </div>
+            <h1 class="z-welcome-title">Know what is on your plate, one bite at a time.</h1>
+            <p class="text-body-secondary mb-0">Snap or describe a meal. Zalak gives an honest estimate, never a judgement.</p>
+
+            <div class="z-welcome-actions">
+                <a class="btn btn-primary btn-lg" href="{% url 'signup' %}">Create account</a>
+                <a class="btn btn-outline-secondary btn-lg" href="{% url 'sign_in' %}">Sign in</a>
+                {# The guest checker (FR2, D14): nothing is saved until Log #}
+                <a class="z-link-btn z-small" href="{% url 'add_meal' %}">Try it without an account</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}

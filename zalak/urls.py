@@ -15,15 +15,26 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
+from django.contrib.auth import views as auth_views
 from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
 
 from meals import views
+from meals.forms import EmailAuthenticationForm
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.home, name='home'),
+    # Accounts (chunk 12). Sign in / Sign out are Django's built-in views, given our template and form.
+    path('sign-in/', auth_views.LoginView.as_view(
+        template_name='registration/login.html',
+        authentication_form=EmailAuthenticationForm,
+        redirect_authenticated_user=True,      # a signed-in user goes straight to Home
+    ), name='sign_in'),
+    path('sign-out/', auth_views.LogoutView.as_view(), name='sign_out'),   # POST only
+    path('sign-up/', views.signup, name='signup'),
+    path('sign-up/details/', views.signup_details, name='signup_details'),
     path('diary/', views.diary, name='diary'),
     path('statistics/', views.statistics, name='statistics'),
     path('profile/', views.profile, name='profile'),

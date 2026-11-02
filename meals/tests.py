@@ -559,7 +559,9 @@ class SignalTests(TestCase):
         meal = make_draft(session_key='guest-session')
         meal.status = 'logged'
         meal.save()
-        self.assertFalse(Profile.objects.exists())
+        # Ana's Profile exists (made by the User signal) but nobody's counter moved
+        self.assertEqual(Profile.objects.count(), 1)
+        self.assertEqual(self.counter(), 0)
 
     def test_deleting_a_meal_removes_its_photo(self):
         meal = make_draft(self.user, photo=jpeg())
@@ -1316,3 +1318,176 @@ class AnswerQuestionTests(AnalyzedMealMixin, TestCase):
 
     def test_needs_a_post(self):
         self.assertEqual(self.client.get(self.url).status_code, 405)
+
+
+class AccountTests(TestCase):
+    """Chunk 12: Welcome, Create account (2 steps), Sign in and Sign out."""
+
+    def sign_up(self, **changes):
+        data = {'first_name': 'Ana', 'email': 'Ana@Example.com', 'password': 'tavce-gravce-42', 'agree': 'on'}
+        data.update(changes)
+        return self.client.post(reverse('signup'), data)
+
+    def test_a_new_user_gets_a_profile(self):
+        # The post_save signal, for every way of making a user (here: like createsuperuser)
+        user = User.objects.create_superuser('boss', password='a-long-password')
+        self.assertTrue(Profile.objects.filter(user=user).exists())
+
+    def test_saving_a_user_again_keeps_one_profile(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        user.first_name = 'Ana'
+        user.save()
+        self.assertEqual(Profile.objects.filter(user=user).count(), 1)
+
+    def test_guest_gets_welcome(self):
+        page = self.client.get(reverse('home'))
+        self.assertTemplateUsed(page, 'meals/welcome.html')
+        self.assertContains(page, 'Try it without an account')
+        self.assertContains(page, reverse('signup'))
+        self.assertContains(page, reverse('sign_in'))
+
+    def test_signed_in_user_gets_home(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        page = self.client.get(reverse('home'))
+        self.assertTemplateUsed(page, 'meals/home.html')
+
+    def test_sign_up_makes_the_account_and_signs_in(self):
+        response = self.sign_up()
+        self.assertRedirects(response, reverse('signup_details'))
+
+        user = User.objects.get()
+        self.assertEqual(user.username, 'ana@example.com')   # the e-mail, lowercased
+        self.assertEqual(user.email, 'ana@example.com')
+        self.assertEqual(user.first_name, 'Ana')
+        self.assertTrue(user.check_password('tavce-gravce-42'))   # hashed, not plain text
+        self.assertNotEqual(user.password, 'tavce-gravce-42')
+        self.assertTrue(Profile.objects.filter(user=user).exists())
+        self.assertEqual(int(self.client.session['_auth_user_id']), user.id)
+
+    def test_the_same_email_twice_is_refused(self):
+        User.objects.create_user('ana@example.com', email='ana@example.com', password='a-long-password')
+        page = self.sign_up(email='ANA@example.com')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'There is already an account with this e-mail.')
+        self.assertContains(page, 'Sign in instead')
+        self.assertEqual(User.objects.count(), 1)
+
+    def test_the_checkbox_is_required(self):
+        page = self.sign_up(agree='')
+        self.assertContains(page, 'Tick this box to continue.')
+        self.assertFalse(User.objects.exists())
+
+    def test_weak_passwords_are_refused_with_what_to_do(self):
+        cases = {
+            'short': 'Use at least 8 characters.',
+            '12345678901': 'Add some letters, not only numbers.',
+            'password123': 'Lots of people use this password.',
+            'ana@example.com': 'Make it less like your name or e-mail.',
+        }
+        for password, message in cases.items():
+            page = self.sign_up(password=password)
+            self.assertContains(page, message, msg_prefix=password)
+            self.assertContains(page, 'aria-invalid="true"')
+        self.assertFalse(User.objects.exists())
+
+    def test_empty_fields_get_calm_messages(self):
+        page = self.sign_up(first_name='  ', email='', password='')
+        self.assertContains(page, 'Write your name')
+        self.assertContains(page, 'Write your e-mail')
+        self.assertContains(page, 'Choose a password')
+
+    def test_step_2_saves_the_details(self):
+        self.sign_up()
+        response = self.client.post(reverse('signup_details'),
+                                    {'height_cm': '182', 'weight_kg': '78', 'activity_level': 'medium'})
+        # Not fetched here: that visit would show (and use up) the one-time toast
+        self.assertRedirects(response, reverse('home'), fetch_redirect_response=False)
+        profile = Profile.objects.get()
+        self.assertEqual((profile.height_cm, profile.weight_kg, profile.activity_level), (182, 78, 'medium'))
+
+        home = self.client.get(reverse('home'))
+        self.assertContains(home, 'Welcome to Zalak, Ana')   # the toast
+
+    def test_step_2_can_stay_empty(self):
+        self.sign_up()
+        response = self.client.post(reverse('signup_details'), {'height_cm': '', 'weight_kg': ''})
+        self.assertRedirects(response, reverse('home'))
+        profile = Profile.objects.get()
+        self.assertIsNone(profile.height_cm)
+        self.assertEqual(profile.activity_level, '')
+
+    def test_step_2_checks_the_numbers(self):
+        self.sign_up()
+        page = self.client.post(reverse('signup_details'), {'height_cm': '18', 'weight_kg': '780'})
+        self.assertContains(page, 'Check the height')
+        self.assertContains(page, 'Check the weight')
+        self.assertIsNone(Profile.objects.get().height_cm)
+
+    def test_skip_saves_nothing(self):
+        self.sign_up()
+        response = self.client.post(reverse('signup_details'), {'height_cm': '18', 'skip': '1'})
+        self.assertRedirects(response, reverse('home'))
+        self.assertIsNone(Profile.objects.get().height_cm)
+
+    def test_step_2_needs_an_account(self):
+        response = self.client.get(reverse('signup_details'))
+        self.assertRedirects(response, reverse('sign_in') + '?next=' + reverse('signup_details'))
+
+    def test_sign_in_with_any_case(self):
+        User.objects.create_user('ana@example.com', password='a-long-password')
+        response = self.client.post(reverse('sign_in'), {'username': ' Ana@Example.COM ', 'password': 'a-long-password'})
+        self.assertRedirects(response, reverse('home'))
+
+    def test_an_admin_made_username_with_capitals_can_sign_in(self):
+        User.objects.create_superuser('Viktor', password='a-long-password')
+        response = self.client.post(reverse('sign_in'), {'username': 'viktor', 'password': 'a-long-password'})
+        self.assertRedirects(response, reverse('home'))
+
+    def test_wrong_password_gets_a_calm_message(self):
+        User.objects.create_user('ana@example.com', password='a-long-password')
+        page = self.client.post(reverse('sign_in'), {'username': 'ana@example.com', 'password': 'nope'})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'That e-mail and password don&#x27;t match.')
+        self.assertNotIn('_auth_user_id', self.client.session)
+        # The e-mail is kept and the cursor goes to the password
+        form = page.context['form']
+        self.assertEqual(form['username'].value(), 'ana@example.com')
+        self.assertIn('autofocus', form.fields['password'].widget.attrs)
+        self.assertNotIn('autofocus', form.fields['username'].widget.attrs)
+
+    def test_personal_pages_send_a_guest_to_sign_in(self):
+        for name in ['diary', 'statistics', 'profile']:
+            response = self.client.get(reverse(name))
+            self.assertRedirects(response, reverse('sign_in') + '?next=' + reverse(name))
+
+    def test_sign_in_returns_to_the_page_asked_for(self):
+        User.objects.create_user('ana@example.com', password='a-long-password')
+        response = self.client.post(reverse('sign_in'), {
+            'username': 'ana@example.com', 'password': 'a-long-password', 'next': reverse('diary'),
+        })
+        self.assertRedirects(response, reverse('diary'))
+
+    def test_signed_in_user_skips_the_account_pages(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        self.assertRedirects(self.client.get(reverse('sign_in')), reverse('home'))
+        self.assertRedirects(self.client.get(reverse('signup')), reverse('home'))
+
+    def test_sign_out(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        self.assertContains(self.client.get(reverse('profile')), 'Sign out')
+
+        self.assertEqual(self.client.get(reverse('sign_out')).status_code, 405)   # only POST signs out
+        response = self.client.post(reverse('sign_out'))
+        self.assertRedirects(response, reverse('home'))
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.assertTemplateUsed(self.client.get(reverse('home')), 'meals/welcome.html')
+
+    def test_account_pages_render(self):
+        for name in ['sign_in', 'signup']:
+            page = self.client.get(reverse(name))
+            self.assertEqual(page.status_code, 200)
+            self.assertContains(page, 'js/auth.js')
+            self.assertContains(page, 'data-password-toggle')

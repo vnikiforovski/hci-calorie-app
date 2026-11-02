@@ -1,0 +1,42 @@
+{# One form field on the account pages: label, input, hint and errors.                          #}
+{# Django 5.2 points the input's aria-describedby at "<id>_helptext" and "<id>_error", and sets  #}
+{# aria-invalid when there is an error, so the ids below must stay like this.                    #}
+{# Options: password=True (eye button), unit="cm" (suffix inside), min_length=8 (live tick),   #}
+{# sign_in_link=True ("Sign in instead" under an "already an account" error).                   #}
+<label class="z-field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+
+{% if password %}
+    <div class="z-password">
+        {{ field }}
+        <button type="button" class="z-password-toggle" data-password-toggle
+                aria-controls="{{ field.id_for_label }}" aria-pressed="false" aria-label="Show password">
+            <i class="bi bi-eye" aria-hidden="true"></i>
+        </button>
+    </div>
+{% elif unit %}
+    <div class="z-unit-wrap">
+        {{ field }}
+        <span class="z-unit-suffix" aria-hidden="true">{{ unit }}</span>
+    </div>
+{% else %}
+    {{ field }}
+{% endif %}
+
+{% if field.help_text %}
+    <p class="z-field-hint" id="{{ field.auto_id }}_helptext"
+       {% if min_length %}data-min-length="{{ min_length }}" data-for="{{ field.id_for_label }}"{% endif %}>
+        {% if min_length %}<i class="bi bi-circle" aria-hidden="true"></i>{% endif %}
+        {{ field.help_text }}
+    </p>
+{% endif %}
+
+{% if field.errors %}
+    <div id="{{ field.auto_id }}_error">
+        {% for error in field.errors %}
+            <p class="z-field-error">{{ error }}</p>
+        {% endfor %}
+        {% if sign_in_link %}
+            <a class="z-field-error-link" href="{% url 'sign_in' %}">Sign in instead</a>
+        {% endif %}
+    </div>
+{% endif %}

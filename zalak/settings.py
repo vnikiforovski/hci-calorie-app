@@ -121,6 +121,12 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# Accounts (chunk 12): @login_required sends a guest to Sign in (with ?next= to come back);
+# after signing in or out, "/" shows Home or Welcome.
+LOGIN_URL = 'sign_in'
+LOGIN_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'home'
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
@@ -145,7 +151,7 @@ STATICFILES_DIRS = [
 
 # Added as ?v= to our own CSS and JS links (meals/context_processors.py).
 # Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
-STATIC_VERSION = '12'
+STATIC_VERSION = '14'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}A bit about you{% endblock %}
+
+{# Figma "Create account · 2 of 2". The account exists already, so there is no back arrow:  #}
+{# "Skip for now" is the way out. A focused page: no sidebar, header or bottom bar.          #}
+{# "What brings you here" is left out (build plan decision).                                 #}
+{% block body_class %}{% endblock %}
+{% block sidebar %}{% endblock %}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-auth">
+        <div class="z-auth-header">
+            <h1>A bit about you</h1>
+        </div>
+        <p class="text-body-secondary z-small">All optional. Zalak works fine without it. It only helps put the numbers in context.</p>
+
+        <p class="visually-hidden">Step 2 of 2</p>
+        <div class="z-stepbar" aria-hidden="true"><span class="is-done"></span><span class="is-done"></span></div>
+
+        <form method="post" action="{% url 'signup_details' %}" class="z-auth-form-fill" novalidate data-auth-form>
+            {% csrf_token %}
+
+            <div class="z-two-fields">
+                <div>{% include 'meals/_field.html' with field=form.height_cm unit='cm' %}</div>
+                <div>{% include 'meals/_field.html' with field=form.weight_kg unit='kg' %}</div>
+            </div>
+
+            {# Three real radio buttons drawn as a segmented control: arrow keys move between them #}
+            <fieldset class="z-activity" {% if form.activity_level.errors %}aria-describedby="{{ form.activity_level.auto_id }}_error"{% endif %}>
+                <legend class="z-field-label">{{ form.activity_level.label }}</legend>
+                <div class="z-segment">
+                    {% for radio in form.activity_level %}
+                        {{ radio.tag }}
+                        <label class="z-segment-option" for="{{ radio.id_for_label }}">
+                            <span class="z-segment-word">{{ radio.choice_label }}</span>
+                            <span class="z-caption">
+                                {% if radio.data.value == 'low' %}Mostly sitting
+                                {% elif radio.data.value == 'medium' %}On your feet
+                                {% else %}Sport most days{% endif %}
+                            </span>
+                        </label>
+                    {% endfor %}
+                </div>
+                {% if form.activity_level.errors %}
+                    <div id="{{ form.activity_level.auto_id }}_error">
+                        {% for error in form.activity_level.errors %}
+                            <p class="z-field-error">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </fieldset>
+
+            <div class="z-auth-bottom">
+                {# Finish comes first, so Enter in a field presses Finish, not Skip #}
+                <button type="submit" class="btn btn-primary btn-lg w-100" data-busy-text="Saving…">Finish</button>
+                <button type="submit" name="skip" value="1" class="z-link-btn z-small">Skip for now</button>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/auth.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

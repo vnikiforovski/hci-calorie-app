@@ -11,10 +11,12 @@
     <link rel="stylesheet" href="{% static 'css/zalak.css' %}?v={{ STATIC_VERSION }}">
 </head>
 {% with page=request.resolver_match.url_name %}
-<body class="{% if user.is_authenticated %}has-sidebar has-bottombar{% endif %}">
+{# Focused pages (Welcome, sign-up step 2) override body_class and drop the navigation #}
+<body class="{% block body_class %}{% if user.is_authenticated %}has-sidebar has-bottombar{% endif %}{% endblock %}">
 
 {% if user.is_authenticated %}
     {# Desktop: left sidebar #}
+    {% block sidebar %}
     <nav class="z-sidebar" aria-label="Main">
         <a class="z-logo" href="{% url 'home' %}">
             <img src="{% static 'img/logo.svg' %}" alt="">zalak
@@ -45,6 +47,7 @@
             </a>
         </div>
     </nav>
+    {% endblock %}
 
     {# Mobile: top header. Pages like Result override this block with a back button. #}
     {% block header %}
@@ -58,14 +61,17 @@
         </header>
     {% endblock %}
 {% else %}
-    {# Guest: logo and a small Sign in link, no bottom bar (docs/05) #}
-    <header class="z-header">
-        <a class="z-logo" href="{% url 'home' %}">
-            <img src="{% static 'img/logo.svg' %}" alt="">zalak
-        </a>
-        {# Temporary: the admin login until chunk 12 adds Sign in #}
-        <a class="z-small fw-semibold" href="{% url 'admin:login' %}?next={{ request.path }}">Sign in</a>
-    </header>
+    {# Guest: logo and a small Sign in link, no bottom bar (docs/05). Welcome and the account pages empty it. #}
+    {% block guest_header %}
+        <header class="z-header">
+            <a class="z-logo" href="{% url 'home' %}">
+                <img src="{% static 'img/logo.svg' %}" alt="">zalak
+            </a>
+            <a class="z-header-pill" href="{% url 'sign_in' %}">
+                <i class="bi bi-person" aria-hidden="true"></i> Sign in
+            </a>
+        </header>
+    {% endblock %}
 {% endif %}
 
 <main class="z-main">
