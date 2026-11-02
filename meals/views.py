@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from urllib.parse import urlencode
 
-from django.contrib.auth import login
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404, HttpResponse
@@ -11,7 +11,9 @@ from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import MealDetailForm, MealItemForm, PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm
+from .forms import (AccountDetailsForm, DeleteAccountForm, MealDetailForm, MealItemForm, PersonalDetailsForm,
+                    PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm, UncertaintyForm,
+                    ZalakPasswordChangeForm)
 from .models import Meal, MealItem, Profile, slot_for_time
 from .services.ai import AnalysisError, analyze_photo, analyze_text, estimate_item
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
@@ -350,6 +352,7 @@ def result(request, meal_id):
         'slot_options': SLOT_OPTIONS,
         # Set by add_item when Zalak couldn't add the item: the name comes back with a message
         'add_item_error': request.session.pop('add_item_error', None),
+        'ask_questions': asks_questions(request),   # Profile · Preferences (chunk 18)
     }
     return render(request, 'meals/result.html', context)
 
@@ -414,6 +417,7 @@ def render_meal_detail(request, meal, form):
         'slot_icon': SLOT_ICONS[meal.slot],
         'slot_options': SLOT_OPTIONS,
         'add_item_error': request.session.pop('add_item_error', None),
+        'ask_questions': asks_questions(request),
         'eaten': eaten,
         'day_label': day_name(eaten.date()),
         'time_label': f'{day_name(eaten.date())}, {eaten:%H:%M}',
@@ -1291,10 +1295,123 @@ def most_logged(meals):
     return rows[:MOST_LOGGED_COUNT]
 
 
+# ---------- Profile (chunk 18, Figma "Profile", "Profile · Personal details / Preferences / Account and privacy") ----------
+
+def own_profile(request):
+    """The signed-in user's Profile. get_or_create: the post_save signal makes one for every new
+    user, but accounts from before chunk 12 (e.g. the superuser) may have none."""
+    profile, created = Profile.objects.get_or_create(user=request.user)
+    return profile
+
+
+def asks_questions(request):
+    """Show the inline question on an unsure item (FR16)? "Ask me" yes, "Best guess" no (FR37).
+    A guest has no Profile, so a guest is always asked (build plan, chunk 18)."""
+    if not request.user.is_authenticated:
+        return True
+    return own_profile(request).uncertainty == 'ask'
+
+
 @login_required
 def profile(request):
-    # Sign out lives here until chunk 18 builds the real Profile page
-    return render(request, 'coming_soon.html', {'title': 'Profile', 'sign_out': True})
+    """The Profile hub: who is signed in, the rows to the subpages, and Sign out (red)."""
+    context = {
+        'profile': own_profile(request),
+    }
+    return render(request, 'meals/profile.html', context)
+
+
+@login_required
+def profile_details(request):
+    """Personal details: name and e-mail (the User) plus height, weight, year and activity
+    (the Profile). Two ModelForms in one <form>; both must be valid before anything is saved."""
+    profile = own_profile(request)
+    if request.method == 'POST':
+        account_form = AccountDetailsForm(request.POST, instance=request.user)
+        details_form = PersonalDetailsForm(request.POST, instance=profile)
+        if account_form.is_valid() and details_form.is_valid():
+            account_form.save()   # a new e-mail is the new sign-in name too
+            details_form.save()
+            request.session['toast'] = {'text': 'Changes saved'}
+            return redirect('profile')
+    else:
+        account_form = AccountDetailsForm(instance=request.user)
+        details_form = PersonalDetailsForm(instance=profile)
+    context = {
+        'account_form': account_form,
+        'details_form': details_form,
+    }
+    return render(request, 'meals/profile_details.html', context)
+
+
+@login_required
+def profile_preferences(request):
+    """Preferences: "When Zalak is unsure". preferences.js saves a tap straight away with fetch
+    (it gets a 204, so the page and the focus stay); without JavaScript the Save button posts and comes back."""
+    profile = own_profile(request)
+    if request.method == 'POST':
+        form = UncertaintyForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            if request.headers.get('X-Requested-With') == 'fetch':
+                return HttpResponse(status=204)
+            request.session['toast'] = {'text': 'Preferences saved'}
+            return redirect('profile_preferences')
+        if request.headers.get('X-Requested-With') == 'fetch':
+            return HttpResponse(status=400)
+    else:
+        form = UncertaintyForm(instance=profile)
+    return render(request, 'meals/profile_preferences.html', {'form': form, 'profile': profile})
+
+
+@login_required
+def account_privacy(request):
+    """Account and privacy: Change password, and Delete account and all data (red)."""
+    return render(request, 'meals/account_privacy.html')
+
+
+@login_required
+def change_password(request):
+    """Change password: Django's PasswordChangeForm with calmer words. update_session_auth_hash
+    keeps this browser signed in (a new password otherwise signs every session out)."""
+    if request.method == 'POST':
+        form = ZalakPasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            request.session['toast'] = {'text': 'Password changed'}
+            return redirect('profile_account')
+    else:
+        form = ZalakPasswordChangeForm(request.user)
+    return render(request, 'meals/change_password.html', {'form': form})
+
+
+@login_required
+def delete_account(request):
+    """Delete account and all data (FR3). The page says what goes and asks for the password once.
+    user.delete() cascades to the Profile, every meal and its items; the post_delete signal on Meal
+    removes each photo file (signals.remove_photo_file). Then the visitor is a guest on Welcome."""
+    if request.method == 'POST':
+        form = DeleteAccountForm(request.user, request.POST)
+        if form.is_valid():
+            user = request.user
+            logout(request)   # first: logout() empties the session, the toast goes into the new one
+            user.delete()
+            request.session['toast'] = {'text': 'Your account and meals are deleted'}
+            return redirect('home')
+    else:
+        form = DeleteAccountForm(request.user)
+    context = {
+        'form': form,
+        'meal_count': Meal.objects.filter(user=request.user, status='logged', deleted_at__isnull=True).count(),
+    }
+    return render(request, 'meals/delete_account.html', context)
+
+
+@login_required
+def help_about(request):
+    """Help and about: what Zalak does, the three confidence words, and "estimates, not medical advice"."""
+    return render(request, 'meals/help_about.html')
 
 
 def add_meal(request):

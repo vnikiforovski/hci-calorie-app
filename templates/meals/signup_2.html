@@ -29,30 +29,7 @@
                 <div>{% include 'meals/_field.html' with field=form.weight_kg unit='kg' %}</div>
             </div>
 
-            {# Three real radio buttons drawn as a segmented control: arrow keys move between them #}
-            <fieldset class="z-activity" {% if form.activity_level.errors %}aria-describedby="{{ form.activity_level.auto_id }}_error"{% endif %}>
-                <legend class="z-field-label">{{ form.activity_level.label }}</legend>
-                <div class="z-segment">
-                    {% for radio in form.activity_level %}
-                        {{ radio.tag }}
-                        <label class="z-segment-option" for="{{ radio.id_for_label }}">
-                            <span class="z-segment-word">{{ radio.choice_label }}</span>
-                            <span class="z-caption">
-                                {% if radio.data.value == 'low' %}Mostly sitting
-                                {% elif radio.data.value == 'medium' %}On your feet
-                                {% else %}Sport most days{% endif %}
-                            </span>
-                        </label>
-                    {% endfor %}
-                </div>
-                {% if form.activity_level.errors %}
-                    <div id="{{ form.activity_level.auto_id }}_error">
-                        {% for error in form.activity_level.errors %}
-                            <p class="z-field-error">{{ error }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </fieldset>
+            {% include 'meals/_activity_field.html' with field=form.activity_level %}
 
             <div class="z-auth-bottom">
                 {# Finish comes first, so Enter in a field presses Finish, not Skip #}

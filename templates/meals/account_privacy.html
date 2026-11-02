@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+
+{% block title %}Account and privacy{% endblock %}
+
+{# Profile · Account and privacy (chunk 18, Figma). Left out of Figma: "Download my data" and         #}
+{# "Photos · Kept for 30 days" (neither is built). Red only for Delete, like Sign out.              #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-profile">
+        {% url 'profile' as profile_url %}
+        {% include 'meals/_profile_head.html' with back=profile_url back_label='Back to Profile' title='Account and privacy' %}
+
+        <ul class="z-menu" aria-label="Account">
+            <li>
+                <a class="z-menu-row" href="{% url 'profile_password' %}">
+                    <span class="z-menu-text">
+                        <span class="z-menu-title">Change password</span>
+                        <span class="z-menu-line">Choose a new one any time</span>
+                    </span>
+                    <i class="bi bi-chevron-right z-menu-chevron" aria-hidden="true"></i>
+                </a>
+            </li>
+        </ul>
+
+        <a class="btn btn-danger btn-lg w-100" href="{% url 'profile_delete' %}">Delete account and all data</a>
+        <p class="z-profile-foot">Deleting removes every meal and photo. This cannot be undone.</p>
+    </div>
+{% endblock %}

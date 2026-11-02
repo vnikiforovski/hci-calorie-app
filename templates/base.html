@@ -38,7 +38,8 @@
                data-bs-toggle="offcanvas" data-bs-target="#addMealSheet" aria-controls="addMealSheet">
                 <i class="bi bi-plus-lg" aria-hidden="true"></i> Add a meal
             </a>
-            <a class="z-profile-row {% if page == 'profile' %}active{% endif %}" href="{% url 'profile' %}"
+            {# Active on the Profile hub and its subpages (their URL names all start with "profile") #}
+            <a class="z-profile-row {% if page|slice:':7' == 'profile' %}active{% endif %}" href="{% url 'profile' %}"
                {% if page == 'profile' %}aria-current="page"{% endif %}>
                 <span class="z-avatar" aria-hidden="true">{{ user.first_name|default:user.username|first|upper }}</span>
                 <span>

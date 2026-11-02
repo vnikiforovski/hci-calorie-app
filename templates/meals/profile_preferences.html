@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Preferences{% endblock %}
+
+{# Profile · Preferences (chunk 18, Figma). Only "When Zalak is unsure" for now: food preferences    #}
+{# come in chunk 23, lighter ideas in 25; dark mode and meal slots are left out. A tap saves straight #}
+{# away (preferences.js, no reload); without JavaScript the Save button inside <noscript> does it.   #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-profile">
+        {% url 'profile' as profile_url %}
+        {% include 'meals/_profile_head.html' with back=profile_url back_label='Back to Profile' title='Preferences' %}
+        <p class="z-profile-intro">These change how Zalak estimates and shows your meals.</p>
+
+        <form method="post" action="{% url 'profile_preferences' %}" class="z-pref-card" data-preferences>
+            {% csrf_token %}
+            <fieldset class="z-pref">
+                <legend class="z-pref-title">When Zalak is unsure</legend>
+                {# The line follows the choice: the server picks it on load, preferences.js after a tap #}
+                <p class="z-pref-line" data-when="ask" {% if form.uncertainty.value != 'ask' %}hidden{% endif %}>Zalak asks one quick question instead of guessing.</p>
+                <p class="z-pref-line" data-when="guess" {% if form.uncertainty.value != 'guess' %}hidden{% endif %}>Zalak makes its best guess and says why it's unsure.</p>
+                <div class="z-switch2">
+                    {% for radio in form.uncertainty %}
+                        {{ radio.tag }}
+                        <label class="z-switch2-option" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            <p class="z-pref-status" role="status" data-status></p>
+            <noscript><button type="submit" class="btn btn-primary w-100 mt-3">Save</button></noscript>
+        </form>
+
+        <p class="z-profile-foot">Zalak gives estimates, not medical advice.</p>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/preferences.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

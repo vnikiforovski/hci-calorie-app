@@ -35,7 +35,8 @@ class Profile(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     height_cm = models.PositiveIntegerField(null=True, blank=True)
-    weight_kg = models.PositiveIntegerField(null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)  # 78.4 (chunk 18)
+    birth_year = models.PositiveSmallIntegerField(null=True, blank=True)  # Personal details (chunk 18)
     activity_level = models.CharField(max_length=10, choices=ACTIVITY_CHOICES, blank=True)
     uncertainty = models.CharField(max_length=10, choices=UNCERTAINTY_CHOICES, default='ask')
     food_preferences = models.CharField(max_length=200, blank=True)  # sent to the AI (FR38)

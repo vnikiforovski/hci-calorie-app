@@ -1,0 +1,26 @@
+{# "How active are you?": three real radio buttons drawn as a segmented control (Figma), so the arrow  #}
+{# keys move between them, with a short hint under each word. Sign-up step 2 and Personal details.   #}
+{# Pass field=form.activity_level.                                                                   #}
+<fieldset class="z-activity" {% if field.errors %}aria-describedby="{{ field.auto_id }}_error"{% endif %}>
+    <legend class="z-field-label">{{ field.label }}</legend>
+    <div class="z-segment">
+        {% for radio in field %}
+            {{ radio.tag }}
+            <label class="z-segment-option" for="{{ radio.id_for_label }}">
+                <span class="z-segment-word">{{ radio.choice_label }}</span>
+                <span class="z-caption">
+                    {% if radio.data.value == 'low' %}Mostly sitting
+                    {% elif radio.data.value == 'medium' %}On your feet
+                    {% else %}Sport most days{% endif %}
+                </span>
+            </label>
+        {% endfor %}
+    </div>
+    {% if field.errors %}
+        <div id="{{ field.auto_id }}_error">
+            {% for error in field.errors %}
+                <p class="z-field-error">{{ error }}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+</fieldset>

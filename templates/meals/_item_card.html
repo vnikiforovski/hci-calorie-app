@@ -40,8 +40,9 @@
             <div class="z-reason mt-3">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
                 <div class="flex-grow-1">
-                    <p class="mb-0" id="question-{{ item.id }}">{{ item.reason }}{% if item.question %} {{ item.question }}{% endif %}</p>
-                    {% if item.can_ask %}
+                    {# "Best guess" in Preferences (chunk 18): the reason stays, the question and chips go #}
+                    <p class="mb-0" id="question-{{ item.id }}">{{ item.reason }}{% if item.question and ask_questions %} {{ item.question }}{% endif %}</p>
+                    {% if item.can_ask and ask_questions %}
                         {# The chips scale Zalak's portion x0.5 / x1 / x1.5. After a tap the item is "likely" #}
                         {# and this box goes away; the amount can still be changed on Edit item.               #}
                         <form method="post" action="{% url 'answer_question' item.meal_id item.id %}"

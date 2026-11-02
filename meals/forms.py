@@ -3,7 +3,7 @@ from datetime import datetime
 from io import BytesIO
 
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.files.base import ContentFile
@@ -217,6 +217,30 @@ PASSWORD_HINTS = {
 }
 
 
+def name_and_email_rules(form):
+    """Name and e-mail are optional on Django's User, but Zalak needs both (sign-up and Personal details)."""
+    form.fields['first_name'].required = True
+    form.fields['email'].required = True
+    form.fields['first_name'].error_messages['required'] = 'Write your name, so Zalak knows what to call you.'
+    form.fields['email'].error_messages['required'] = 'Write your e-mail. You sign in with it.'
+    form.fields['email'].error_messages['invalid'] = 'That doesn\'t look like an e-mail. Check it, e.g. ana@example.com.'
+
+
+def clean_account_email(email, user=None):
+    """The e-mail is the username: lowercase (Ana@Example.com and ana@example.com are one account),
+    at most 150 long, and nobody else's. user is the account that may keep it (Personal details)."""
+    email = email.strip().lower()
+    if len(email) > 150:   # the username column is 150 long
+        raise forms.ValidationError('That e-mail is too long. Use a shorter one.')
+    taken = User.objects.filter(username__iexact=email)
+    if user is not None:
+        taken = taken.exclude(pk=user.pk)
+    if taken.exists():
+        # The code lets the sign-up template add a "Sign in instead" link under this message
+        raise forms.ValidationError('There is already an account with this e-mail.', code='taken')
+    return email
+
+
 class SignUpForm(forms.ModelForm):
     """Create account, step 1 (Figma "Create account · 1 of 2"): name, e-mail, password
     and the "estimates, not medical advice" checkbox (FR33). The e-mail is the username,
@@ -259,25 +283,13 @@ class SignUpForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Both are optional on Django's User, but Zalak needs them
-        self.fields['first_name'].required = True
-        self.fields['email'].required = True
-        self.fields['first_name'].error_messages['required'] = 'Write your name, so Zalak knows what to call you.'
-        self.fields['email'].error_messages['required'] = 'Write your e-mail. You sign in with it.'
-        self.fields['email'].error_messages['invalid'] = 'That doesn\'t look like an e-mail. Check it, e.g. ana@example.com.'
+        name_and_email_rules(self)
 
     def clean_first_name(self):
         return self.cleaned_data['first_name'].strip()
 
     def clean_email(self):
-        # Lowercase, so Ana@Example.com and ana@example.com are one account
-        email = self.cleaned_data['email'].strip().lower()
-        if len(email) > 150:   # the username column is 150 long
-            raise forms.ValidationError('That e-mail is too long. Use a shorter one.')
-        if User.objects.filter(username__iexact=email).exists():
-            # The code lets the template add a "Sign in instead" link under this message
-            raise forms.ValidationError('There is already an account with this e-mail.', code='taken')
-        return email
+        return clean_account_email(self.cleaned_data['email'])
 
     def clean(self):
         cleaned = super().clean()
@@ -308,21 +320,31 @@ class ProfileDetailsForm(forms.ModelForm):
             'height_cm': forms.NumberInput(attrs={
                 'class': 'form-control z-unit-field', 'inputmode': 'numeric', 'placeholder': '170',
             }),
+            # One decimal, e.g. 78.4 (Figma "Personal details", chunk 18)
             'weight_kg': forms.NumberInput(attrs={
-                'class': 'form-control z-unit-field', 'inputmode': 'numeric', 'placeholder': '70',
+                'class': 'form-control z-unit-field', 'inputmode': 'decimal', 'step': '0.1', 'placeholder': '70',
             }),
-            # Bootstrap's btn-check hides the radio; its label is the segment (signup_2.html)
+            # Bootstrap's btn-check hides the radio; its label is the segment (_activity_field.html)
             'activity_level': forms.RadioSelect(attrs={'class': 'btn-check'}),
         }
         error_messages = {
             'height_cm': {'invalid': 'Write the height as a whole number, e.g. 170.'},
-            'weight_kg': {'invalid': 'Write the weight as a whole number, e.g. 70.'},
+            'weight_kg': {
+                'invalid': 'Write the weight as a number, e.g. 70 or 70.5.',
+                'max_decimal_places': 'Use one decimal at most, e.g. 70.5.',
+                'max_digits': 'Check the weight: Zalak expects 30 to 300 kg.',
+                'max_whole_digits': 'Check the weight: Zalak expects 30 to 300 kg.',
+            },
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Without the "---------" choice a ModelForm adds for blank=True: nothing ticked means "not said"
         self.fields['activity_level'].choices = Profile.ACTIVITY_CHOICES
+        # 73 kg, not "73.0"; 78.4 stays 78.4
+        weight = self.instance.weight_kg
+        if not self.is_bound and weight is not None and weight == int(weight):
+            self.initial['weight_kg'] = int(weight)
 
     def clean_height_cm(self):
         height = self.cleaned_data['height_cm']
@@ -335,6 +357,122 @@ class ProfileDetailsForm(forms.ModelForm):
         if weight is not None and not 30 <= weight <= 300:
             raise forms.ValidationError('Check the weight: Zalak expects 30 to 300 kg.')
         return weight
+
+
+# ---------- Profile (chunk 18) ----------
+
+class PersonalDetailsForm(ProfileDetailsForm):
+    """Profile · Personal details: sign-up step 2's fields plus the year of birth."""
+
+    class Meta(ProfileDetailsForm.Meta):
+        fields = ['height_cm', 'weight_kg', 'birth_year', 'activity_level']
+        labels = dict(ProfileDetailsForm.Meta.labels, birth_year='Year of birth')
+        widgets = dict(ProfileDetailsForm.Meta.widgets, birth_year=forms.NumberInput(attrs={
+            'class': 'form-control', 'inputmode': 'numeric', 'placeholder': '1998',
+        }))
+        error_messages = dict(ProfileDetailsForm.Meta.error_messages,
+                              birth_year={'invalid': 'Write the year as four digits, e.g. 1998.'})
+
+    def clean_birth_year(self):
+        year = self.cleaned_data['birth_year']
+        if year is not None and not 1900 <= year <= timezone.localdate().year:
+            raise forms.ValidationError('Check the year, e.g. 1998.')
+        return year
+
+
+class AccountDetailsForm(forms.ModelForm):
+    """Profile · Personal details: the name and the e-mail. The e-mail is also the username,
+    so a new e-mail is the new sign-in name (save() keeps the two the same)."""
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'email']
+        labels = {'first_name': 'Name', 'email': 'E-mail'}
+        help_texts = {'email': 'You sign in with this e-mail.'}
+        widgets = {
+            'first_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'given-name'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'autocomplete': 'email', 'inputmode': 'email'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        name_and_email_rules(self)
+
+    def clean_first_name(self):
+        return self.cleaned_data['first_name'].strip()
+
+    def clean_email(self):
+        return clean_account_email(self.cleaned_data['email'], user=self.instance)
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.username = user.email
+        if commit:
+            user.save()
+        return user
+
+
+class UncertaintyForm(forms.ModelForm):
+    """Profile · Preferences: "When Zalak is unsure" (FR37). Ask me shows the inline question
+    on Result (FR16); Best guess hides it."""
+
+    class Meta:
+        model = Profile
+        fields = ['uncertainty']
+        widgets = {'uncertainty': forms.RadioSelect(attrs={'class': 'btn-check'})}
+
+
+class ZalakPasswordChangeForm(PasswordChangeForm):
+    """Django's password change form with Zalak's fields and calm messages."""
+
+    error_messages = dict(PasswordChangeForm.error_messages,
+                          password_incorrect="That's not your current password. Try again.",
+                          password_mismatch="The two new passwords aren't the same. Type them again.")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = {'old_password': 'Current password', 'new_password1': 'New password',
+                  'new_password2': 'New password again'}
+        for name, field in self.fields.items():
+            field.label = labels[name]
+            field.help_text = ''
+            field.widget.attrs.update({'class': 'form-control'})
+            field.widget.attrs.pop('autofocus', None)
+        self.fields['new_password1'].help_text = 'At least 8 characters'
+        self.fields['old_password'].error_messages['required'] = 'Write your current password.'
+        self.fields['new_password1'].error_messages['required'] = 'Choose a new password, at least 8 characters.'
+        self.fields['new_password2'].error_messages['required'] = 'Write the new password again.'
+
+    def validate_password_for_user(self, user, password_field_name='new_password2'):
+        # Django's validators from settings, with the same calmer words as sign-up (PASSWORD_HINTS),
+        # shown under the new password (where the "At least 8 characters" hint is), not under "again"
+        password = self.cleaned_data.get(password_field_name)
+        if password:
+            try:
+                validate_password(password, user)
+            except forms.ValidationError as error:
+                for problem in error.error_list:
+                    self.add_error('new_password1', PASSWORD_HINTS.get(problem.code, ' '.join(problem.messages)))
+
+
+class DeleteAccountForm(forms.Form):
+    """Delete account (FR3): the password once, so nobody deletes it by accident."""
+    password = forms.CharField(
+        label='Your password',
+        strip=False,
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'autocomplete': 'current-password'}),
+        error_messages={'required': 'Write your password to delete the account.'},
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_password(self):
+        password = self.cleaned_data['password']
+        if not self.user.check_password(password):
+            raise forms.ValidationError("That's not your password. Try again.")
+        return password
 
 
 class EmailAuthenticationForm(AuthenticationForm):

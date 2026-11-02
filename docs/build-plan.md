@@ -38,7 +38,8 @@ class Profile(models.Model):                       # ⟶ Doctor.user OneToOne
     UNCERTAINTY_CHOICES = [('ask','Ask me'), ('guess','Best guess')]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     height_cm = models.PositiveIntegerField(null=True, blank=True)
-    weight_kg = models.PositiveIntegerField(null=True, blank=True)
+    weight_kg = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)   # 78.4 (chunk 18)
+    birth_year = models.PositiveSmallIntegerField(null=True, blank=True)                   # chunk 18
     activity_level = models.CharField(max_length=10, choices=ACTIVITY_CHOICES, blank=True)
     uncertainty = models.CharField(max_length=10, choices=UNCERTAINTY_CHOICES, default='ask')
     food_preferences = models.CharField(max_length=200, blank=True)   # sent to the AI (FR38)
@@ -240,7 +241,7 @@ class MealItem(models.Model):
 
 ### Phase C: demo prep (2–3 Nov)
 
-- [ ] **17. Statistics page** (2 Nov)
+- [x] **17. Statistics page** (2 Nov)
   - Work: the last 7 days, with the average kcal range per day and the average macro split; no target line, no red/green. Replaces "Coming soon".
   - Decided 2 Nov: Figma's **Mo–Su weeks** (as on Home's week strip) instead of "the last 7 days", plus a **Month** view through Figma's Week / Month switch (`?period=month`, `?date=` picks the week or month; ‹ always goes back, › stops at the period holding today). Averages are over the **days with a logged meal** (a day not logged isn't a day of eating nothing): kcal rounded to 10, grams to 5. Each bar is solid up to the lowest estimate and lighter up to the highest; the chart's top is 1.1 × the highest day (at least 1,000), with grid lines every 1,000. Macro shares come from the middle of each range × 4/4/9 kcal per g and add up to 100 (Figma's 20/46/34). Also built from Figma: the Days logged and Meals cards, and "Most logged this week" (names logged at least twice, case-insensitive, top 3, with the latest photo or the slot's pastel).
   - Adapted from Figma: left out Customize (FR41, Could), the Water card (water not built), Weight and BMI (no weight history; BMI is out of scope), so two KPI cards. The Month view and the desktop layout have no Figma frame: a month has thin bars with the day number on 1, 8, 15, 22, 29; at 1440 the switch and the range share a row and the chart sits beside Macros + Most logged. Empty and future days draw no bar; an empty period says "Nothing logged this week yet." and hides Macros and Most logged. The Week / Month options are 44 px high (Figma 38). Still left out: the desktop Home "On average" card.
@@ -249,7 +250,9 @@ class MealItem(models.Model):
   - Test: the numbers match the logged meals by hand.
 - [ ] **18. Small Profile page** (2 Nov)
   - Work: personal details (name, height, weight, activity) via a ProfileForm with `instance`; the "When Zalak is unsure" switch (Ask me / Best guess) saved to `Profile.uncertainty`, and Result's inline question follows it (guests always get Ask me); a red Sign out button; "Estimate, not medical advice". The Profile link in the nav opens it.
-  - Files: `forms.py`, `views.py`, `urls.py`, `templates/meals/profile.html`, `templates/meals/_item_card.html`
+  - Decided 2 Nov: Figma's hub + subpages instead of one page. `/profile/` (card with the initial, Edit details, menu rows, red Sign out), Personal details (name, e-mail, height, weight with one decimal, year of birth, activity: two ModelForms in one form; a new e-mail is the new sign-in name), Preferences ("When Zalak is unsure", saved on tap with `fetch`, a 204 back, a `<noscript>` Save button otherwise), Account and privacy (Change password with Django's `PasswordChangeForm` + `update_session_auth_hash`; Delete account and all data, FR3, on a confirm page that asks for the password once), and Help and about. Best guess hides the question and the chips but keeps the unsure badge and its reason; guests are always asked. Profile URL names all start with `profile`, so the sidebar row is marked on every subpage. `coming_soon.html` is removed (nothing uses it).
+  - Adapted from Figma: left out the Goals and targets, Water and Your meals rows; Food preferences (chunk 23), Show lighter ideas (chunk 25), Dark mode and Meal slots in Preferences; "Download my data" and "Photos · Kept for 30 days" in Account. Sub-lines say what is built ("When unsure: Ask me", "Password, delete account", "Choose a new one any time"). The Preferences line follows the choice. Personal details keeps sign-up's activity hints. Switch options are 44 px (Figma 38). No Figma frame for Change password, the delete confirm, Help and about or the desktop (one 560 px column in the middle).
+  - Files: `models.py` + migration `0002`, `forms.py`, `views.py`, `urls.py`, `base.html`, `templates/meals/profile.html`, `profile_details.html`, `profile_preferences.html`, `account_privacy.html`, `change_password.html`, `delete_account.html`, `help_about.html`, `_profile_head.html`, `_profile_row.html`, `_activity_field.html` (from `signup_2.html`), `_item_card.html`, `static/js/preferences.js`, `zalak.css`, `settings.py`, `tests.py`
   - Pattern: ModelForm with `instance`, `@login_required`, PRG
   - Test: switch to Best guess → a new analysis shows no question on the unsure item; switch back; edit the weight; sign out.
 - [ ] **19. 390 / 1440 + accessibility pass** (2 Nov)

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Delete account{% endblock %}
+
+{# Delete account and all data (FR3, chunk 18). No Figma frame: a calm confirm page that says what  #}
+{# goes and asks for the password once. "Keep my account" is the safe way out.                      #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-profile z-profile-form">
+        {% url 'profile_account' as account_url %}
+        {% include 'meals/_profile_head.html' with back=account_url back_label='Back to Account and privacy' title='Delete account?' %}
+        <p class="z-profile-intro">
+            This deletes your account, {{ meal_count }} logged meal{{ meal_count|pluralize }} and every photo.
+            It cannot be undone.
+        </p>
+
+        <form method="post" action="{% url 'profile_delete' %}" novalidate data-auth-form>
+            {% csrf_token %}
+            {% include 'meals/_field.html' with field=form.password password=True %}
+            <button type="submit" class="btn btn-danger btn-lg w-100 z-profile-save" data-busy-text="Deleting…">Delete my account</button>
+            <a class="btn btn-outline-secondary btn-lg w-100 mt-2" href="{{ account_url }}">Keep my account</a>
+        </form>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/auth.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

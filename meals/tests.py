@@ -2277,3 +2277,147 @@ class StatisticsTests(TestCase):
         self.assertEqual(period_label('week', date(2026, 10, 12), date(2026, 10, 18)), '12–18 October')
         self.assertEqual(period_label('week', date(2026, 10, 26), date(2026, 11, 1)), '26 October – 1 November')
         self.assertEqual(period_label('month', date(2026, 10, 1), date(2026, 10, 31)), 'October 2026')
+
+
+PROFILE_PAGES = ['profile', 'profile_details', 'profile_preferences', 'profile_account',
+                 'profile_password', 'profile_delete', 'profile_help']
+
+
+class ProfileTests(TestCase):
+    """Chunk 18: the Profile hub, Personal details, Preferences, Change password, Delete account."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', email='ana@example.com',
+                                             password='a-long-password', first_name='Ana')
+        self.client.force_login(self.user)
+
+    def details(self, **changes):
+        data = {'first_name': 'Ana', 'email': 'ana@example.com', 'height_cm': '168', 'weight_kg': '61.5',
+                'birth_year': '1998', 'activity_level': 'medium'}
+        data.update(changes)
+        return self.client.post(reverse('profile_details'), data)
+
+    def test_every_page_opens_and_a_guest_is_sent_to_sign_in(self):
+        for name in PROFILE_PAGES:
+            self.assertEqual(self.client.get(reverse(name)).status_code, 200, name)
+        self.client.logout()
+        for name in PROFILE_PAGES:
+            self.assertIn(reverse('sign_in'), self.client.get(reverse(name))['Location'], name)
+
+    def test_the_hub(self):
+        page = self.client.get(reverse('profile'))
+        self.assertContains(page, 'ana@example.com')
+        self.assertContains(page, 'When unsure: Ask me')
+        self.assertContains(page, f'action="{reverse("sign_out")}"')
+        self.assertContains(page, 'estimates, not medical advice')
+
+    def test_details_save_both_forms(self):
+        response = self.details(first_name=' Ana M ', email='Ana.M@Example.com')
+        self.assertRedirects(response, reverse('profile'), fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual((self.user.first_name, self.user.email, self.user.username),
+                         ('Ana M', 'ana.m@example.com', 'ana.m@example.com'))   # the new sign-in name
+        self.assertEqual((profile.height_cm, profile.weight_kg, profile.birth_year, profile.activity_level),
+                         (168, Decimal('61.5'), 1998, 'medium'))
+        self.assertContains(self.client.get(reverse('profile')), 'Changes saved')
+
+        # Signing in works with the new e-mail
+        self.client.logout()
+        self.assertTrue(self.client.login(username='ana.m@example.com', password='a-long-password'))
+
+    def test_details_keep_your_own_email_but_not_someone_elses(self):
+        self.assertEqual(self.details().status_code, 302)   # the same e-mail is fine
+        User.objects.create_user('ivan@example.com', password='a-long-password')
+        page = self.details(email='Ivan@example.com', weight_kg='70')
+        self.assertContains(page, 'There is already an account with this e-mail.')
+        profile = Profile.objects.get(user=self.user)
+        self.assertEqual(profile.weight_kg, Decimal('61.5'))   # nothing saved while one form is wrong
+
+    def test_details_check_the_numbers(self):
+        next_year = str(timezone.localdate().year + 1)
+        page = self.details(birth_year=next_year, weight_kg='61.55', first_name='')
+        self.assertContains(page, 'Check the year, e.g. 1998.')
+        self.assertContains(page, 'Use one decimal at most, e.g. 70.5.')
+        self.assertContains(page, 'Write your name')
+
+    def test_preferences_save_with_and_without_javascript(self):
+        url = reverse('profile_preferences')
+        response = self.client.post(url, {'uncertainty': 'guess'}, HTTP_X_REQUESTED_WITH='fetch')
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(Profile.objects.get(user=self.user).uncertainty, 'guess')
+        self.assertContains(self.client.get(reverse('profile')), 'When unsure: Best guess')
+
+        response = self.client.post(url, {'uncertainty': 'ask'})
+        self.assertRedirects(response, url, fetch_redirect_response=False)
+        self.assertEqual(Profile.objects.get(user=self.user).uncertainty, 'ask')
+        bad = self.client.post(url, {'uncertainty': 'maybe'}, HTTP_X_REQUESTED_WITH='fetch')
+        self.assertEqual(bad.status_code, 400)
+
+    def analyzed_meal(self):
+        with override_settings(ZALAK_AI_FAKE=False), \
+                patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče, bread, salad', 'slot': 'lunch'})
+        return reverse('result', args=[Meal.objects.latest('id').id])
+
+    def test_best_guess_hides_the_question_but_keeps_the_reason(self):
+        result = self.analyzed_meal()
+        page = self.client.get(result)
+        self.assertContains(page, 'How much was there?')
+        self.assertContains(page, 'name="answer"')
+
+        Profile.objects.filter(user=self.user).update(uncertainty='guess')
+        page = self.client.get(result)
+        self.assertContains(page, 'Oil is hard to see')
+        self.assertContains(page, 'Unsure')
+        self.assertNotContains(page, 'How much was there?')
+        self.assertNotContains(page, 'name="answer"')
+
+    def test_a_guest_is_always_asked(self):
+        self.client.logout()
+        result = self.analyzed_meal()
+        self.assertContains(self.client.get(result), 'name="answer"')
+
+    def test_change_password(self):
+        url = reverse('profile_password')
+        page = self.client.post(url, {'old_password': 'wrong', 'new_password1': 'another-long-one',
+                                      'new_password2': 'another-long-one'})
+        self.assertContains(page, "That&#x27;s not your current password.")
+        page = self.client.post(url, {'old_password': 'a-long-password', 'new_password1': 'short',
+                                      'new_password2': 'short'})
+        self.assertContains(page, 'Use at least 8 characters.')
+
+        response = self.client.post(url, {'old_password': 'a-long-password', 'new_password1': 'another-long-one',
+                                          'new_password2': 'another-long-one'})
+        self.assertRedirects(response, reverse('profile_account'), fetch_redirect_response=False)
+        self.assertEqual(self.client.get(reverse('profile')).status_code, 200)   # still signed in
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('another-long-one'))
+
+    def test_delete_account_needs_the_password(self):
+        self.assertContains(self.client.get(reverse('profile_delete')), '0 logged meals')
+        page = self.client.post(reverse('profile_delete'), {'password': 'wrong'})
+        self.assertContains(page, "That&#x27;s not your password.")
+        self.assertTrue(User.objects.filter(id=self.user.id).exists())
+
+    def test_delete_account_removes_meals_photos_and_signs_out(self):
+        use_temp_media(self)
+        meal = make_draft(user=self.user, slot='lunch', status='logged')
+        meal.photo.save('plate.jpg', SimpleUploadedFile('plate.jpg', b'not really a photo'))
+        photo_path = meal.photo.path
+        self.assertTrue(os.path.exists(photo_path))
+
+        response = self.client.post(reverse('profile_delete'), {'password': 'a-long-password'})
+        self.assertRedirects(response, reverse('home'), fetch_redirect_response=False)
+        self.assertFalse(User.objects.filter(id=self.user.id).exists())
+        self.assertFalse(Meal.objects.exists())
+        self.assertFalse(Profile.objects.exists())
+        self.assertFalse(os.path.exists(photo_path))
+        home = self.client.get(reverse('home'))
+        self.assertTemplateUsed(home, 'meals/welcome.html')   # a guest again
+        self.assertContains(home, 'Your account and meals are deleted')
+
+    def test_sign_up_step_2_takes_a_decimal_weight(self):
+        response = self.client.post(reverse('signup_details'), {'weight_kg': '78.4'})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Profile.objects.get(user=self.user).weight_kg, Decimal('78.4'))

@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}Help and about{% endblock %}
+
+{# Help and about (chunk 18). No Figma frame: plain cards. Calm words, no allergen claims (CLAUDE.md). #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-profile">
+        {% url 'profile' as profile_url %}
+        {% include 'meals/_profile_head.html' with back=profile_url back_label='Back to Profile' title='Help and about' %}
+
+        <section class="z-help-card" aria-labelledby="helpWhat">
+            <h2 id="helpWhat">What Zalak does</h2>
+            <p class="mb-0">Take a photo, type or say what you ate. Zalak estimates the calories and macros as a
+               range, for example 650–850 kcal, because a photo or a sentence never shows everything.
+               You correct anything that's wrong, then tap Log. Nothing is saved before that, and
+               "Just checking" throws the estimate away.</p>
+        </section>
+
+        <section class="z-help-card" aria-labelledby="helpSure">
+            <h2 id="helpSure">How sure is Zalak?</h2>
+            <ul class="z-help-list">
+                <li>
+                    <span class="z-badge z-badge-sure"><i class="bi bi-check-circle" aria-hidden="true"></i> Sure</span>
+                    <span>Clear to see and easy to estimate.</span>
+                </li>
+                <li>
+                    <span class="z-badge z-badge-likely"><i class="bi bi-dash-circle" aria-hidden="true"></i> Likely</span>
+                    <span>Probably right. Check the portion.</span>
+                </li>
+                <li>
+                    <span class="z-badge z-badge-unsure"><i class="bi bi-question-circle" aria-hidden="true"></i> Unsure</span>
+                    <span>Hard to tell, and Zalak says why. In Preferences you choose whether it asks you or makes its best guess.</span>
+                </li>
+            </ul>
+        </section>
+
+        <section class="z-help-card" aria-labelledby="helpAdvice">
+            <h2 id="helpAdvice">Estimates, not medical advice</h2>
+            <p class="mb-0">The numbers are estimates to help you notice what you eat. They are not medical or
+               diet advice. Zalak can't see what's hidden in a meal, so it says nothing about allergens:
+               check the label or ask whoever made it.</p>
+        </section>
+
+        <section class="z-help-card" aria-labelledby="helpAbout">
+            <h2 id="helpAbout">About</h2>
+            <p class="mb-0">"Zalak" is Macedonian for "a bite". A student project for the course Design of
+               Human-Computer Interaction at FINKI, Skopje, 2026.</p>
+        </section>
+    </div>
+{% endblock %}

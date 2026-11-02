@@ -38,6 +38,13 @@ urlpatterns = [
     path('diary/', views.diary, name='diary'),
     path('statistics/', views.statistics, name='statistics'),
     path('profile/', views.profile, name='profile'),
+    # Profile (chunk 18): every name starts with "profile", so base.html marks the sidebar row on all of them
+    path('profile/details/', views.profile_details, name='profile_details'),
+    path('profile/preferences/', views.profile_preferences, name='profile_preferences'),
+    path('profile/account/', views.account_privacy, name='profile_account'),
+    path('profile/password/', views.change_password, name='profile_password'),
+    path('profile/delete/', views.delete_account, name='profile_delete'),
+    path('profile/help/', views.help_about, name='profile_help'),
     path('add/', views.add_meal, name='add_meal'),
     path('add/text/', views.text_input, name='text_input'),
     path('add/photo/', views.photo_input, name='photo_input'),

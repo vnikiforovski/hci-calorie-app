@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+
+{% block title %}Profile{% endblock %}
+
+{# The Profile hub (chunk 18), Figma "Profile". Left out of Figma: the Goals and targets, Water and   #}
+{# Your meals rows (not built yet). Like Meal detail it has its own header and no bottom bar (Figma). #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-profile">
+        {% url 'home' as home_url %}
+        {% include 'meals/_profile_head.html' with back=home_url back_label='Back to Home' title='Profile' %}
+
+        <section class="z-profile-card" aria-label="Your account">
+            <span class="z-profile-banner" aria-hidden="true"></span>
+            <span class="z-profile-avatar" aria-hidden="true">{{ user.first_name|default:user.username|first|upper }}</span>
+            <p class="z-profile-name">{{ user.first_name|default:'You' }}</p>
+            <p class="z-profile-email">{{ user.email|default:user.username }}</p>
+            <a class="btn btn-outline-secondary btn-lg z-profile-edit" href="{% url 'profile_details' %}">Edit details</a>
+        </section>
+
+        <ul class="z-menu" aria-label="Your settings">
+            {% url 'profile_details' as details_url %}
+            {% include 'meals/_profile_row.html' with url=details_url icon='bi-person' title='Personal details' line='Height, weight, activity' %}
+            {% url 'profile_preferences' as preferences_url %}
+            {% with line='When unsure: '|add:profile.get_uncertainty_display %}
+                {% include 'meals/_profile_row.html' with url=preferences_url icon='bi-sliders' title='Preferences' %}
+            {% endwith %}
+        </ul>
+
+        <ul class="z-menu" aria-label="More">
+            {% url 'profile_account' as account_url %}
+            {% include 'meals/_profile_row.html' with url=account_url icon='bi-lock' title='Account and privacy' line='Password, delete account' %}
+            {% url 'profile_help' as help_url %}
+            {% include 'meals/_profile_row.html' with url=help_url icon='bi-info-circle' title='Help and about' line='Zalak gives estimates, not medical advice' %}
+        </ul>
+
+        {# Red: sign out is one of the two red actions (delete is the other). LogoutView takes POST only. #}
+        <form method="post" action="{% url 'sign_out' %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger btn-lg w-100">Sign out</button>
+        </form>
+    </div>
+{% endblock %}

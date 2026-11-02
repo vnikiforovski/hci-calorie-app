@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Personal details{% endblock %}
+
+{# Profile · Personal details (chunk 18, Figma). Two ModelForms in one <form>: the name and e-mail  #}
+{# (User) and the Profile's numbers (views.profile_details). All but name and e-mail are optional. #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-profile z-profile-form">
+        {% url 'profile' as profile_url %}
+        {% include 'meals/_profile_head.html' with back=profile_url back_label='Back to Profile' title='Personal details' %}
+        <p class="z-profile-intro">Used only to put the numbers in context. Never shared.</p>
+
+        <form method="post" action="{% url 'profile_details' %}" novalidate data-auth-form>
+            {% csrf_token %}
+            {% include 'meals/_field.html' with field=account_form.first_name %}
+            {% include 'meals/_field.html' with field=account_form.email %}
+
+            <div class="z-two-fields">
+                <div>{% include 'meals/_field.html' with field=details_form.height_cm unit='cm' %}</div>
+                <div>{% include 'meals/_field.html' with field=details_form.weight_kg unit='kg' %}</div>
+            </div>
+            {% include 'meals/_field.html' with field=details_form.birth_year %}
+            {% include 'meals/_activity_field.html' with field=details_form.activity_level %}
+
+            <button type="submit" class="btn btn-primary btn-lg w-100 z-profile-save" data-busy-text="Saving…">Save changes</button>
+        </form>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/auth.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}
