@@ -18,8 +18,10 @@ def toast(request):
 
 def add_meal(request):
     """The Add meal sheet (chunk 14) is on every page of a signed-in user: the corner "+" and the
-    sidebar's "Add a meal" open it. Its slot comes from the time; Home adds add_day on a past day."""
+    sidebar's "Add a meal" open it. Its slot comes from the time; Home adds add_day on a past day.
+    Recent (chunk 22) is the last 5 different logged meals, each with one-tap Log again."""
     if not request.user.is_authenticated:
         return {}
-    from .views import SLOT_OPTIONS   # here, not at the top: views.py is big and imports a lot
-    return {'add_slot': slot_for_time(timezone.now()), 'slot_options': SLOT_OPTIONS}
+    from .views import SLOT_OPTIONS, recent_meals   # here, not at the top: views.py is big and imports a lot
+    return {'add_slot': slot_for_time(timezone.now()), 'slot_options': SLOT_OPTIONS,
+            'recent_meals': recent_meals(request.user)}

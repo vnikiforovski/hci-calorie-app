@@ -27,6 +27,7 @@
         </div>
 
         <div class="z-book">
+            {% include 'meals/_book_tab.html' %}
             {# Desktop only: the left page, the day before #}
             <div class="z-book-left z-desktop-only">
                 {% include 'meals/_diary_page.html' with page=left_page %}

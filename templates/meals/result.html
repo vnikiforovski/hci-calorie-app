@@ -14,7 +14,11 @@
     <div class="z-result-side">
     <section class="z-hero">
         <div class="z-hero-top">
-            <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Back to Home">
+            {% if is_mine %}
+                <a class="z-icon-btn" href="{% url 'your_meals' %}?tab=mine" aria-label="Back to Your meals">
+            {% else %}
+                <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Back to Home">
+            {% endif %}
                 <i class="bi bi-chevron-left" aria-hidden="true"></i>
             </a>
             <span class="z-chip"><i class="bi bi-stars" aria-hidden="true"></i> AI estimate</span>
@@ -47,7 +51,19 @@
 
     <div class="z-actions">
         {# Only drafts come here: a logged meal opens Meal detail (views.result) #}
-        {% if meal.status == 'draft' %}
+        {% if is_mine %}
+            {# "Create your own meal" (chunk 22): the draft becomes a My meal, never logged or counted #}
+            <div class="z-actions-buttons">
+                <form method="post" action="{% url 'just_checking' meal.id %}" id="discardForm">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-secondary btn-lg w-100">Cancel</button>
+                </form>
+                <form method="post" action="{% url 'save_my_meal' meal.id %}" id="logForm">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Save to My meals</button>
+                </form>
+            </div>
+        {% elif meal.status == 'draft' %}
             <div class="z-actions-buttons">
                 {# Just checking throws the draft away; nothing is saved (FR34) #}
                 <form method="post" action="{% url 'just_checking' meal.id %}" id="discardForm">

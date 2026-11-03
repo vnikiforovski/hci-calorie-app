@@ -113,6 +113,20 @@ class PhotoMealForm(forms.ModelForm):
         return self.cleaned_data['text'].strip()   # the note is optional
 
 
+class MealTitleForm(forms.ModelForm):
+    """Rename a My meal on its Saved meal page (chunk 22). A My meal has no Meal detail, so this
+    small sheet is its "Edit meal"; the items are edited on the page itself. Empty gives Zalak's name."""
+
+    class Meta:
+        model = Meal
+        fields = ['title']
+        widgets = {
+            'title': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off',
+                                            'placeholder': 'e.g. My protein oats'}),
+        }
+        labels = {'title': 'Meal name'}
+
+
 class MealDetailForm(forms.ModelForm):
     """Meal detail (chunk 15): the slot, the title and the photo of a logged meal, plus when it
     was eaten. The day and the time come from the time sheet (meal_detail.js) as two hidden

@@ -1,17 +1,20 @@
 import calendar
+import os
+from copy import deepcopy
 from datetime import date, timedelta
 from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.core.files.base import ContentFile
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import (AccountDetailsForm, DeleteAccountForm, MealDetailForm, MealItemForm, PersonalDetailsForm,
+from .forms import (AccountDetailsForm, DeleteAccountForm, MealDetailForm, MealItemForm, MealTitleForm, PersonalDetailsForm,
                     PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm, UncertaintyForm,
                     ZalakPasswordChangeForm)
 from .models import Meal, MealItem, Profile, slot_for_time
@@ -345,6 +348,10 @@ def result(request, meal_id):
     meal = get_own_meal(request, meal_id)
     if meal.status == 'logged':
         return render_meal_detail(request, meal, MealDetailForm(instance=meal))
+    if meal.status == 'mine':
+        # A My meal (chunk 22) lives on its Saved meal page; item changes come back here, so they
+        # land there too (the browser keeps the #item-… part of the address over the redirect)
+        return redirect('saved_meal', meal_id=meal.id)
     if not meal.items.exists():
         # A draft without items has no Result yet: show the way forward instead
         if (meal.ai_response or {}).get('status') == 'no_food':
@@ -360,6 +367,8 @@ def result(request, meal_id):
         # Set by add_item when Zalak couldn't add the item: the name comes back with a message
         'add_item_error': request.session.pop('add_item_error', None),
         'ask_questions': asks_questions(request),   # Profile · Preferences (chunk 18)
+        # "Create your own meal" (chunk 22): Save to My meals instead of Log
+        'is_mine': is_mine_draft(request, meal),
     }
     return render(request, 'meals/result.html', context)
 
@@ -394,7 +403,9 @@ def get_own_logged_meal(request, meal_id):
 
 
 # Where Meal detail goes back to (its back arrow, Save changes, Delete and Undo)
-MEAL_PAGES = {'home': home_url, 'diary': diary_url}
+MEAL_PAGES = {'home': home_url, 'diary': diary_url,
+              # "Edit meal" on a favorite's Saved meal page (chunk 22): back to Your meals
+              'your_meals': lambda day: your_meals_url('favorites')}
 
 
 def meal_back_url(request, meal):
@@ -435,9 +446,18 @@ def render_meal_detail(request, meal, form):
         'show_logged_time': logged.date() == eaten.date(),
         'now': timezone.localtime(),
         'back_url': back_url,
-        'back_label': 'Back to the Diary' if back_url.startswith(reverse('diary')) else 'Back to Home',
+        'back_label': back_label(back_url),
     }
     return render(request, 'meals/meal_detail.html', context)
+
+
+def back_label(url):
+    """The words of Meal detail's back arrow. Your meals is checked first: its URL starts with /diary/."""
+    if url.startswith(reverse('your_meals')):
+        return 'Back to Your meals'
+    if url.startswith(reverse('diary')):
+        return 'Back to the Diary'
+    return 'Back to Home'
 
 
 @require_POST
@@ -625,11 +645,19 @@ def eaten_on(day):
     return now.replace(year=day.year, month=day.month, day=day.day)
 
 
+def checker_back(request, mine, meal):
+    """Where the input pages' back / close button goes: Home, or Your meals for "Create your own meal"."""
+    if mine or is_mine_draft(request, meal):
+        return {'back_url': your_meals_url('mine'), 'back_to': 'Your meals'}
+    return {'back_url': reverse('home'), 'back_to': 'Home'}
+
+
 def text_input(request, meal_id=None):
     """Text and voice. Without meal_id it starts a new draft; with one ("Edit the text")
     it edits that draft, so a corrected meal doesn't leave a second draft behind."""
     meal = get_own_draft(request, meal_id) if meal_id else None
-    day = picked_day(request, meal_id)
+    mine = wants_mine(request, meal_id)
+    day = None if mine else picked_day(request, meal_id)
 
     if request.method == 'POST':
         form = TextMealForm(request.POST, instance=meal)
@@ -645,6 +673,8 @@ def text_input(request, meal_id=None):
                     meal.eaten_at = eaten_on(day)
             # The draft is saved first, so the input is kept even if the AI fails (FR29)
             meal.save()
+            if mine:
+                remember_mine_draft(request, meal)
             return analyze_meal(meal)
     elif meal:
         form = TextMealForm(instance=meal)
@@ -658,6 +688,8 @@ def text_input(request, meal_id=None):
         'form': form,
         'slot': form['slot'].value(),
         'day': day,
+        'mine': mine,
+        **checker_back(request, mine, meal),
         'steps': TEXT_STEPS,
     }
     return render(request, 'meals/text_input.html', context)
@@ -668,7 +700,8 @@ def photo_input(request, meal_id=None):
     it gives that draft a new photo, so a retake doesn't leave a second draft behind."""
     meal = get_own_draft(request, meal_id) if meal_id else None
     old_photo = meal.photo.name if meal and meal.photo else ''
-    day = picked_day(request, meal_id)
+    mine = wants_mine(request, meal_id)
+    day = None if mine else picked_day(request, meal_id)
 
     if request.method == 'POST':
         form = PhotoMealForm(request.POST, request.FILES, instance=meal)
@@ -682,6 +715,8 @@ def photo_input(request, meal_id=None):
                     meal.eaten_at = eaten_on(day)
             # Saved first, so the photo and note are kept even if the AI fails (FR29)
             meal.save()
+            if mine:
+                remember_mine_draft(request, meal)
             if old_photo and old_photo != meal.photo.name:
                 meal.photo.storage.delete(old_photo)   # the retaken photo replaces the old file
             return analyze_meal(meal)
@@ -698,6 +733,8 @@ def photo_input(request, meal_id=None):
         'form': form,
         'slot': slot,
         'day': day,
+        'mine': mine,
+        **checker_back(request, mine, meal),
         'steps': PHOTO_STEPS,
         'show_tips': not tips_seen(request),   # the tips open by themselves until "Don't show again"
     }
@@ -999,7 +1036,11 @@ def just_checking(request, meal_id):
     waiting = request.session.get('guest_meal')
     if waiting and waiting['id'] == meal.id:
         del request.session['guest_meal']   # nothing is waiting for an account any more
+    mine = is_mine_draft(request, meal)
+    forget_mine_draft(request, meal)
     meal.delete()
+    if mine:
+        return redirect(your_meals_url('mine'))   # Cancel on "Create your own meal"
     return redirect('home')
 
 
@@ -1350,6 +1391,7 @@ def profile(request):
     """The Profile hub: who is signed in, the rows to the subpages, and Sign out (red)."""
     context = {
         'profile': own_profile(request),
+        'saved_count': saved_meals(request.user).count(),   # "Your meals · 4 saved" (chunk 22)
     }
     return render(request, 'meals/profile.html', context)
 
@@ -1445,6 +1487,293 @@ def delete_account(request):
 def help_about(request):
     """Help and about: what Zalak does, the three confidence words, and "estimates, not medical advice"."""
     return render(request, 'meals/help_about.html')
+
+
+# ---------- Your meals (chunk 22, Figma "Diary · Your meals", "Saved meal", "Add meal") ----------
+# Favorites are logged meals with the heart (is_favorite). My meals are templates with status "mine":
+# never counted, never on Home, the Diary or Statistics. Logging either one again makes a copy.
+
+YOUR_MEALS_TABS = ['favorites', 'mine']
+RECENT_COUNT = 5
+
+
+def your_meals_url(tab='favorites'):
+    url = reverse('your_meals')
+    return f'{url}?tab=mine' if tab == 'mine' else url
+
+
+def saved_meals(user):
+    """Everything under Your meals: the hearted logged meals and the My meals."""
+    own = Meal.objects.filter(user=user, deleted_at__isnull=True)
+    return own.filter(status='logged', is_favorite=True) | own.filter(status='mine')
+
+
+def copy_meal(source, slot, eaten_at, status):
+    """A new meal like `source`: its words, Zalak's answer (so Reset still works) and every item with
+    its numbers and position. The photo is copied to a new file, so deleting one meal (whose
+    post_delete signal removes its photo) never takes the other's photo with it. The heart is not
+    copied: a meal logged again from Favorites doesn't show up there twice."""
+    meal = Meal(user=source.user, slot=slot, input_method=source.input_method, text=source.text,
+                title=source.title, description=source.description, status=status,
+                eaten_at=eaten_at, ai_response=deepcopy(source.ai_response))
+    if source.photo:
+        try:
+            with source.photo.open('rb') as photo:
+                content = ContentFile(photo.read())
+            meal.photo.save(os.path.basename(source.photo.name), content, save=False)
+        except OSError:
+            pass   # the file is gone from media/: the copy simply has no photo
+    meal.save()   # with status "logged" the pre_save signal counts it, like any Log
+    for item in source.items.all():
+        MealItem.objects.create(meal=meal, **{field: getattr(item, field) for field in ITEM_FIELDS})
+    return meal
+
+
+def logged_times(meal):
+    """ "Logged 12 times" on Saved meal: logged meals with the same name, case aside (as Most logged)."""
+    name = (meal.title or '').strip().casefold()
+    if not name:
+        return 0
+    titles = Meal.objects.filter(user=meal.user, status='logged', deleted_at__isnull=True) \
+        .values_list('title', flat=True)
+    return sum(1 for title in titles if (title or '').strip().casefold() == name)
+
+
+def recent_meals(user):
+    """Recent in the Add meal sheet: the last 5 logged meals with different names, newest first."""
+    logged = Meal.objects.filter(user=user, status='logged', deleted_at__isnull=True)
+    seen, ids = set(), []
+    for meal_id, title in logged.order_by('-eaten_at').values_list('id', 'title')[:100]:
+        name = (title or '').strip().casefold()
+        if name in seen:
+            continue
+        seen.add(name)
+        ids.append(meal_id)
+        if len(ids) == RECENT_COUNT:
+            break
+    meals = {meal.id: meal for meal in logged.filter(id__in=ids).prefetch_related('items')}
+    recent = [meals[meal_id] for meal_id in ids]
+    for meal in recent:
+        meal.tint = SLOT_TINTS.get(meal.slot, 'sky')
+    return recent
+
+
+# "Create your own meal": the normal checker, whose draft is remembered in the session so its
+# Result shows Save to My meals instead of Log. Only signed-in users have Your meals.
+
+def wants_mine(request, meal_id):
+    if meal_id is not None or not request.user.is_authenticated:
+        return False
+    data = request.POST if request.method == 'POST' else request.GET
+    return data.get('mine') == '1'
+
+
+def remember_mine_draft(request, meal):
+    drafts = request.session.get('mine_drafts', [])
+    if meal.id not in drafts:
+        request.session['mine_drafts'] = drafts + [meal.id]
+
+
+def forget_mine_draft(request, meal):
+    drafts = request.session.get('mine_drafts', [])
+    if meal.id in drafts:
+        request.session['mine_drafts'] = [draft for draft in drafts if draft != meal.id]
+
+
+def is_mine_draft(request, meal):
+    return bool(meal and meal.id in request.session.get('mine_drafts', []))
+
+
+@login_required
+def your_meals(request):
+    """Your meals, the back of the Diary book (FR10, FR27): ?tab=favorites (the hearted meals) or ?tab=mine."""
+    tab = request.GET.get('tab')
+    if tab not in YOUR_MEALS_TABS:
+        tab = 'favorites'
+    own = Meal.objects.filter(user=request.user, deleted_at__isnull=True)
+    if tab == 'mine':
+        meals = own.filter(status='mine').order_by('-created_at')
+    else:
+        meals = own.filter(status='logged', is_favorite=True).order_by('-eaten_at')
+    meals = list(meals.prefetch_related('items'))
+    for meal in meals:
+        meal.tint = SLOT_TINTS.get(meal.slot, 'sky')
+    today = timezone.localdate()
+    logged = own.filter(status='logged')
+    month, calendar_open = parse_month(request.GET.get('month'), today)
+    context = {
+        'tab': tab,
+        'meals': meals,
+        # The Diary's "Jump to a date", as on every Diary page
+        'calendar': calendar_month(logged, month, today, diary_url),
+        'calendar_open': calendar_open,
+        'favorites_url': your_meals_url('favorites'),
+        'mine_url': your_meals_url('mine'),
+    }
+    return render(request, 'meals/your_meals.html', context)
+
+
+def get_saved_meal(request, meal_id):
+    """A meal under Your meals: the user's own hearted logged meal or My meal, else 404."""
+    meal = get_own_meal(request, meal_id)
+    if meal.status == 'mine' or (meal.status == 'logged' and meal.is_favorite):
+        return meal
+    raise Http404
+
+
+@login_required
+def saved_meal(request, meal_id):
+    """Saved meal (Figma): log it again in 2 taps (NFR8), slot from the time unless changed.
+    A favorite's items are read-only here ("Edit meal" opens its Meal detail), so a pencil never
+    quietly changes a day in the Diary. A My meal is edited right here, and renamed in a small sheet."""
+    meal = get_saved_meal(request, meal_id)
+    is_mine = meal.status == 'mine'
+    slot = slot_for_time(timezone.now())
+    context = {
+        'meal': meal,
+        'is_mine': is_mine,
+        'read_only': not is_mine,
+        'items': meal.items_with_bars,
+        'slot': slot,
+        'slot_icon': SLOT_ICONS[slot],
+        'slot_options': SLOT_OPTIONS,
+        'logged_times': logged_times(meal),
+        'back_url': your_meals_url(meal.status if is_mine else 'favorites'),
+        'add_item_error': request.session.pop('add_item_error', None),
+        'ask_questions': asks_questions(request),
+        'title_form': MealTitleForm(instance=meal) if is_mine else None,
+    }
+    return render(request, 'meals/saved_meal.html', context)
+
+
+@login_required
+@require_POST
+def rename_saved(request, meal_id):
+    """The Rename sheet of a My meal. An emptied name gives back Zalak's, as on Meal detail."""
+    meal = get_saved_meal(request, meal_id)
+    if meal.status != 'mine':
+        raise Http404
+    form = MealTitleForm(request.POST, instance=meal)
+    if form.is_valid():
+        meal = form.save(commit=False)
+        if not meal.title:
+            answer = meal.ai_response if isinstance(meal.ai_response, dict) else {}
+            meal.title = answer.get('title', '')
+        meal.save()
+        request.session['toast'] = {'text': 'Changes saved'}
+    return redirect('saved_meal', meal_id=meal.id)
+
+
+@login_required
+@require_POST
+def toggle_favorite(request, meal_id):
+    """The heart on Meal detail (FR10). Its Undo is the same toggle again."""
+    meal = get_own_logged_meal(request, meal_id)
+    meal.is_favorite = not meal.is_favorite
+    meal.save(update_fields=['is_favorite'])
+    if meal.is_favorite:
+        request.session['toast'] = {'text': 'Saved to Your meals'}
+    else:
+        request.session['toast'] = {'text': 'Removed from Your meals',
+                                    'undo_url': reverse('toggle_favorite', args=[meal.id])}
+    return redirect('result', meal_id=meal.id)
+
+
+@login_required
+@require_POST
+def log_again(request, meal_id):
+    """Log again (FR27, NFR8) from Meal detail, Saved meal and Recent: a copy, logged now on
+    today (or the Add sheet's day), in the posted slot or the one from the time."""
+    source = get_own_meal(request, meal_id)
+    if source.status not in ('logged', 'mine'):
+        raise Http404
+    slot = request.POST.get('slot')
+    if slot not in SLOT_ICONS:
+        slot = slot_for_time(timezone.now())
+    day = parse_day(request.POST.get('day'))
+    eaten_at = eaten_on(day) if day and day != timezone.localdate() else timezone.now()
+
+    meal = copy_meal(source, slot, eaten_at, 'logged')
+    request.session['logged_again'] = meal.id
+    request.session['toast'] = {
+        'text': f'Logged again to {slot}',
+        'undo_url': reverse('undo_log_again', args=[meal.id]),
+    }
+    return redirect(home_url(timezone.localdate(meal.eaten_at)))
+
+
+@login_required
+@require_POST
+def undo_log_again(request, meal_id):
+    """Undo in "Logged again to lunch": the copy goes. Back to draft first, so the signal takes it
+    off the counter again; deleting it then removes its photo file (post_delete)."""
+    if request.session.get('logged_again') != meal_id:
+        raise Http404   # only the copy just made, never any other logged meal
+    meal = get_own_logged_meal(request, meal_id)
+    day = timezone.localdate(meal.eaten_at)
+    meal.status = 'draft'
+    meal.save()
+    meal.delete()
+    del request.session['logged_again']
+    return redirect(home_url(day))
+
+
+@login_required
+@require_POST
+def save_as_my_meal(request, meal_id):
+    """ "Save a copy to My meals" on Meal detail (FR39): a template made from a logged meal."""
+    meal = get_own_logged_meal(request, meal_id)
+    copy_meal(meal, meal.slot, timezone.now(), 'mine')
+    request.session['toast'] = {'text': 'Saved to Your meals'}
+    return redirect('result', meal_id=meal.id)
+
+
+@login_required
+@require_POST
+def save_my_meal(request, meal_id):
+    """Save to My meals on the Result of "Create your own meal" (FR39): the draft becomes a My meal."""
+    meal = get_own_draft(request, meal_id)
+    if not is_mine_draft(request, meal):
+        raise Http404
+    slot = request.POST.get('slot')
+    if slot in SLOT_ICONS:
+        meal.slot = slot
+    meal.status = 'mine'
+    meal.save()
+    forget_mine_draft(request, meal)
+    request.session['toast'] = {'text': 'Saved to Your meals'}
+    return redirect(your_meals_url('mine'))
+
+
+@login_required
+@require_POST
+def remove_saved(request, meal_id):
+    """The red button and the heart on Saved meal: a favorite loses its heart (the meal stays in
+    the Diary); a My meal is soft-deleted. Both with Undo."""
+    meal = get_saved_meal(request, meal_id)
+    if meal.status == 'mine':
+        meal.deleted_at = timezone.now()
+    else:
+        meal.is_favorite = False
+    meal.save()
+    request.session['toast'] = {'text': 'Removed from Your meals',
+                                'undo_url': reverse('undo_remove_saved', args=[meal.id])}
+    return redirect(your_meals_url(meal.status))
+
+
+@login_required
+@require_POST
+def undo_remove_saved(request, meal_id):
+    """Undo in "Removed from Your meals": the heart, or the My meal, comes back."""
+    meal = get_object_or_404(Meal, id=meal_id, user=request.user)
+    if meal.status == 'mine':
+        meal.deleted_at = None
+    elif meal.status == 'logged' and meal.deleted_at is None:
+        meal.is_favorite = True
+    else:
+        raise Http404
+    meal.save()
+    return redirect(your_meals_url(meal.status))
 
 
 def add_meal(request):

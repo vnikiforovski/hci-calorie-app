@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+
+{% block title %}Your meals{% endblock %}
+
+{# Your meals (chunk 22, Figma "Diary · Your meals" and "… · My meals"): the back of the Diary book.     #}
+{# Favorites are the hearted logged meals; My meals are the user's own, never counted. A row opens     #}
+{# Saved meal, where Log to <slot> logs a copy (2 taps from here, NFR8). No desktop frame in Figma:   #}
+{# the desktop shows this one page in the middle (views.your_meals).                                  #}
+{% block header %}{% endblock %}
+
+{% block content %}
+    <div class="z-diary">
+        <div class="z-diary-head">
+            <div>
+                <h1 class="mb-0">Diary</h1>
+                <p class="text-body-secondary mb-0">Your meals</p>
+            </div>
+            <div class="z-diary-head-actions">
+                <button type="button" class="z-icon-btn" data-bs-toggle="offcanvas" data-bs-target="#dateSheet"
+                        aria-controls="dateSheet" aria-label="Jump to a date">
+                    <i class="bi bi-calendar3" aria-hidden="true"></i>
+                </button>
+                <a class="z-icon-btn z-mobile-only" href="{% url 'profile' %}" aria-label="Profile">
+                    <i class="bi bi-person" aria-hidden="true"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="z-book-one">
+            {% include 'meals/_book_tab.html' with current=True %}
+            <section class="z-diary-page z-saved-page" aria-labelledby="yourMealsTitle">
+                <header class="z-page-head">
+                    <p class="z-page-kicker">Back of the book</p>
+                    <h2 class="z-page-date" id="yourMealsTitle">Your meals</h2>
+                    <p class="z-small text-body-secondary mb-0">
+                        {% if tab == 'mine' %}Meals you put together yourself. Tap one to see it or log it.
+                        {% else %}Meals you save live here. Tap one to see it or log it.{% endif %}
+                    </p>
+                </header>
+
+                {# Two links, not a JS switch: each tab has its own address (?tab=mine), so Back works #}
+                <nav class="z-segmented z-saved-tabs" aria-label="Your meals">
+                    <a class="z-segment{% if tab == 'favorites' %} active{% endif %}" href="{{ favorites_url }}"
+                       {% if tab == 'favorites' %}aria-current="page"{% endif %}>
+                        <i class="bi bi-heart me-2" aria-hidden="true"></i>Favorites
+                    </a>
+                    <a class="z-segment{% if tab == 'mine' %} active{% endif %}" href="{{ mine_url }}"
+                       {% if tab == 'mine' %}aria-current="page"{% endif %}>My meals</a>
+                </nav>
+
+                {% if meals %}
+                    <ul class="z-page-rows z-saved-rows">
+                        {% for meal in meals %}
+                            <li>
+                                <a class="z-page-row" href="{% url 'saved_meal' meal.id %}">
+                                    {% if meal.photo %}
+                                        <span class="z-polaroid"><img src="{{ meal.photo.url }}" alt=""></span>
+                                    {% else %}
+                                        <span class="z-polaroid z-polaroid-{{ meal.tint }}" aria-hidden="true"></span>
+                                    {% endif %}
+                                    <span class="z-page-text">
+                                        <span class="z-page-title">{{ meal.title|default:'Meal' }}</span>
+                                        <span class="z-page-kcal">{{ meal.get_slot_display }} · {{ meal.kcal_min|intcomma }}–{{ meal.kcal_max|intcomma }} kcal</span>
+                                    </span>
+                                    <i class="bi bi-chevron-right z-menu-chevron" aria-hidden="true"></i>
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    {# Not in Figma: an empty tab says how to fill it #}
+                    <p class="z-saved-empty text-body-secondary">
+                        {% if tab == 'mine' %}Meals you put together yourself live here. Create one below, then log it in two taps.
+                        {% else %}Tap the heart on a meal to keep it here.{% endif %}
+                    </p>
+                {% endif %}
+
+                <button type="button" class="z-create-btn" data-bs-toggle="offcanvas" data-bs-target="#createMealSheet" aria-controls="createMealSheet">
+                    <i class="bi bi-plus-lg" aria-hidden="true"></i> Create your own meal
+                </button>
+            </section>
+        </div>
+
+        <nav class="z-diary-nav" aria-label="Diary pages">
+            <a class="z-page-btn" href="{% url 'diary' %}"><i class="bi bi-chevron-left" aria-hidden="true"></i> Today</a>
+            <span class="z-diary-nav-here" aria-current="page">Your meals</span>
+            <span class="z-page-btn-space" aria-hidden="true"></span>
+        </nav>
+    </div>
+
+    {% include 'meals/_create_meal_sheet.html' %}
+    {% include 'meals/_date_sheet.html' %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/date_sheet.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

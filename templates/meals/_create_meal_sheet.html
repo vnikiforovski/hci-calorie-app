@@ -1,0 +1,36 @@
+{# "Create your own meal" on Your meals (chunk 22, not a Figma frame): the normal checker with mine=1, #}
+{# so its Result offers Save to My meals instead of Log. A GET form, so it works without JavaScript.   #}
+<div class="offcanvas offcanvas-bottom z-sheet z-add-sheet" tabindex="-1" id="createMealSheet" aria-labelledby="createMealTitle">
+    <div class="z-sheet-handle" aria-hidden="true"></div>
+    <form method="get" action="{% url 'text_input' %}">
+        <input type="hidden" name="mine" value="1">
+        <div class="z-sheet-title">
+            <div>
+                <h2 class="z-add-title mb-0" id="createMealTitle">Create your own meal</h2>
+                <p class="z-small text-body-secondary mt-2 mb-0">Zalak checks it like any meal. It's kept under My meals, not logged.</p>
+            </div>
+            <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <div class="z-add-options">
+            <button type="submit" class="z-add-option z-add-option-photo" formaction="{% url 'photo_input' %}">
+                <span class="z-add-option-icon" aria-hidden="true"><i class="bi bi-camera"></i></span>
+                <span class="z-add-option-text">
+                    <span class="z-add-option-title">Photo</span>
+                    <span class="z-add-option-hint">Snap the plate, add a note if you like</span>
+                </span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+            <button type="submit" class="z-add-option z-add-option-text-voice" formaction="{% url 'text_input' %}">
+                <span class="z-add-option-icon" aria-hidden="true"><i class="bi bi-mic"></i></span>
+                <span class="z-add-option-text">
+                    <span class="z-add-option-title">Text and voice</span>
+                    <span class="z-add-option-hint">Type or say what goes in it</span>
+                </span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+        </div>
+    </form>
+</div>

@@ -2519,3 +2519,158 @@ class DemoFixtureTests(TestCase):
                          [('Yogurt with honey and walnuts', 4), ('Coffee with milk', 3)])
         meal = Meal.objects.filter(user=self.ana).first()
         self.assertTemplateUsed(self.client.get(reverse('result', args=[meal.id])), 'meals/meal_detail.html')
+
+
+class YourMealsTests(TestCase):
+    """Chunk 22: favorites, My meals, Log again (a copy) and Recent in the Add meal sheet."""
+
+    def setUp(self):
+        use_temp_media(self)
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(user=self.user, slot='lunch', status='logged', is_favorite=True,
+                               ai_response={'status': 'ok', 'title': 'Chicken', 'items': []},
+                               eaten_at=timezone.now() - timedelta(days=1))
+
+    def counter(self):
+        return Profile.objects.get(user=self.user).meals_logged
+
+    def test_copy_meal_copies_items_answer_and_a_new_photo_file(self):
+        from .views import copy_meal
+        self.meal.photo = SimpleUploadedFile('plate.jpg', jpeg().read(), content_type='image/jpeg')
+        self.meal.save()
+        copied = copy_meal(self.meal, 'dinner', timezone.now(), 'mine')
+        self.assertEqual(copied.slot, 'dinner')
+        self.assertEqual(copied.ai_response, self.meal.ai_response)
+        self.assertFalse(copied.is_favorite)
+        self.assertEqual([(i.name, i.grams, i.position) for i in copied.items.all()],
+                         [(i.name, i.grams, i.position) for i in self.meal.items.all()])
+        self.assertNotEqual(copied.photo.name, self.meal.photo.name)
+        # Deleting the original (its signal removes its photo) leaves the copy's photo alone
+        self.meal.delete()
+        self.assertTrue(copied.photo.storage.exists(copied.photo.name))
+
+    def test_log_again_counts_once_lands_on_today_and_undo_takes_it_back(self):
+        before = self.counter()
+        response = self.client.post(reverse('log_again', args=[self.meal.id]), {'slot': 'dinner'})
+        self.assertRedirects(response, reverse('home'), fetch_redirect_response=False)
+        copied = Meal.objects.exclude(id=self.meal.id).get()
+        self.assertEqual((copied.status, copied.slot), ('logged', 'dinner'))
+        self.assertEqual(timezone.localdate(copied.eaten_at), timezone.localdate())
+        self.assertEqual(self.counter(), before + 1)
+        self.assertContains(self.client.get(reverse('home')), 'Logged again to dinner')
+
+        self.client.post(reverse('undo_log_again', args=[copied.id]))
+        self.assertFalse(Meal.objects.filter(id=copied.id).exists())
+        self.assertEqual(self.counter(), before)
+        # Undo only works for the copy just made, never for another logged meal
+        self.assertEqual(self.client.post(reverse('undo_log_again', args=[self.meal.id])).status_code, 404)
+
+    def test_log_again_from_recent_goes_to_the_sheets_day(self):
+        day = timezone.localdate() - timedelta(days=2)
+        self.client.post(reverse('log_again', args=[self.meal.id]), {'slot': 'snack', 'day': day.isoformat()})
+        copied = Meal.objects.exclude(id=self.meal.id).get()
+        self.assertEqual(timezone.localdate(copied.eaten_at), day)
+
+    def test_heart_toggles_and_toggling_again_is_the_undo(self):
+        self.client.post(reverse('toggle_favorite', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertFalse(self.meal.is_favorite)
+        self.client.post(reverse('toggle_favorite', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertTrue(self.meal.is_favorite)
+
+    def test_your_meals_tabs(self):
+        mine = make_draft(user=self.user, status='mine')
+        Meal.objects.filter(id=mine.id).update(title='My protein oats')
+        favorites = self.client.get(reverse('your_meals'))
+        self.assertContains(favorites, 'Chicken')
+        self.assertNotContains(favorites, 'My protein oats')
+        tab = self.client.get(reverse('your_meals') + '?tab=mine')
+        self.assertContains(tab, 'My protein oats')
+        self.assertContains(tab, reverse('saved_meal', args=[mine.id]))
+
+    def test_a_guest_is_sent_to_sign_in(self):
+        self.client.logout()
+        self.assertRedirects(self.client.get(reverse('your_meals')),
+                             reverse('sign_in') + '?next=' + reverse('your_meals'), fetch_redirect_response=False)
+
+    def test_saved_meal_page(self):
+        Meal.objects.create(user=self.user, input_method='text', title='CHICKEN', status='logged')
+        page = self.client.get(reverse('saved_meal', args=[self.meal.id]))
+        self.assertContains(page, 'Logged 2 times')   # case doesn't matter
+        self.assertContains(page, 'Remove from favorites')
+        self.assertNotContains(page, 'Add something Zalak missed')   # a favorite is read-only here
+
+    def test_saved_meal_only_for_favorites_and_my_meals(self):
+        self.meal.is_favorite = False
+        self.meal.save()
+        self.assertEqual(self.client.get(reverse('saved_meal', args=[self.meal.id])).status_code, 404)
+
+    def test_someone_elses_meal_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(reverse('saved_meal', args=[self.meal.id])).status_code, 404)
+        for name in ['toggle_favorite', 'log_again', 'remove_saved', 'save_as_my_meal']:
+            with self.subTest(name):
+                self.assertEqual(self.client.post(reverse(name, args=[self.meal.id])).status_code, 404)
+
+    def test_remove_from_favorites_and_undo(self):
+        self.client.post(reverse('remove_saved', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertFalse(self.meal.is_favorite)
+        self.assertIsNone(self.meal.deleted_at)   # it stays in the Diary
+        self.client.post(reverse('undo_remove_saved', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertTrue(self.meal.is_favorite)
+
+    def test_delete_a_my_meal_and_undo(self):
+        mine = make_draft(user=self.user, status='mine')
+        self.client.post(reverse('remove_saved', args=[mine.id]))
+        mine.refresh_from_db()
+        self.assertIsNotNone(mine.deleted_at)
+        self.client.post(reverse('undo_remove_saved', args=[mine.id]))
+        mine.refresh_from_db()
+        self.assertIsNone(mine.deleted_at)
+
+    def test_a_my_meal_is_never_counted_or_shown_as_eaten(self):
+        before = self.counter()
+        self.client.post(reverse('save_as_my_meal', args=[self.meal.id]))
+        mine = Meal.objects.get(status='mine')
+        self.assertEqual(self.counter(), before)
+        self.assertNotContains(self.client.get(reverse('home')), f'href="/meal/{mine.id}/')
+        self.assertEqual(self.client.get(reverse('statistics')).context['stats']['days_logged'], 1)
+        # Its address goes to the Saved meal page, so item edits come back there
+        self.assertRedirects(self.client.get(reverse('result', args=[mine.id])),
+                             reverse('saved_meal', args=[mine.id]))
+
+    @override_settings(ZALAK_AI_FAKE=True, ZALAK_AI_FAKE_DELAY=0)
+    def test_create_your_own_meal(self):
+        response = self.client.post(reverse('text_input'), {'text': 'oats with whey', 'slot': 'breakfast',
+                                                            'input_method': 'text', 'mine': '1'})
+        draft = Meal.objects.get(status='draft')
+        self.assertRedirects(response, reverse('result', args=[draft.id]))
+        self.assertContains(self.client.get(reverse('result', args=[draft.id])), 'Save to My meals')
+        before = self.counter()
+        self.client.post(reverse('save_my_meal', args=[draft.id]), {'slot': 'breakfast'})
+        draft.refresh_from_db()
+        self.assertEqual(draft.status, 'mine')
+        self.assertEqual(self.counter(), before)
+
+    def test_save_to_my_meals_needs_a_create_your_own_draft(self):
+        draft = make_draft(user=self.user)
+        self.assertEqual(self.client.post(reverse('save_my_meal', args=[draft.id])).status_code, 404)
+
+    def test_recent_has_five_different_names_newest_first(self):
+        from .views import recent_meals
+        now = timezone.now()
+        for hours, title in enumerate(['Soup', 'soup', 'Wrap', 'Salad', 'Oats', 'Burek', 'Tea']):
+            Meal.objects.create(user=self.user, input_method='text', title=title, status='logged',
+                                eaten_at=now - timedelta(hours=hours))
+        self.assertEqual([meal.title for meal in recent_meals(self.user)],
+                         ['Soup', 'Wrap', 'Salad', 'Oats', 'Burek'])
+        self.assertContains(self.client.get(reverse('home')), 'Log again<span class="visually-hidden">: Soup')
+
+    def test_profile_counts_saved_meals(self):
+        make_draft(user=self.user, status='mine')
+        self.assertContains(self.client.get(reverse('profile')), '2 saved')

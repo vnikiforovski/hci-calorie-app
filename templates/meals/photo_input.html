@@ -19,11 +19,12 @@
             {{ form.slot }}
             {{ form.photo }}
             {% if day %}<input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}">{% endif %}   {# a past day from Home #}
+        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}   {# "Create your own meal" (chunk 22) #}
 
             {# Live camera, Figma "Photo · Camera" (phones only) #}
             <section class="z-camera" id="cameraState" aria-labelledby="cameraTitle" hidden>
                 <div class="z-camera-top">
-                    <a class="z-camera-btn" href="{% url 'home' %}" aria-label="Close and go to Home">
+                    <a class="z-camera-btn" href="{{ back_url }}" aria-label="Close and go to {{ back_to }}">
                         <i class="bi bi-x-lg" aria-hidden="true"></i>
                     </a>
                     <span class="z-camera-slot"><span class="visually-hidden">Meal slot:</span> {{ slot|capfirst }}{% if day %} · {{ day|date:'D j' }}{% endif %}</span>
@@ -60,10 +61,10 @@
             {# Desktop step 1: drop, choose or paste a photo #}
             <section class="z-drop-step" id="dropState" aria-labelledby="dropTitle" hidden>
                 <div class="z-back-row">
-                    <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Close and go to Home">
+                    <a class="z-icon-btn" href="{{ back_url }}" aria-label="Close and go to {{ back_to }}">
                         <i class="bi bi-x-lg" aria-hidden="true"></i>
                     </a>
-                    <span class="fw-medium">Add to {{ slot }}{% if day %} · {{ day|date:'D j' }}{% endif %}</span>
+                    <span class="fw-medium">{% if mine %}For Your meals · My meals{% else %}Add to {{ slot }}{% if day %} · {{ day|date:'D j' }}{% endif %}{% endif %}</span>
                 </div>
                 <h1 class="mt-3 mb-3" id="dropTitle">Add a photo of your meal</h1>
 
@@ -86,7 +87,7 @@
             <section class="z-note" id="noteState">
                 <div class="z-hero z-note-band">
                     <div class="z-hero-top">
-                        <a class="z-icon-btn" href="{% url 'home' %}" aria-label="Close and go to Home">
+                        <a class="z-icon-btn" href="{{ back_url }}" aria-label="Close and go to {{ back_to }}">
                             <i class="bi bi-x-lg" aria-hidden="true"></i>
                         </a>
                         <button type="button" class="z-retake" id="noteTipsButton" data-bs-toggle="offcanvas" data-bs-target="#photoTips" aria-controls="photoTips">

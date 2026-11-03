@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ meal.title|default:'Saved meal' }}{% endblock %}
+
+{# Saved meal (chunk 22, Figma "Saved meal"): a favorite or a My meal, opened from Your meals.          #}
+{# Log to <slot> logs a copy now, on today (views.log_again). A favorite's items are read-only here and #}
+{# "Edit meal" opens its Meal detail; a My meal's items are edited right here (item changes come back   #}
+{# through views.result) and Rename opens a small sheet. The red button removes it from Your meals.    #}
+{% block header %}{% endblock %}
+{% block bottom_nav %}{% endblock %}
+
+{% block content %}
+    <div class="z-result-layout is-detail">
+    <div class="z-result-side">
+    <section class="z-hero">
+        <div class="z-hero-top">
+            <a class="z-icon-btn" href="{{ back_url }}" aria-label="Back to Your meals">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            </a>
+            <div class="z-hero-top-end">
+                <span class="z-chip"><i class="bi bi-stars" aria-hidden="true"></i> AI estimate</span>
+                {% if not is_mine %}
+                    {# The filled heart: tapping it is "Remove from favorites", with Undo #}
+                    <form method="post" action="{% url 'remove_saved' meal.id %}">
+                        {% csrf_token %}
+                        <button type="submit" class="z-icon-btn z-heart-btn is-on" aria-pressed="true"
+                                aria-label="Favorite">
+                            <i class="bi bi-heart-fill" aria-hidden="true"></i>
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+        {% if meal.photo %}
+            <div class="z-plate">
+                <img class="z-hero-photo" src="{{ meal.photo.url }}" alt="Photo of {{ meal.title|default:'the meal' }}">
+            </div>
+        {% else %}
+            <div class="z-hero-icon" aria-hidden="true"><i class="bi bi-fork-knife"></i></div>
+            {% if meal.text %}
+                <p class="z-hero-text">{{ meal.text }}</p>
+            {% endif %}
+        {% endif %}
+    </section>
+
+    <div class="z-result z-result-top">
+        <div class="z-detail-pills">
+            {# The slot of the copy: from the time, unless changed here. Its hidden input is in the Log form. #}
+            {% include 'meals/_slot_dropdown.html' with form_id='logAgainForm' %}
+            <span class="z-slot-pill z-pill-static">
+                <i class="bi bi-bookmark" aria-hidden="true"></i>
+                {% if logged_times %}Logged {{ logged_times }} time{{ logged_times|pluralize }}{% else %}Not logged yet{% endif %}
+            </span>
+        </div>
+        <p class="z-caption text-body-secondary mt-2 mb-0">Logging adds it to today with the current time. You can change it after.</p>
+
+        {% include 'meals/_meal_summary.html' %}
+    </div>
+    </div>{# .z-result-side #}
+
+    <div class="z-result-items">
+        {% include 'meals/_meal_items.html' %}
+    </div>
+    </div>{# .z-result-layout #}
+
+    <div class="z-actions">
+        <div class="z-actions-buttons z-actions-detail">
+            {% if is_mine %}
+                <button type="button" class="btn btn-outline-secondary btn-lg w-100"
+                        data-bs-toggle="offcanvas" data-bs-target="#renameSheet" aria-controls="renameSheet">Rename</button>
+            {% else %}
+                <a class="btn btn-outline-secondary btn-lg w-100" href="{% url 'result' meal.id %}?from=your_meals">Edit meal</a>
+            {% endif %}
+            <form method="post" action="{% url 'log_again' meal.id %}" id="logAgainForm">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-lg w-100">Log to <span id="logSlotLabel">{{ slot }}</span></button>
+            </form>
+            {# Red only for delete-like actions (docs/06); Undo in the toast, so no "Are you sure?" #}
+            <form method="post" action="{% url 'remove_saved' meal.id %}" class="z-actions-wide">
+                {% csrf_token %}
+                {% if is_mine %}
+                    <button type="submit" class="btn btn-danger btn-lg w-100">
+                        <i class="bi bi-trash" aria-hidden="true"></i> Delete from My meals
+                    </button>
+                {% else %}
+                    <button type="submit" class="btn btn-danger btn-lg w-100">
+                        <i class="bi bi-heart" aria-hidden="true"></i> Remove from favorites
+                    </button>
+                {% endif %}
+            </form>
+        </div>
+        <p class="z-caption text-body-secondary text-center mb-0">Estimate, not medical advice</p>
+    </div>
+
+    {% if is_mine %}
+        {# Rename a My meal (not in Figma): the title only; an empty name gives back Zalak's #}
+        <div class="offcanvas offcanvas-bottom z-sheet" tabindex="-1" id="renameSheet" aria-labelledby="renameTitle">
+            <div class="z-sheet-handle" aria-hidden="true"></div>
+            <form method="post" action="{% url 'rename_saved' meal.id %}">
+                {% csrf_token %}
+                <div class="z-sheet-title">
+                    <h2 class="mb-0" id="renameTitle">Rename this meal</h2>
+                    <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <label class="form-label z-small" for="{{ title_form.title.id_for_label }}">{{ title_form.title.label }}</label>
+                {{ title_form.title }}
+                <p class="z-caption text-body-secondary mt-1">Leave it empty to use Zalak's name.</p>
+                <button type="submit" class="btn btn-primary btn-lg w-100 mt-2">Save</button>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'js/slot_select.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/add_item.js' %}?v={{ STATIC_VERSION }}"></script>
+{% endblock %}

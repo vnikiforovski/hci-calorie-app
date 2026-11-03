@@ -65,6 +65,7 @@ class Meal(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('logged', 'Logged'),
+        ('mine', 'My meal'),   # a template under Your meals (chunk 22): never counted anywhere
     ]
 
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE, related_name='meals')

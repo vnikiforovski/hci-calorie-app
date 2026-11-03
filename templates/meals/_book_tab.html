@@ -1,0 +1,6 @@
+{# The "♥ Your meals" tab on the edge of the Diary book (Figma "Diary · Your meals"), on every Diary page. #}
+{# On Your meals itself it is the current page (current=True).                                          #}
+<a class="z-book-tab" href="{% url 'your_meals' %}" {% if current %}aria-current="page"{% endif %}>
+    <i class="bi bi-heart-fill" aria-hidden="true"></i>
+    <span>Your meals</span>
+</a>

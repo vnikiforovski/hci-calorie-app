@@ -1,11 +1,11 @@
-{# The arrows under the Diary page (views.nav_link). ‹ always goes back; on today there is nothing    #}
-{# ahead, so › is left out ("Your meals ›" comes in chunk 22).                                       #}
+{# The arrows under the Diary page (views.nav_link). ‹ always goes back; on today there is no day      #}
+{# ahead, so › turns to the back of the book: Your meals (chunk 22, Figma "Diary · Your meals").     #}
 <nav class="z-diary-nav {{ extra_class }}" aria-label="Diary pages">
     <a class="z-page-btn" href="{{ prev.url }}"><i class="bi bi-chevron-left" aria-hidden="true"></i> {{ prev.label }}</a>
     <span class="z-diary-nav-here" aria-current="page">{{ here }}</span>
     {% if next %}
         <a class="z-page-btn" href="{{ next.url }}">{{ next.label }} <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
     {% else %}
-        <span class="z-page-btn-space" aria-hidden="true"></span>
+        <a class="z-page-btn" href="{% url 'your_meals' %}">Your meals <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
     {% endif %}
 </nav>

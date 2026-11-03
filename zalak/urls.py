@@ -36,6 +36,12 @@ urlpatterns = [
     path('sign-up/', views.signup, name='signup'),
     path('sign-up/details/', views.signup_details, name='signup_details'),
     path('diary/', views.diary, name='diary'),
+    # Your meals (chunk 22): the back of the Diary book, and one saved meal
+    path('diary/your-meals/', views.your_meals, name='your_meals'),
+    path('diary/your-meals/<int:meal_id>/', views.saved_meal, name='saved_meal'),
+    path('diary/your-meals/<int:meal_id>/rename/', views.rename_saved, name='rename_saved'),
+    path('diary/your-meals/<int:meal_id>/remove/', views.remove_saved, name='remove_saved'),
+    path('diary/your-meals/<int:meal_id>/undo-remove/', views.undo_remove_saved, name='undo_remove_saved'),
     path('statistics/', views.statistics, name='statistics'),
     path('profile/', views.profile, name='profile'),
     # Profile (chunk 18): every name starts with "profile", so base.html marks the sidebar row on all of them
@@ -67,4 +73,9 @@ urlpatterns = [
     path('meal/<int:meal_id>/save/', views.save_meal, name='save_meal'),
     path('meal/<int:meal_id>/delete/', views.delete_meal, name='delete_meal'),
     path('meal/<int:meal_id>/undo-delete/', views.undo_delete_meal, name='undo_delete_meal'),
+    path('meal/<int:meal_id>/favorite/', views.toggle_favorite, name='toggle_favorite'),
+    path('meal/<int:meal_id>/log-again/', views.log_again, name='log_again'),
+    path('meal/<int:meal_id>/undo-log-again/', views.undo_log_again, name='undo_log_again'),
+    path('meal/<int:meal_id>/save-as-mine/', views.save_as_my_meal, name='save_as_my_meal'),
+    path('meal/<int:meal_id>/save-mine/', views.save_my_meal, name='save_my_meal'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,4 +1,5 @@
 {# One food item on Result. Expects `item` (a MealItem, with kcal_min_pct / kcal_max_pct from Meal.items_with_bars). #}
+{# With read_only (a favorite's Saved meal, chunk 22) there is no pencil and no question chips.                     #}
 <article class="card z-item z-item-{{ item.confidence }}" id="item-{{ item.id }}">
     <div class="card-body">
         <div class="d-flex justify-content-between gap-3">
@@ -24,9 +25,11 @@
             </div>
             <div class="d-flex flex-column align-items-end justify-content-between gap-2">
                 <span class="z-small fw-semibold z-tabular text-nowrap">{{ item.kcal_min }}–{{ item.kcal_max }} kcal</span>
-                <a class="z-icon-btn" href="{% url 'edit_item' item.meal_id item.id %}" aria-label="Edit {{ item.name }}">
-                    <i class="bi bi-pencil" aria-hidden="true"></i>
-                </a>
+                {% if not read_only %}
+                    <a class="z-icon-btn" href="{% url 'edit_item' item.meal_id item.id %}" aria-label="Edit {{ item.name }}">
+                        <i class="bi bi-pencil" aria-hidden="true"></i>
+                    </a>
+                {% endif %}
             </div>
         </div>
 
@@ -42,7 +45,7 @@
                 <div class="flex-grow-1">
                     {# "Best guess" in Preferences (chunk 18): the reason stays, the question and chips go #}
                     <p class="mb-0" id="question-{{ item.id }}">{{ item.reason }}{% if item.question and ask_questions %} {{ item.question }}{% endif %}</p>
-                    {% if item.can_ask and ask_questions %}
+                    {% if item.can_ask and ask_questions and not read_only %}
                         {# The chips scale Zalak's portion x0.5 / x1 / x1.5. After a tap the item is "likely" #}
                         {# and this box goes away; the amount can still be changed on Edit item.               #}
                         <form method="post" action="{% url 'answer_question' item.meal_id item.id %}"
