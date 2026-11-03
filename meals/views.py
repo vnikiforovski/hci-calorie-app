@@ -15,10 +15,10 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import (AccountDetailsForm, DeleteAccountForm, MealDetailForm, MealItemForm, MealTitleForm, PersonalDetailsForm,
-                    PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm, UncertaintyForm,
+                    PhotoMealForm, PreferencesForm, ProfileDetailsForm, SignUpForm, TextMealForm,
                     ZalakPasswordChangeForm)
 from .models import Meal, MealItem, Profile, slot_for_time
-from .services.ai import AnalysisError, analyze_photo, analyze_text, correct_meal, estimate_item
+from .services.ai import AnalysisError, analyze_photo, analyze_text, correct_meal, estimate_item, is_lighter
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
                     NO_PLURAL, UNIT_TABS, WEIGHT_UNITS, format_amount, round_to, stepper_label)
 
@@ -387,8 +387,36 @@ def result(request, meal_id):
         **tell_zalak_context(request),
         # "Create your own meal" (chunk 22): Save to My meals instead of Log
         'is_mine': is_mine_draft(request, meal),
+        'lighter_idea': lighter_idea_for(request, meal),   # chunk 25
     }
     return render(request, 'meals/result.html', context)
+
+
+def lighter_idea_for(request, meal):
+    """The lighter idea card on Result (FR17), or None. Only on a draft the user is just checking
+    (never a logged meal or a "Create your own meal" draft), not after its ×, not when Preferences
+    turned it off (guests always see it), and only while it is still clearly lighter than the meal
+    as it is now (the user may have removed items since Zalak answered)."""
+    if meal.status != 'draft' or meal.hide_lighter_idea or is_mine_draft(request, meal):
+        return None
+    idea = meal.ai_response.get('lighter_idea') if isinstance(meal.ai_response, dict) else None
+    if not isinstance(idea, dict):
+        return None
+    if request.user.is_authenticated and not own_profile(request).show_lighter_ideas:
+        return None
+    return idea if is_lighter(idea, meal.kcal_min, meal.kcal_max) else None
+
+
+@require_POST
+def hide_lighter_idea(request, meal_id):
+    """The × on the lighter idea card: hidden for this meal for good. lighter_idea.js sends it with
+    fetch and gets a 204 (the card just goes); without JavaScript the form posts and comes back."""
+    meal = get_own_draft(request, meal_id)
+    meal.hide_lighter_idea = True
+    meal.save(update_fields=['hide_lighter_idea'])
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return HttpResponse(status=204)
+    return redirect('result', meal_id=meal.id)
 
 
 GUEST_DRAFT_HOURS = 24
@@ -1561,11 +1589,11 @@ def profile_details(request):
 
 @login_required
 def profile_preferences(request):
-    """Preferences: "When Zalak is unsure". preferences.js saves a tap straight away with fetch
+    """Preferences: "When Zalak is unsure" and "Show lighter ideas". preferences.js saves a tap straight away with fetch
     (it gets a 204, so the page and the focus stay); without JavaScript the Save button posts and comes back."""
     profile = own_profile(request)
     if request.method == 'POST':
-        form = UncertaintyForm(request.POST, instance=profile)
+        form = PreferencesForm(request.POST, instance=profile)
         if form.is_valid():
             form.save()
             if request.headers.get('X-Requested-With') == 'fetch':
@@ -1575,7 +1603,7 @@ def profile_preferences(request):
         if request.headers.get('X-Requested-With') == 'fetch':
             return HttpResponse(status=400)
     else:
-        form = UncertaintyForm(instance=profile)
+        form = PreferencesForm(instance=profile)
     return render(request, 'meals/profile_preferences.html', {'form': form, 'profile': profile})
 
 

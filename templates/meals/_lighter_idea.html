@@ -1,0 +1,16 @@
+{# A lighter idea (chunk 25, FR17): a small card under the summary on a draft's Result only, never a     #}
+{# pop-up. Neutral words: "a lighter idea", never healthier or better. × hides it for this meal (a form #}
+{# post; lighter_idea.js does it with fetch so the page stays). No Figma frame; tint card, ink icon.     #}
+<aside class="z-lighter" data-lighter-idea aria-label="A lighter idea">
+    <i class="bi bi-lightbulb z-lighter-icon" aria-hidden="true"></i>
+    <p class="z-lighter-text">
+        <span class="z-lighter-label">A lighter idea:</span>
+        {{ lighter_idea.name|lower }}, <span class="z-tabular">~{{ lighter_idea.kcal_min }}–{{ lighter_idea.kcal_max }}</span> kcal
+    </p>
+    <form method="post" action="{% url 'hide_lighter_idea' meal.id %}" data-lighter-hide>
+        {% csrf_token %}
+        <button type="submit" class="z-icon-btn z-lighter-hide" aria-label="Hide this idea">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+    </form>
+</aside>

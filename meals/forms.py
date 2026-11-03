@@ -429,14 +429,19 @@ class AccountDetailsForm(forms.ModelForm):
         return user
 
 
-class UncertaintyForm(forms.ModelForm):
-    """Profile · Preferences: "When Zalak is unsure" (FR37). Ask me shows the inline question
-    on Result (FR16); Best guess hides it."""
+class PreferencesForm(forms.ModelForm):
+    """Profile · Preferences: "When Zalak is unsure" (FR37) and "Show lighter ideas" (FR17, chunk 25).
+    Ask me shows the inline question on Result (FR16); Best guess hides it. The switch shows or hides
+    the lighter idea card on a draft's Result."""
 
     class Meta:
         model = Profile
-        fields = ['uncertainty']
-        widgets = {'uncertainty': forms.RadioSelect(attrs={'class': 'btn-check'})}
+        fields = ['uncertainty', 'show_lighter_ideas']
+        widgets = {
+            'uncertainty': forms.RadioSelect(attrs={'class': 'btn-check'}),
+            'show_lighter_ideas': forms.CheckboxInput(attrs={'class': 'form-check-input z-toggle', 'role': 'switch',
+                                                              'aria-describedby': 'lighterHint'}),
+        }
 
 
 class ZalakPasswordChangeForm(PasswordChangeForm):

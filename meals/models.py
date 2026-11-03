@@ -80,6 +80,9 @@ class Meal(models.Model):
     eaten_at = models.DateTimeField(default=timezone.now)
     is_favorite = models.BooleanField(default=False)
     ai_response = models.JSONField(null=True, blank=True)  # validated AI output, for "Reset"
+    # The × on Result's lighter idea (chunk 25). A field, not in ai_response, so Try again and
+    # Tell Zalak (which replace ai_response) don't bring a hidden card back.
+    hide_lighter_idea = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)  # soft delete for Undo
     created_at = models.DateTimeField(auto_now_add=True)
 

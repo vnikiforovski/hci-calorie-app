@@ -2890,3 +2890,119 @@ class TellZalakTests(AnalyzedMealMixin, TestCase):
         other = User.objects.create_user('ivan@example.com', password='a-long-password')
         self.client.force_login(other)
         self.assertEqual(self.tell().status_code, 404)
+
+
+class LighterIdeaValidateTests(TestCase):
+    """Chunk 25: validate() keeps a lighter idea only when it is clearly lighter and neutrally named."""
+
+    def idea(self, **changes):
+        data = good_answer()   # the meal is 620-810 kcal, a middle of 715
+        data['lighter_idea'].update(changes)
+        return validate(data)['lighter_idea']
+
+    def test_a_clearly_lighter_idea_is_kept_and_rounded(self):
+        self.assertEqual(self.idea(kcal_min=303, kcal_max=377),
+                         {'name': 'Bean salad with a slice of bread', 'kcal_min': 300, 'kcal_max': 380})
+
+    def test_an_idea_not_a_quarter_lighter_is_dropped(self):
+        self.assertIsNotNone(self.idea(kcal_min=500, kcal_max=570))   # middle 535 <= 0.75 * 715
+        self.assertIsNone(self.idea(kcal_min=520, kcal_max=600))      # middle 560 > 536
+
+    def test_a_bad_idea_is_dropped_without_failing_the_answer(self):
+        self.assertIsNone(self.idea(name=''))
+        self.assertIsNone(self.idea(kcal_min=400, kcal_max=300))
+        self.assertIsNone(self.idea(kcal_min=-1))
+        self.assertIsNone(self.idea(kcal_min='lots'))
+        self.assertIsNone(self.idea(name='A healthier bean salad'))
+        self.assertIsNone(self.idea(name='Good, light salad'))
+        data = good_answer()
+        data['lighter_idea'] = 'salad'
+        self.assertIsNone(validate(data)['lighter_idea'])
+        del data['lighter_idea']
+        self.assertIsNone(validate(data)['lighter_idea'])
+
+    def test_no_food_has_no_idea(self):
+        data = good_answer()
+        data.update(status='no_food', no_food_reason='No plate.', items=[])
+        self.assertIsNone(validate(data)['lighter_idea'])
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class LighterIdeaTests(AnalyzedMealMixin, TestCase):
+    """Chunk 25: the card on a draft's Result, its ×, and the Preferences switch."""
+
+    CARD = 'A lighter idea:'
+
+    def test_a_draft_shows_the_card(self):
+        page = self.client.get(self.result_url)
+        self.assertContains(page, self.CARD)
+        self.assertContains(page, 'bean salad with a slice of bread,')   # lower case after the colon
+        self.assertContains(page, '~300–380')
+        self.assertContains(page, 'js/lighter_idea.js')
+
+    def test_turned_off_in_preferences_shows_no_card(self):
+        Profile.objects.filter(user=self.user).update(show_lighter_ideas=False)
+        self.assertNotContains(self.client.get(self.result_url), self.CARD)
+
+    def test_a_logged_meal_never_shows_it(self):
+        self.client.post(reverse('log_meal', args=[self.meal.id]), {'slot': 'lunch'})
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'Tavče gravče')
+        self.assertNotContains(page, self.CARD)
+
+    def test_a_create_your_own_meal_draft_shows_no_card(self):
+        session = self.client.session
+        session['mine_drafts'] = [self.meal.id]
+        session.save()
+        self.assertNotContains(self.client.get(self.result_url), self.CARD)
+
+    def test_no_card_once_the_meal_is_no_longer_much_heavier(self):
+        # Without the tavče gravče the meal is 230-330 kcal: the idea is no lighter than that
+        self.meal.items.get(position=0).delete()
+        self.assertNotContains(self.client.get(self.result_url), self.CARD)
+
+    def test_hide_with_and_without_javascript(self):
+        url = reverse('hide_lighter_idea', args=[self.meal.id])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        response = self.client.post(url, HTTP_X_REQUESTED_WITH='fetch')
+        self.assertEqual(response.status_code, 204)
+        self.meal.refresh_from_db()
+        self.assertTrue(self.meal.hide_lighter_idea)
+        self.assertNotContains(self.client.get(self.result_url), self.CARD)
+        self.assertRedirects(self.client.post(url), self.result_url, fetch_redirect_response=False)
+
+    def test_hidden_stays_hidden_after_tell_zalak(self):
+        Meal.objects.filter(id=self.meal.id).update(hide_lighter_idea=True)
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('tell_zalak', args=[self.meal.id]), {'correction': 'no bread'})
+        self.assertNotContains(self.client.get(self.result_url), self.CARD)
+
+    def test_someone_elses_meal_gives_404(self):
+        other = User.objects.create_user('bo@example.com', password='a-long-password')
+        self.client.force_login(other)
+        url = reverse('hide_lighter_idea', args=[self.meal.id])
+        self.assertEqual(self.client.post(url).status_code, 404)
+        self.meal.refresh_from_db()
+        self.assertFalse(self.meal.hide_lighter_idea)
+
+    def test_a_guest_sees_it(self):
+        self.client.logout()
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče, bread', 'slot': 'lunch'})
+        guest_meal = Meal.objects.filter(user=None).get()
+        self.assertContains(self.client.get(reverse('result', args=[guest_meal.id])), self.CARD)
+
+    def test_the_preferences_switch_saves_with_and_without_javascript(self):
+        url = reverse('profile_preferences')
+        page = self.client.get(url)
+        self.assertContains(page, 'Show lighter ideas')
+        self.assertContains(page, 'role="switch"')
+        # A browser leaves an unticked checkbox out of the form
+        response = self.client.post(url, {'uncertainty': 'ask'}, HTTP_X_REQUESTED_WITH='fetch')
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(Profile.objects.get(user=self.user).show_lighter_ideas)
+        response = self.client.post(url, {'uncertainty': 'guess', 'show_lighter_ideas': 'on'})
+        self.assertRedirects(response, url, fetch_redirect_response=False)
+        profile = Profile.objects.get(user=self.user)
+        self.assertTrue(profile.show_lighter_ideas)
+        self.assertEqual(profile.uncertainty, 'guess')

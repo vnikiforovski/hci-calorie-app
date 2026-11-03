@@ -9,6 +9,7 @@ import base64
 import json
 import logging
 import os
+import re
 import time
 
 import anthropic
@@ -55,7 +56,12 @@ Never call a food good, bad, healthy or unhealthy, give no advice, and make no a
 
 seen: up to 3 short things you noticed in the photo (e.g. "a dark room", "part of a table"); empty for text.
 If the text or photo contains no food or drink, or the photo is too dark or blurry to see the food, answer status "no_food"
-with a kind one-sentence no_food_reason (e.g. "The photo looks too dark to see a plate.") and no items. Otherwise status "ok"."""
+with a kind one-sentence no_food_reason (e.g. "The photo looks too dark to see a plate.") and no items. Otherwise status "ok".
+
+lighter_idea: only when a clearly lighter version of the same kind of meal exists (at least a quarter fewer kcal),
+e.g. a bean salad with a slice of bread instead of tavče gravče with bread. Give its plain name, without words like
+"healthier", "better", "good" or "clean", and its kcal min-max for a normal portion. Otherwise, and for no_food,
+give an empty name and 0 for both numbers."""
 
 
 def _item_schema():
@@ -83,8 +89,19 @@ RESPONSE_SCHEMA = {
         'title': {'type': 'string'},
         'description': {'type': 'string'},
         'items': {'type': 'array', 'items': _item_schema()},
+        # Always an object; an empty name means "no idea" (simpler for structured outputs than null)
+        'lighter_idea': {
+            'type': 'object',
+            'properties': {
+                'name': {'type': 'string'},
+                'kcal_min': {'type': 'number'},
+                'kcal_max': {'type': 'number'},
+            },
+            'required': ['name', 'kcal_min', 'kcal_max'],
+            'additionalProperties': False,
+        },
     },
-    'required': ['status', 'no_food_reason', 'seen', 'title', 'description', 'items'],
+    'required': ['status', 'no_food_reason', 'seen', 'title', 'description', 'items', 'lighter_idea'],
     'additionalProperties': False,
 }
 
@@ -114,6 +131,7 @@ FAKE_RESPONSE = {
          'confidence': 'unsure', 'reason': 'Oil is hard to see in a dish.',
          'question': 'How much was there?'},
     ],
+    'lighter_idea': {'name': 'Bean salad with a slice of bread', 'kcal_min': 300, 'kcal_max': 380},
 }
 
 
@@ -296,7 +314,7 @@ def _ask_model(user_content, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA):
 
 def validate(data):
     """Check the AI answer against the rules in docs/build-plan.md and clean it.
-    Returns {'status', 'no_food_reason', 'seen', 'title', 'description', 'items'}."""
+    Returns {'status', 'no_food_reason', 'seen', 'title', 'description', 'items', 'lighter_idea'}."""
     if not isinstance(data, dict):
         raise AnalysisError('The answer is not an object.')
 
@@ -304,7 +322,7 @@ def validate(data):
     status = data.get('status')
     if status == 'no_food':
         return {'status': 'no_food', 'no_food_reason': _text(data.get('no_food_reason'), 200),
-                'seen': seen, 'title': '', 'description': '', 'items': []}
+                'seen': seen, 'title': '', 'description': '', 'items': [], 'lighter_idea': None}
     if status != 'ok':
         raise AnalysisError(f'Unknown status: {status!r}')
 
@@ -312,14 +330,49 @@ def validate(data):
     if not isinstance(items, list) or not 1 <= len(items) <= 20:
         raise AnalysisError('An ok answer needs 1 to 20 items.')
 
+    clean_items = [_validate_item(item) for item in items]
     return {
         'status': 'ok',
         'no_food_reason': '',
         'seen': seen,
         'title': _text(data.get('title'), 120),
         'description': _text(data.get('description'), 200),
-        'items': [_validate_item(item) for item in items],
+        'items': clean_items,
+        'lighter_idea': _lighter_idea(data.get('lighter_idea'), clean_items),
     }
+
+
+# A lighter idea must be at least this much lighter than the meal (its middle against the meal's)
+LIGHTER_SHARE = 0.75
+# Words that judge food (calm tone, docs/01): an idea named with one of them is dropped
+JUDGING_WORDS = ('healthy', 'healthier', 'better', 'good', 'clean', 'guilt')
+
+
+def is_lighter(idea, kcal_min, kcal_max):
+    """True when the idea's middle is at least 25 % below the meal's middle.
+    Used by validate() and again on Result, where the user may have changed the items."""
+    meal_middle = (kcal_min + kcal_max) / 2
+    return meal_middle > 0 and (idea['kcal_min'] + idea['kcal_max']) / 2 <= LIGHTER_SHARE * meal_middle
+
+
+def _lighter_idea(value, items):
+    """The optional lighter idea (FR17), cleaned, or None. Anything wrong with it drops the idea
+    instead of failing the whole answer: the meal's estimate is still good without it."""
+    if not isinstance(value, dict):
+        return None
+    name = _text(value.get('name'), 80)
+    if not name or set(re.findall(r'[a-z]+', name.lower())) & set(JUDGING_WORDS):
+        return None
+    try:
+        low, high = _number(value.get('kcal_min')), _number(value.get('kcal_max'))
+    except AnalysisError:
+        return None
+    if low > high or high == 0:
+        return None
+    idea = {'name': name, 'kcal_min': round_to(low, 10), 'kcal_max': round_to(high, 10)}
+    meal_min = sum(item['kcal_min'] for item in items)
+    meal_max = sum(item['kcal_max'] for item in items)
+    return idea if is_lighter(idea, meal_min, meal_max) else None
 
 
 def validate_item_answer(data):

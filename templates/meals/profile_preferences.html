@@ -3,9 +3,9 @@
 
 {% block title %}Preferences{% endblock %}
 
-{# Profile · Preferences (chunk 18, Figma). Only "When Zalak is unsure" for now: food preferences    #}
-{# come in chunk 23, lighter ideas in 25; dark mode and meal slots are left out. A tap saves straight #}
-{# away (preferences.js, no reload); without JavaScript the Save button inside <noscript> does it.   #}
+{# Profile · Preferences (chunk 18, Figma): "When Zalak is unsure" and "Show lighter ideas" (chunk 25). #}
+{# Food preferences (dropped), dark mode and meal slots are left out. A tap saves straight away       #}
+{# (preferences.js, no reload); without JavaScript the Save button inside <noscript> does it.         #}
 {% block header %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
 
@@ -29,6 +29,15 @@
                     {% endfor %}
                 </div>
             </fieldset>
+            <div class="z-pref-row">
+                <div>
+                    <label class="z-pref-title" for="{{ form.show_lighter_ideas.id_for_label }}">Show lighter ideas</label>
+                    <p class="z-pref-line mb-0" id="lighterHint">Only when you are just checking</p>
+                </div>
+                <div class="form-check form-switch z-toggle-wrap">
+                    {{ form.show_lighter_ideas }}{# role="switch", and the hint is read with it (PreferencesForm) #}
+                </div>
+            </div>
             <p class="z-pref-status" role="status" data-status></p>
             <noscript><button type="submit" class="btn btn-primary w-100 mt-3">Save</button></noscript>
         </form>

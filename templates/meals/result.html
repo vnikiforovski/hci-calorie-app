@@ -41,6 +41,10 @@
         {% include 'meals/_slot_dropdown.html' with form_id='logForm' %}
 
         {% include 'meals/_meal_summary.html' %}
+
+        {% if lighter_idea %}
+            {% include 'meals/_lighter_idea.html' %}
+        {% endif %}
     </div>
     </div>{# .z-result-side #}
 
@@ -102,4 +106,7 @@
     <script src="{% static 'js/add_item.js' %}?v={{ STATIC_VERSION }}"></script>
     <script src="{% static 'js/voice.js' %}?v={{ STATIC_VERSION }}"></script>
     <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
+    {% if lighter_idea %}
+        <script src="{% static 'js/lighter_idea.js' %}?v={{ STATIC_VERSION }}"></script>
+    {% endif %}
 {% endblock %}

@@ -73,6 +73,7 @@ urlpatterns = [
     path('meal/<int:meal_id>/log/', views.log_meal, name='log_meal'),
     path('meal/<int:meal_id>/undo-log/', views.undo_log, name='undo_log'),
     path('meal/<int:meal_id>/discard/', views.just_checking, name='just_checking'),
+    path('meal/<int:meal_id>/lighter-idea/hide/', views.hide_lighter_idea, name='hide_lighter_idea'),
     path('meal/<int:meal_id>/save/', views.save_meal, name='save_meal'),
     path('meal/<int:meal_id>/delete/', views.delete_meal, name='delete_meal'),
     path('meal/<int:meal_id>/undo-delete/', views.undo_delete_meal, name='undo_delete_meal'),
