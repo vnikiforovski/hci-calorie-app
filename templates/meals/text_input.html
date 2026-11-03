@@ -18,7 +18,7 @@
     <h1 class="mt-3 mb-3">{% if mine %}Create your own meal{% else %}Describe your meal{% endif %}</h1>
 
     {# The current URL: a new meal, or "Edit the text" of an existing draft (same page) #}
-    <form method="post" action="{{ request.path }}" id="textMealForm" class="z-with-actions" novalidate data-analyzing data-require-text>
+    <form method="post" action="{{ request.path }}" id="textMealForm" class="z-with-actions" novalidate data-analyzing data-require-text data-voice>
         {% csrf_token %}
         {{ form.slot }}
         {{ form.input_method }}
@@ -26,9 +26,9 @@
         {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}   {# "Create your own meal" (chunk 22) #}
 
         {# The field and, while listening, the live line inside it (Figma "Text and voice · Listening") #}
-        <div class="z-voice-field" id="voiceField">
+        <div class="z-voice-field" id="voiceField" data-voice-fieldbox>
             {{ form.text }}
-            <p class="z-voice-live" id="voiceLive" hidden>
+            <p class="z-voice-live" id="voiceLive" data-voice-live hidden>
                 <span class="z-voice-dot" aria-hidden="true"></span>
                 Listening… you can edit the text anytime
             </p>
@@ -46,8 +46,8 @@
         </div>
 
         {# Voice (FR7): hidden until voice.js finds speech recognition, so Firefox simply has no mic (NFR16) #}
-        <div class="z-voice" id="voice" hidden>
-            <button type="button" class="z-mic" id="micButton" aria-pressed="false">
+        <div class="z-voice" id="voice" data-voice-box hidden>
+            <button type="button" class="z-mic" id="micButton" aria-pressed="false" data-voice-mic>
                 {# 136 px area for the two pulse rings, the 80 px disk in the middle #}
                 <span class="z-mic-circle" aria-hidden="true">
                     <span class="z-mic-disk">
@@ -55,13 +55,15 @@
                         <i class="bi bi-stop z-mic-icon-stop"></i>
                     </span>
                 </span>
-                <span class="z-mic-label" id="micLabel">Tap to speak</span>
+                <span class="z-mic-label" id="micLabel" data-voice-label>Tap to speak</span>
             </button>
-            <div class="z-wave" aria-hidden="true">
+            <div class="z-wave" aria-hidden="true" data-voice-wave>
                 {% for bar in '123456789' %}<span></span>{% endfor %}
             </div>
-            <p class="z-small z-voice-status" id="voiceStatus" role="status"></p>
+            <p class="z-small z-voice-status" id="voiceStatus" role="status" data-voice-status></p>
         </div>
+
+        {% include 'meals/_cancel_note.html' %}
 
         <div class="z-actions">
             <div class="z-actions-buttons z-actions-one">

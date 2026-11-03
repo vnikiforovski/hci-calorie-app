@@ -59,10 +59,15 @@
         });
     });
 
-    // Cancel stops waiting for the answer; the input is still in the form (docs/05)
+    // Cancel stops waiting for the answer; the input is still in the form (docs/05). The server
+    // already saved the draft, so the input pages say where it is (#cancelNote, chunk 24).
+    var cancelNote = document.getElementById('cancelNote');
     cancelButton.addEventListener('click', function () {
         window.stop();
         stopAnalyzing();
+        if (cancelNote) {
+            cancelNote.textContent = cancelNote.dataset.text;
+        }
     });
 
     // While the overlay is open: Escape cancels, and Tab stays on Cancel (the only button)

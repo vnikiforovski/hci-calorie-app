@@ -127,10 +127,14 @@
     </div>
 
     {% include 'meals/_time_sheet.html' %}
+    {# Tell Zalak (chunk 24): the overlay while Zalak reads the correction #}
+    {% include 'meals/_analyzing.html' with steps=correction_steps %}
 {% endblock %}
 
 {% block scripts %}
     <script src="{% static 'js/slot_select.js' %}?v={{ STATIC_VERSION }}"></script>
     <script src="{% static 'js/add_item.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/voice.js' %}?v={{ STATIC_VERSION }}"></script>
+    <script src="{% static 'js/analyzing.js' %}?v={{ STATIC_VERSION }}"></script>
     <script src="{% static 'js/meal_detail.js' %}?v={{ STATIC_VERSION }}"></script>
 {% endblock %}

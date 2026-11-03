@@ -67,6 +67,9 @@ urlpatterns = [
     path('meal/<int:meal_id>/item/<int:item_id>/answer/', views.answer_question, name='answer_question'),
     path('meal/<int:meal_id>/add-item/', views.add_item, name='add_item'),
     path('meal/<int:meal_id>/undo-remove/', views.undo_remove_item, name='undo_remove_item'),
+    # Tell Zalak (chunk 24): the whole meal corrected in the user's own words, with Undo
+    path('meal/<int:meal_id>/tell/', views.tell_zalak, name='tell_zalak'),
+    path('meal/<int:meal_id>/undo-tell/', views.undo_tell_zalak, name='undo_tell_zalak'),
     path('meal/<int:meal_id>/log/', views.log_meal, name='log_meal'),
     path('meal/<int:meal_id>/undo-log/', views.undo_log, name='undo_log'),
     path('meal/<int:meal_id>/discard/', views.just_checking, name='just_checking'),

@@ -200,7 +200,7 @@ class VoiceInputTests(TestCase):
 
     def test_mic_is_hidden_until_the_browser_supports_it(self):
         page = self.client.get(self.url)
-        self.assertContains(page, '<div class="z-voice" id="voice" hidden>', html=False)
+        self.assertContains(page, '<div class="z-voice" id="voice" data-voice-box hidden>', html=False)
         self.assertContains(page, 'id="micButton"')
         self.assertContains(page, 'js/voice.js?v=')
 
@@ -2674,3 +2674,219 @@ class YourMealsTests(TestCase):
     def test_profile_counts_saved_meals(self):
         make_draft(user=self.user, status='mine')
         self.assertContains(self.client.get(reverse('profile')), '2 saved')
+
+
+# ---------- Chunk 24: To finish drafts on Home, reusing a cancelled draft, Tell Zalak ----------
+
+class ToFinishTests(TestCase):
+    """Home lists the day's drafts in their slot as "To finish" rows, never counted."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+
+    def test_a_draft_is_listed_in_its_slot_and_not_counted(self):
+        draft = make_draft(user=self.user, slot='lunch')
+        page = self.client.get(reverse('home'))
+        self.assertContains(page, 'To finish</span> · Chicken')
+        self.assertContains(page, f'href="{reverse("result", args=[draft.id])}?from=home"')
+        lunch = next(slot for slot in page.context['slots'] if slot['value'] == 'lunch')
+        self.assertEqual([row['id'] for row in lunch['drafts']], [draft.id])
+        self.assertEqual(lunch['meals'], [])
+        self.assertEqual(page.context['totals']['kcal_max'], 0)
+
+    def test_logged_my_meal_other_day_and_create_your_own_drafts_are_not_listed(self):
+        make_draft(user=self.user, status='logged')
+        make_draft(user=self.user, status='mine')
+        make_draft(user=self.user, eaten_at=timezone.now() - timedelta(days=1))
+        mine_draft = make_draft(user=self.user)
+        session = self.client.session
+        session['mine_drafts'] = [mine_draft.id]
+        session.save()
+        self.assertNotContains(self.client.get(reverse('home')), 'To finish')
+
+    def test_the_label(self):
+        from .views import draft_label
+        meal = Meal(title='', text='two eggs ' * 10)
+        self.assertEqual(len(draft_label(meal)), 40)
+        self.assertTrue(draft_label(meal).endswith('…'))
+        self.assertEqual(draft_label(Meal(title='', text='')), 'Photo meal')
+        self.assertEqual(draft_label(Meal(title='Burek', text='burek')), 'Burek')
+
+    def test_text_page_says_where_a_cancelled_draft_goes(self):
+        self.assertContains(self.client.get(reverse('text_input')), 'Kept as a draft: find it on Home under To finish.')
+        self.client.logout()
+        self.assertContains(self.client.get(reverse('text_input')), 'Stopped. What you added is still here.')
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class ReuseDraftTests(TestCase):
+    """Cancel only stops the browser waiting, so the same words again use the draft the server kept."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+
+    def post(self, client=None, text='Two eggs and toast'):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()) as ask_model:
+            response = (client or self.client).post(reverse('text_input'), {'text': text, 'slot': 'breakfast'})
+        return response, ask_model
+
+    def test_the_same_words_reuse_a_finished_draft_without_a_new_call(self):
+        self.post()
+        response, ask_model = self.post(text='  two eggs AND   toast ')
+        meal = Meal.objects.get()
+        self.assertRedirects(response, reverse('result', args=[meal.id]))
+        ask_model.assert_not_called()
+
+    def test_a_draft_without_an_answer_yet_is_analysed(self):
+        draft = Meal.objects.create(user=self.user, input_method='text', text='Two eggs and toast')
+        response, ask_model = self.post()
+        self.assertEqual(Meal.objects.get().id, draft.id)
+        ask_model.assert_called_once()
+        self.assertEqual(draft.items.count(), 4)
+
+    def test_other_words_or_after_15_minutes_make_a_new_draft(self):
+        self.post()
+        self.post(text='Burek')
+        self.assertEqual(Meal.objects.count(), 2)
+        Meal.objects.update(created_at=timezone.now() - timedelta(minutes=16))
+        self.post()
+        self.assertEqual(Meal.objects.count(), 3)
+
+    def test_a_guest_reuses_only_within_their_own_session(self):
+        self.client.logout()
+        self.post()
+        self.post()
+        self.assertEqual(Meal.objects.count(), 1)
+        self.post(client=self.client_class())   # another browser
+        self.assertEqual(Meal.objects.count(), 2)
+
+    def test_a_logged_meal_is_never_reused(self):
+        self.post()
+        Meal.objects.update(status='logged')
+        self.post()
+        self.assertEqual(Meal.objects.count(), 2)
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class CorrectMealTests(TestCase):
+    ITEMS = [{'name': 'Chicken', 'amount': '1', 'unit': 'serving', 'grams': 150, 'kcal_min': 220, 'kcal_max': 260}]
+
+    @patch('meals.services.ai._ask_model')
+    def test_sends_the_meal_the_items_and_the_correction(self, ask_model):
+        from .services.ai import CORRECTION_PROMPT, correct_meal
+        ask_model.return_value = good_answer()
+        data = correct_meal('chicken wrap', self.ITEMS, 'it was turkey, not chicken')
+        self.assertEqual(data['status'], 'ok')
+        content = ask_model.call_args.args[0]
+        self.assertIn('The meal: chicken wrap', content)
+        self.assertIn('- Chicken: 1 serving, 150 g, 220-260 kcal', content)
+        self.assertIn('Correction: it was turkey, not chicken', content)
+        self.assertEqual(ask_model.call_args.kwargs['system'], CORRECTION_PROMPT)
+
+    @patch('meals.services.ai._ask_model')
+    def test_a_photo_meal_sends_the_photo_again(self, ask_model):
+        from .services.ai import correct_meal
+        ask_model.return_value = good_answer()
+        correct_meal('cooked in butter', self.ITEMS, 'no bread', image_bytes=b'jpeg')
+        image, text = ask_model.call_args.args[0]
+        self.assertEqual(image['type'], 'image')
+        self.assertIn('Note: cooked in butter', text['text'])
+
+    @patch('meals.services.ai._ask_model')
+    def test_a_bad_answer_raises(self, ask_model):
+        from .services.ai import correct_meal
+        ask_model.return_value = {'status': 'ok', 'items': []}
+        with self.assertRaises(AnalysisError):
+            correct_meal('chicken wrap', self.ITEMS, 'turkey')
+
+
+def corrected_answer():
+    answer = good_answer()
+    answer['title'] = 'Turkey lunch'
+    answer['items'][0]['name'] = 'Turkey'
+    return answer
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class TellZalakTests(AnalyzedMealMixin, TestCase):
+    """Tell Zalak: the whole meal again with the user's correction, with Undo."""
+
+    def tell(self, answer=None, side_effect=None, words='it was turkey, not chicken'):
+        with patch('meals.services.ai._ask_model', return_value=answer or corrected_answer(),
+                   side_effect=side_effect):
+            return self.client.post(reverse('tell_zalak', args=[self.meal.id]), {'correction': words})
+
+    def names(self):
+        return list(self.meal.items.order_by('position').values_list('name', flat=True))
+
+    def test_result_shows_the_field(self):
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'Something else wrong? Tell Zalak')
+        self.assertContains(page, 'Reading what you said')   # the overlay's steps
+
+    def test_the_items_are_replaced(self):
+        response = self.tell()
+        self.assertRedirects(response, self.result_url, fetch_redirect_response=False)   # keep the toast
+        self.meal.refresh_from_db()
+        self.assertEqual(self.names()[0], 'Turkey')
+        self.assertEqual(self.meal.title, 'Turkey lunch')
+        self.assertEqual(self.meal.ai_response['items'][0]['name'], 'Turkey')   # Reset means the new one
+        self.assertContains(self.client.get(self.result_url), 'Zalak updated the meal')
+
+    def test_a_name_the_user_gave_stays(self):
+        self.meal.title = 'Sunday lunch'
+        self.meal.save()
+        self.tell()
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.title, 'Sunday lunch')
+
+    def test_undo_brings_the_meal_back_exactly(self):
+        before = (self.meal.title, self.meal.ai_response,
+                  list(self.meal.items.order_by('position').values_list('name', 'grams', 'kcal_min_100g', 'position')))
+        self.tell()
+        self.client.post(reverse('undo_tell_zalak', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        after = (self.meal.title, self.meal.ai_response,
+                 list(self.meal.items.order_by('position').values_list('name', 'grams', 'kcal_min_100g', 'position')))
+        self.assertEqual(after, before)
+        # Once only
+        self.assertEqual(self.client.post(reverse('undo_tell_zalak', args=[self.meal.id])).status_code, 404)
+
+    def test_undo_for_another_meal_is_404(self):
+        self.tell()
+        other = make_draft(user=self.user)
+        self.assertEqual(self.client.post(reverse('undo_tell_zalak', args=[other.id])).status_code, 404)
+
+    def test_a_failure_keeps_the_meal_and_the_words(self):
+        before = self.names()
+        response = self.tell(side_effect=AnalysisError('down', kind='connection'))
+        self.assertRedirects(response, self.result_url + '#tell-zalak', fetch_redirect_response=False)
+        self.assertEqual(self.names(), before)
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'value="it was turkey, not chicken"')
+        self.assertContains(page, 'Connection lost')
+        self.assertContains(page, 'Try again')
+
+    def test_no_food_asks_what_changed(self):
+        before = self.names()
+        self.tell(answer={'status': 'no_food', 'no_food_reason': 'Hm.'}, words='hello')
+        self.assertEqual(self.names(), before)
+        self.assertContains(self.client.get(self.result_url), "Zalak couldn&#x27;t use that. Try saying what changed.")
+
+    def test_empty_words_change_nothing(self):
+        with patch('meals.services.ai._ask_model') as ask_model:
+            self.client.post(reverse('tell_zalak', args=[self.meal.id]), {'correction': '   '})
+        ask_model.assert_not_called()
+
+    def test_a_logged_meal_can_be_corrected_on_meal_detail(self):
+        Meal.objects.filter(id=self.meal.id).update(status='logged')
+        self.assertContains(self.client.get(self.result_url), 'id="tell-zalak"')
+        self.tell()
+        self.assertEqual(self.names()[0], 'Turkey')
+
+    def test_someone_elses_meal_is_404(self):
+        other = User.objects.create_user('ivan@example.com', password='a-long-password')
+        self.client.force_login(other)
+        self.assertEqual(self.tell().status_code, 404)

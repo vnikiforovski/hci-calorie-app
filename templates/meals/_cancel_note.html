@@ -1,0 +1,6 @@
+{# After Cancel during Analyzing (chunk 24). Cancel only stops the browser waiting: the server already  #}
+{# saved the draft, so the note says where it is. analyzing.js puts data-text in when Cancel is tapped, #}
+{# so screen readers hear it (an empty live region that gets words). Guests have no Home, and "Create  #}
+{# your own meal" drafts are not listed there, so they get the plainer words.                          #}
+<p class="z-cancel-note" id="cancelNote" role="status"
+   data-text="{% if user.is_authenticated and not mine %}Kept as a draft: find it on Home under To finish.{% else %}Stopped. What you added is still here.{% endif %}"></p>

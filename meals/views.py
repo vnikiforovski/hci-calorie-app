@@ -18,7 +18,7 @@ from .forms import (AccountDetailsForm, DeleteAccountForm, MealDetailForm, MealI
                     PhotoMealForm, ProfileDetailsForm, SignUpForm, TextMealForm, UncertaintyForm,
                     ZalakPasswordChangeForm)
 from .models import Meal, MealItem, Profile, slot_for_time
-from .services.ai import AnalysisError, analyze_photo, analyze_text, estimate_item
+from .services.ai import AnalysisError, analyze_photo, analyze_text, correct_meal, estimate_item
 from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURED_STEPS, MIN_GRAMS,
                     NO_PLURAL, UNIT_TABS, WEIGHT_UNITS, format_amount, round_to, stepper_label)
 
@@ -37,6 +37,12 @@ def home(request):
     day = parse_day(request.GET.get('date')) or today
     logged = Meal.objects.filter(user=request.user, status='logged', deleted_at__isnull=True)
     day_meals = logged.filter(eaten_at__date=day).prefetch_related('items').order_by('eaten_at')
+    # To finish (chunk 24, docs/05, T5): drafts checked but never logged or thrown away. Never counted.
+    # "Create your own meal" drafts are left out: they are not meals eaten.
+    day_drafts = list(Meal.objects.filter(user=request.user, status='draft', deleted_at__isnull=True,
+                                          eaten_at__date=day)
+                      .exclude(id__in=request.session.get('mine_drafts', []))
+                      .order_by('eaten_at'))
 
     # One queryset per slot, like the exam's index grouped by specialty
     slots = []
@@ -47,6 +53,7 @@ def home(request):
             'label': label,
             'icon': icon,
             'meals': meals,
+            'drafts': [{'id': draft.id, 'label': draft_label(draft)} for draft in day_drafts if draft.slot == value],
             'summary': slot_summary(meals),
             'kcal_min': sum(meal.kcal_min for meal in meals),
             'kcal_max': sum(meal.kcal_max for meal in meals),
@@ -158,6 +165,16 @@ def eaten_label(day, today):
     if day == today - timedelta(days=1):
         return 'Eaten yesterday'
     return f'Eaten on {day:%a} {day.day}'
+
+
+def draft_label(meal):
+    """The words after "To finish ·": Zalak's name for it, else the typed words, else "Photo meal"."""
+    if meal.title:
+        return meal.title
+    words = ' '.join(meal.text.split())
+    if words:
+        return words if len(words) <= 40 else words[:39].rstrip() + '…'
+    return 'Photo meal'
 
 
 def slot_summary(meals):
@@ -367,6 +384,7 @@ def result(request, meal_id):
         # Set by add_item when Zalak couldn't add the item: the name comes back with a message
         'add_item_error': request.session.pop('add_item_error', None),
         'ask_questions': asks_questions(request),   # Profile · Preferences (chunk 18)
+        **tell_zalak_context(request),
         # "Create your own meal" (chunk 22): Save to My meals instead of Log
         'is_mine': is_mine_draft(request, meal),
     }
@@ -436,6 +454,7 @@ def render_meal_detail(request, meal, form):
         'slot_options': SLOT_OPTIONS,
         'add_item_error': request.session.pop('add_item_error', None),
         'ask_questions': asks_questions(request),
+        **tell_zalak_context(request),
         'eaten': eaten,
         'day_label': day_name(eaten.date()),
         'time_label': f'{day_name(eaten.date())}, {eaten:%H:%M}',
@@ -660,6 +679,12 @@ def text_input(request, meal_id=None):
     day = None if mine else picked_day(request, meal_id)
 
     if request.method == 'POST':
+        reused = None
+        if meal is None:
+            # Cancel during Analyzing only stops the browser waiting: the server kept the draft
+            # (and may have finished it). The same words again use that draft, not a second one.
+            reused = recent_same_draft(request, request.POST.get('text', ''))
+            meal = reused
         form = TextMealForm(request.POST, instance=meal)
         if form.is_valid():
             meal = form.save(commit=False)   # input_method (text or voice) comes from the form
@@ -675,6 +700,10 @@ def text_input(request, meal_id=None):
             meal.save()
             if mine:
                 remember_mine_draft(request, meal)
+            elif reused:
+                forget_mine_draft(request, meal)   # checked normally this time
+            if reused and meal.items.exists():
+                return redirect('result', meal_id=meal.id)   # Zalak already answered: no second call
             return analyze_meal(meal)
     elif meal:
         form = TextMealForm(instance=meal)
@@ -693,6 +722,29 @@ def text_input(request, meal_id=None):
         'steps': TEXT_STEPS,
     }
     return render(request, 'meals/text_input.html', context)
+
+
+REUSE_MINUTES = 15
+
+
+def recent_same_draft(request, text):
+    """The visitor's text draft with the same words (spaces and case aside) from the last 15 minutes,
+    or None. Photos are not matched: two photos can't be compared cheaply."""
+    words = ' '.join(text.split()).casefold()
+    if not words:
+        return None
+    since = timezone.now() - timedelta(minutes=REUSE_MINUTES)
+    drafts = Meal.objects.filter(status='draft', deleted_at__isnull=True, created_at__gte=since)
+    if request.user.is_authenticated:
+        drafts = drafts.filter(user=request.user)
+    elif request.session.session_key:
+        drafts = drafts.filter(user=None, session_key=request.session.session_key)
+    else:
+        return None
+    for draft in drafts.order_by('-created_at'):
+        if not draft.photo and ' '.join(draft.text.split()).casefold() == words:
+            return draft
+    return None
 
 
 def photo_input(request, meal_id=None):
@@ -868,6 +920,16 @@ ITEM_FIELDS = ['name', 'amount', 'unit', 'grams',
                'confidence', 'reason', 'question', 'edited_by_user', 'position']
 
 
+def item_snapshot(item):
+    """Everything Undo needs to make the item again. The session holds JSON only, so the Decimal
+    fields are kept as text."""
+    copy = {}
+    for field in ITEM_FIELDS:
+        value = getattr(item, field)
+        copy[field] = str(value) if isinstance(value, Decimal) else value
+    return copy
+
+
 @require_POST
 def delete_item(request, meal_id, item_id):
     """Delete item on Edit item (FR21). The last item stays, so Result is never empty:
@@ -877,12 +939,7 @@ def delete_item(request, meal_id, item_id):
     if meal.items.count() <= 1:
         return redirect('edit_item', meal_id=meal.id, item_id=item.id)
 
-    # The session holds JSON only, so the Decimal fields are kept as text
-    copy = {}
-    for field in ITEM_FIELDS:
-        value = getattr(item, field)
-        copy[field] = str(value) if isinstance(value, Decimal) else value
-    request.session['removed_item'] = {'meal_id': meal.id, 'fields': copy}
+    request.session['removed_item'] = {'meal_id': meal.id, 'fields': item_snapshot(item)}
 
     item.delete()
     request.session['toast'] = {
@@ -982,6 +1039,89 @@ def answer_question(request, meal_id, item_id):
         item.edited_by_user = True
         item.save()
     return redirect(item_url(meal, item))
+
+
+# ---------- Tell Zalak (chunk 24, FR18-FR22): correct the whole meal in your own words ----------
+
+# The Analyzing overlay's steps while Zalak reads a correction
+CORRECTION_STEPS = ['Reading what you said', 'Updating the foods', 'Estimating portions']
+NO_FOOD_CORRECTION = "Zalak couldn't use that. Try saying what changed."
+
+
+def tell_zalak_context(request):
+    """For Result, Meal detail and Saved meal: a failed correction (its words and a calm message,
+    shown once) and the overlay's steps."""
+    return {
+        'tell_error': request.session.pop('tell_error', None),
+        'correction_steps': CORRECTION_STEPS,
+    }
+
+
+@require_POST
+def tell_zalak(request, meal_id):
+    """"Something else wrong? Tell Zalak": one AI call with the meal, its items as they are now and
+    the correction. Zalak's answer replaces the items (a name the user gave the meal stays); the old
+    meal waits in the session for Undo. If Zalak can't answer, nothing changes and the words come back."""
+    meal = get_own_meal(request, meal_id)
+    back = reverse('result', args=[meal.id])
+    correction = ' '.join(request.POST.get('correction', '').split())[:300]
+    if not correction:
+        return redirect(back)
+
+    items = list(meal.items.all())
+    current = [{'name': item.name, 'amount': format_amount(item.amount), 'unit': item.unit,
+                'grams': item.grams, 'kcal_min': item.kcal_min, 'kcal_max': item.kcal_max}
+               for item in items]
+    try:
+        if meal.photo:
+            with meal.photo.open('rb') as photo:
+                data = correct_meal(meal.text, current, correction, photo.read())
+        else:
+            data = correct_meal(meal.text, current, correction)
+    except AnalysisError as error:
+        request.session['tell_error'] = {'text': correction, 'message': ai_problem(error)}
+        return redirect(back + '#tell-zalak')
+    if data['status'] == 'no_food':
+        request.session['tell_error'] = {'text': correction, 'message': NO_FOOD_CORRECTION}
+        return redirect(back + '#tell-zalak')
+
+    old_answer = meal.ai_response if isinstance(meal.ai_response, dict) else {}
+    request.session['corrected_meal'] = {
+        'meal_id': meal.id,
+        'title': meal.title,
+        'description': meal.description,
+        'ai_response': meal.ai_response,
+        'items': [item_snapshot(item) for item in items],
+    }
+    renamed = bool(meal.title) and meal.title != old_answer.get('title', '')
+    title = meal.title
+    apply_analysis(meal, data)   # the new items, description and answer (so Reset means this one)
+    if renamed:
+        meal.title = title
+        meal.save(update_fields=['title'])
+    request.session['toast'] = {
+        'text': 'Zalak updated the meal',
+        'undo_url': reverse('undo_tell_zalak', args=[meal.id]),
+    }
+    return redirect(back)
+
+
+@require_POST
+def undo_tell_zalak(request, meal_id):
+    """Undo in "Zalak updated the meal": the meal as it was before, items and all. Works once."""
+    meal = get_own_meal(request, meal_id)
+    saved = request.session.get('corrected_meal')
+    if not saved or saved['meal_id'] != meal.id:
+        raise Http404
+    del request.session['corrected_meal']
+    meal.title = saved['title']
+    meal.description = saved['description']
+    meal.ai_response = saved['ai_response']
+    meal.save()
+    meal.items.all().delete()
+    for fields in saved['items']:
+        MealItem.objects.create(meal=meal, **fields)
+    return redirect('result', meal_id=meal.id)
 
 
 @require_POST
@@ -1641,6 +1781,7 @@ def saved_meal(request, meal_id):
         'back_url': your_meals_url(meal.status if is_mine else 'favorites'),
         'add_item_error': request.session.pop('add_item_error', None),
         'ask_questions': asks_questions(request),
+        **tell_zalak_context(request),
         'title_form': MealTitleForm(instance=meal) if is_mine else None,
     }
     return render(request, 'meals/saved_meal.html', context)

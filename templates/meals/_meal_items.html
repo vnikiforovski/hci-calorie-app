@@ -1,6 +1,8 @@
 {# "What Zalak saw": the item cards and "Add something Zalak missed", on Result and Meal detail. #}
 {# Every item change saves at once and comes back to the same page (views.item_url).          #}
 {# read_only (a favorite's Saved meal): the cards only, nothing to add or change here.        #}
+{# Tell Zalak (chunk 24, Figma "Meal detail"): the whole meal corrected in the user's own words, #}
+{# typed or dictated (voice.js), with the Analyzing overlay while Zalak answers.                #}
 <div class="d-flex justify-content-between align-items-baseline mt-4 mb-2">
     <h2 class="mb-0">What Zalak saw</h2>
     <span class="z-small text-body-secondary">{{ items|length }} item{{ items|length|pluralize }}</span>
@@ -29,6 +31,36 @@
     {% if add_item_error %}
         <p class="z-add-error" id="addItemError" role="alert">
             <i class="bi bi-info-circle" aria-hidden="true"></i> {{ add_item_error.message }}
+        </p>
+    {% endif %}
+</form>
+
+<form method="post" action="{% url 'tell_zalak' meal.id %}" class="z-tell" id="tell-zalak" novalidate data-analyzing data-voice>
+    {% csrf_token %}
+    <label class="z-tell-label" for="tellZalakText">Something else wrong? Tell Zalak</label>
+    <div class="z-tell-row{% if tell_error %} has-error{% endif %}" data-voice-fieldbox>
+        <input type="text" class="z-add-input" id="tellZalakText" name="correction" maxlength="300" autocomplete="off"
+               placeholder="e.g. it was turkey, not chicken" value="{{ tell_error.text|default:'' }}" data-voice-field
+               {% if tell_error %}aria-describedby="tellZalakError"{% endif %}>
+        {# Shown by voice.js only where the browser can listen (NFR16) #}
+        <span data-voice-box hidden>
+            <button type="button" class="z-tell-mic" aria-pressed="false" aria-label="Say it instead" data-voice-mic>
+                <i class="bi bi-mic z-mic-icon-idle" aria-hidden="true"></i>
+                <i class="bi bi-stop z-mic-icon-stop" aria-hidden="true"></i>
+            </button>
+        </span>
+        {% if tell_error %}
+            <button type="submit" class="z-add-retry">Try again</button>
+        {% else %}
+            <button type="submit" class="z-add-btn" aria-label="Send to Zalak">
+                <i class="bi bi-arrow-up" aria-hidden="true"></i>
+            </button>
+        {% endif %}
+    </div>
+    <p class="z-small z-voice-status mb-0" role="status" data-voice-status></p>
+    {% if tell_error %}
+        <p class="z-add-error" id="tellZalakError" role="alert">
+            <i class="bi bi-info-circle" aria-hidden="true"></i> {{ tell_error.message }}
         </p>
     {% endif %}
 </form>

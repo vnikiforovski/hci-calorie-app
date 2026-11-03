@@ -3324,3 +3324,62 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
     text-align: left;
 }
 .z-recent-log:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- To finish + Tell Zalak (chunk 24) ---------- */
+
+/* A draft under its slot on Home: the dashed look of "Add something Zalak missed" (no Figma frame) */
+.z-slot-draft-row { padding: 0 0 0.75rem 3.5rem; }
+.z-slot-draft-row + .z-slot-row { border-top: 1px solid var(--z-line); }
+.z-slot-draft {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.375rem 0.75rem;
+    border: 1.5px dashed var(--z-muted);
+    border-radius: 12px;
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    text-decoration: none;
+}
+.z-slot-draft:hover { border-style: solid; background: var(--z-tint); color: var(--z-ink); }
+.z-slot-draft-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* After Cancel during Analyzing: where the draft went */
+.z-cancel-note { margin: 0.75rem 0 0; color: var(--z-muted); font-size: 0.875rem; }
+.z-cancel-note:empty { display: none; }
+
+/* "Something else wrong? Tell Zalak" (Figma "Meal detail"): a white field with the mic inside */
+.z-tell { margin-top: 1rem; scroll-margin-top: 1rem; }
+.z-tell-label { display: block; margin-bottom: 0.375rem; font-size: 0.875rem; font-weight: 600; }
+.z-tell-row {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 56px;
+    padding: 0.25rem 0.375rem 0.25rem 1rem;
+    border: 1px solid var(--z-field-line);
+    border-radius: 14px;
+    background: var(--z-card);
+}
+.z-tell-row:focus-within { border-color: var(--z-ink); box-shadow: 0 0 0 2px var(--z-ink); }
+.z-tell-row.has-error { border-color: var(--z-accent); }   /* never red */
+.z-tell-row.is-listening { border-color: var(--z-ink); }
+.z-tell-mic {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--z-tint);
+    color: var(--z-ink);
+    font-size: 1.125rem;
+}
+.z-tell-mic .z-mic-icon-stop { display: none; }
+.z-tell-mic.is-listening { background: var(--z-ink); color: #fff; }
+.z-tell-mic.is-listening .z-mic-icon-idle { display: none; }
+.z-tell-mic.is-listening .z-mic-icon-stop { display: inline; }
+.z-tell .z-voice-status:empty { display: none; }
+.z-tell .z-voice-status { margin-top: 0.375rem; }

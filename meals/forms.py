@@ -21,7 +21,7 @@ PHOTO_MAX_BYTES = 20 * 1024 * 1024
 class TextMealForm(forms.ModelForm):
     # Set to "voice" by voice.js once words were dictated (chunk 7). A plain hidden field,
     # not the model's choice field, so an odd value can't block the form with an error nobody sees.
-    input_method = forms.CharField(required=False, widget=forms.HiddenInput)
+    input_method = forms.CharField(required=False, widget=forms.HiddenInput(attrs={'data-voice-method': ''}))
 
     class Meta:
         model = Meal
@@ -32,6 +32,7 @@ class TextMealForm(forms.ModelForm):
                 'rows': 5,
                 'placeholder': 'e.g. two eggs, toast with butter, coffee with milk',
                 'aria-label': 'Describe your meal',
+                'data-voice-field': '',   # voice.js writes the dictated words here (chunk 24: by data attribute)
             }),
             'slot': forms.HiddenInput(),
         }

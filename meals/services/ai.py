@@ -1,5 +1,6 @@
 """The only place that talks to the AI. Views call analyze_text() or analyze_photo() and get back
-validated data, or an AnalysisError that they handle like any AI failure.
+validated data, or an AnalysisError that they handle like any AI failure. estimate_item() does one
+item (Add, Re-estimate) and correct_meal() the whole meal again after Tell Zalak (chunk 24).
 
 The model must answer JSON in the shape of RESPONSE_SCHEMA (structured outputs);
 validate() then checks the rules a schema can't express (min <= max, unsure needs a reason)."""
@@ -196,6 +197,49 @@ def estimate_item(name, amount=None, unit=None, meal_title=''):
     if meal_title:
         lines.append(f'The meal: {meal_title}')
     return validate_item_answer(_ask_model('\n'.join(lines), system=ITEM_PROMPT, schema=ITEM_RESPONSE_SCHEMA))
+
+
+# Tell Zalak (chunk 24): the whole meal again, with the user's correction in their own words
+CORRECTION_PROMPT = SYSTEM_PROMPT + """
+
+This time the user is correcting your earlier estimate. The message gives the meal as before, then
+the items as the user has them now, then the correction in the user's own words (e.g. "it was turkey,
+not chicken", "there was no bread", "I only ate half").
+Apply the correction and answer the whole corrected meal in the same JSON. Keep every item the
+correction doesn't touch exactly as it is: the same name, amount, unit, grams and ranges, because the
+user may have set them. Only add, remove or change what the correction is about. If the correction
+says nothing about food (e.g. "hello"), answer status "no_food" with a kind no_food_reason."""
+
+
+def correct_meal(text, items, correction, image_bytes=None):
+    """Tell Zalak: one call with the original words (or photo + note), the current items and the
+    correction. items are dicts with name, amount, unit, grams, kcal_min, kcal_max.
+    Returns validated data, like analyze_text; raises AnalysisError."""
+    if settings.ZALAK_AI_FAKE:
+        return _fake_answer()
+
+    lines = ['Current items:']
+    for item in items:
+        lines.append(f"- {item['name']}: {item['amount']} {item['unit']}, {item['grams']} g, "
+                     f"{item['kcal_min']}-{item['kcal_max']} kcal")
+    lines.append(f'Correction: {correction}')
+    current = '\n'.join(lines)
+
+    if image_bytes:
+        content = [
+            {
+                'type': 'image',
+                'source': {
+                    'type': 'base64',
+                    'media_type': 'image/jpeg',
+                    'data': base64.standard_b64encode(image_bytes).decode('ascii'),
+                },
+            },
+            {'type': 'text', 'text': (f'Note: {text}' if text else 'No note.') + '\n\n' + current},
+        ]
+    else:
+        content = f'The meal: {text}\n\n{current}'
+    return validate(_ask_model(content, system=CORRECTION_PROMPT))
 
 
 def _fake_delay():
