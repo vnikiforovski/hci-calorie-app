@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Page not found{% endblock %}
+
+{# Django shows this for every 404 when DEBUG is off: an unknown address, a meal that was thrown  #}
+{# away (Back after Just checking), or someone else's meal. Calm words and a way forward (docs/05). #}
+{% block content %}
+    <div class="z-state z-error-page">
+        <img class="z-error-cookie" src="{% static 'img/logo.svg' %}" alt="">
+        <h1>This page isn't here</h1>
+        <p class="z-state-text">The meal or page you opened may have been removed, or the address has a typo. Nothing you logged is lost.</p>
+        <a class="btn btn-primary btn-lg" href="{% url 'home' %}">Go to Home</a>
+    </div>
+{% endblock %}

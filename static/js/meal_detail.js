@@ -137,6 +137,7 @@
         removeFlag.value = '';
         hero.dataset.state = 'photo';
         note.textContent = 'New photo. Save changes to keep it.';
+        showUnsaved();
     });
 
     document.getElementById('photoRemove').addEventListener('click', function () {
@@ -144,5 +145,65 @@
         removeFlag.value = '1';
         hero.dataset.state = 'none';
         note.textContent = 'Photo removed. Save changes to keep it this way.';
+        showUnsaved();
+    });
+
+    // ---------- Unsaved changes (audit M7) ----------
+    // The slot, time, name and photo wait for Save changes, but everything else on this page (an
+    // item's pencil, the heart, Log again, Tell Zalak, Back) leaves or reloads it at once. So while
+    // one of the four differs from what is saved, a line above the buttons says so, and leaving
+    // another way asks first.
+    const mealForm = document.getElementById('mealForm');
+    const slotInput = document.getElementById('slotInput');
+    const title = document.getElementById('id_title');
+    const unsavedNote = document.getElementById('unsavedNote');
+    const saved = { slot: slotInput.value, time: eatenTime.value, title: title.value };
+    let leaving = false;   // Save changes was pressed, or the user chose to leave
+
+    function isUnsaved() {
+        return slotInput.value !== saved.slot || eatenTime.value !== saved.time ||
+            title.value.trim() !== saved.title.trim() || input.files.length > 0 || removeFlag.value === '1';
+    }
+
+    function showUnsaved() {
+        unsavedNote.textContent = isUnsaved() ? unsavedNote.dataset.text : '';
+    }
+
+    function mayLeave() {
+        if (leaving || !isUnsaved()) return true;
+        leaving = window.confirm('Leave without saving? Your changes to the slot, time, name or photo will be lost.');
+        return leaving;
+    }
+
+    // slot_select.js and Done (above) write the hidden fields in their own click handlers, which run
+    // before this one on the document
+    document.addEventListener('click', function (event) {
+        if (event.target.closest('.z-slot-option, #timeDone')) showUnsaved();
+    });
+    title.addEventListener('input', showUnsaved);
+
+    // Links that leave the page (not the ones that only open a sheet or a menu)
+    document.addEventListener('click', function (event) {
+        const link = event.target.closest('a[href]');
+        if (link && !link.hasAttribute('data-bs-toggle') && !mayLeave()) event.preventDefault();
+    });
+
+    // Every other form on the page posts at once and comes back without the unsaved fields.
+    // In the capture phase, so a stopped send never starts the Analyzing overlay or send_once.js.
+    document.addEventListener('submit', function (event) {
+        if (event.target === mealForm) {
+            leaving = true;
+        } else if (!mayLeave()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, true);
+
+    // Back, reload or closing the tab: the browser's own question
+    window.addEventListener('beforeunload', function (event) {
+        if (!leaving && isUnsaved()) {
+            event.preventDefault();
+            event.returnValue = '';
+        }
     });
 })();

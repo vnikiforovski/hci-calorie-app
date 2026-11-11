@@ -45,6 +45,11 @@
             <button type="button" class="z-chip" data-insert="brand: "><i class="bi bi-plus-lg" aria-hidden="true"></i> Brand</button>
         </div>
 
+        {# Not in Figma (audit H2): the way to the camera from here, also for a guest, who has no Add meal sheet #}
+        <a class="btn btn-outline-secondary z-switch-input mt-3" href="{{ photo_url }}">
+            <i class="bi bi-camera" aria-hidden="true"></i> Use a photo instead
+        </a>
+
         {# Voice (FR7): hidden until voice.js finds speech recognition, so Firefox simply has no mic (NFR16) #}
         <div class="z-voice" id="voice" data-voice-box hidden>
             <button type="button" class="z-mic" id="micButton" aria-pressed="false" data-voice-mic>

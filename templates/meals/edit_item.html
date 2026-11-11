@@ -136,7 +136,10 @@
             </form>
         {% else %}
             <p class="z-small text-body-secondary text-center mt-3 mb-0">
-                This is the only item. Use Just checking to drop the meal.
+                This is the only item.
+                {% if meal.status == 'logged' %}Use Delete meal to remove the whole meal.
+                {% elif meal.status == 'mine' %}Use Delete from My meals to remove it.
+                {% else %}Use Just checking to drop the meal.{% endif %}
             </p>
         {% endif %}
     </div>

@@ -634,13 +634,16 @@ class LogTests(TestCase):
         self.assertEqual(self.meal.status, 'draft')
         self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 0)
 
-    def test_undo_of_a_draft_is_404(self):
+    def test_undo_of_a_draft_changes_nothing(self):
+        # A second tap on Undo (audit H1): back to the draft's Result, the counter stays at 0
         response = self.client.post(reverse('undo_log', args=[self.meal.id]))
-        self.assertEqual(response.status_code, 404)
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]))
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 0)
 
-    def test_logging_twice_is_404(self):
+    def test_logging_twice_counts_once(self):
+        # A second tap on Log (audit H1): Home again, not a 404, and still one logged meal
         self.log(slot='lunch')
-        self.assertEqual(self.log(slot='lunch').status_code, 404)
+        self.assertRedirects(self.log(slot='lunch'), reverse('home'))
         self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)
 
     def test_logged_meal_opens_meal_detail_without_log(self):
@@ -2611,7 +2614,7 @@ class YourMealsTests(TestCase):
         other = User.objects.create_user('ivan@example.com', password='a-long-password')
         self.client.force_login(other)
         self.assertEqual(self.client.get(reverse('saved_meal', args=[self.meal.id])).status_code, 404)
-        for name in ['toggle_favorite', 'log_again', 'remove_saved', 'save_as_my_meal']:
+        for name in ['toggle_favorite', 'log_again', 'remove_saved']:
             with self.subTest(name):
                 self.assertEqual(self.client.post(reverse(name, args=[self.meal.id])).status_code, 404)
 
@@ -2635,8 +2638,7 @@ class YourMealsTests(TestCase):
 
     def test_a_my_meal_is_never_counted_or_shown_as_eaten(self):
         before = self.counter()
-        self.client.post(reverse('save_as_my_meal', args=[self.meal.id]))
-        mine = Meal.objects.get(status='mine')
+        mine = make_draft(user=self.user, status='mine')
         self.assertEqual(self.counter(), before)
         self.assertNotContains(self.client.get(reverse('home')), f'href="/meal/{mine.id}/')
         self.assertEqual(self.client.get(reverse('statistics')).context['stats']['days_logged'], 1)
@@ -2699,10 +2701,7 @@ class ToFinishTests(TestCase):
         make_draft(user=self.user, status='logged')
         make_draft(user=self.user, status='mine')
         make_draft(user=self.user, eaten_at=timezone.now() - timedelta(days=1))
-        mine_draft = make_draft(user=self.user)
-        session = self.client.session
-        session['mine_drafts'] = [mine_draft.id]
-        session.save()
+        make_draft(user=self.user, for_my_meals=True)
         self.assertNotContains(self.client.get(reverse('home')), 'To finish')
 
     def test_the_label(self):
@@ -2951,9 +2950,7 @@ class LighterIdeaTests(AnalyzedMealMixin, TestCase):
         self.assertNotContains(page, self.CARD)
 
     def test_a_create_your_own_meal_draft_shows_no_card(self):
-        session = self.client.session
-        session['mine_drafts'] = [self.meal.id]
-        session.save()
+        Meal.objects.filter(id=self.meal.id).update(for_my_meals=True)
         self.assertNotContains(self.client.get(self.result_url), self.CARD)
 
     def test_no_card_once_the_meal_is_no_longer_much_heavier(self):
@@ -3006,3 +3003,549 @@ class LighterIdeaTests(AnalyzedMealMixin, TestCase):
         profile = Profile.objects.get(user=self.user)
         self.assertTrue(profile.show_lighter_ideas)
         self.assertEqual(profile.uncertainty, 'guess')
+
+
+# ---------- Audit fixes (Phase 2, docs/audit.md) ----------
+
+class SecondTapTests(TestCase):
+    """H1, M5: a second tap on Log, Just checking, Delete or Undo repeats nothing and ends where
+    the first one did, never on a 404. A draft without items can't be logged."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, slot='lunch')
+
+    def post(self, name):
+        return self.client.post(reverse(name, args=[self.meal.id]), {'slot': 'lunch'})
+
+    def test_log_twice_logs_once(self):
+        self.assertRedirects(self.post('log_meal'), reverse('home'))
+        self.assertRedirects(self.post('log_meal'), reverse('home'))
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)
+
+    def test_undo_log_twice(self):
+        self.post('log_meal')
+        result = reverse('result', args=[self.meal.id])
+        self.assertRedirects(self.post('undo_log'), result)
+        self.assertRedirects(self.post('undo_log'), result)
+        self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 0)
+
+    def test_just_checking_twice(self):
+        self.assertRedirects(self.post('just_checking'), reverse('home'))
+        self.assertRedirects(self.post('just_checking'), reverse('home'))
+        self.assertFalse(Meal.objects.exists())
+
+    def test_delete_and_undo_twice(self):
+        self.post('log_meal')
+        self.assertRedirects(self.post('delete_meal'), reverse('home'))
+        self.assertRedirects(self.post('delete_meal'), reverse('home'))
+        self.assertIsNotNone(Meal.objects.get().deleted_at)
+        self.assertRedirects(self.post('undo_delete_meal'), reverse('home'))
+        self.assertRedirects(self.post('undo_delete_meal'), reverse('home'))
+        self.assertIsNone(Meal.objects.get().deleted_at)
+
+    def test_undo_log_again_twice(self):
+        self.post('log_meal')
+        self.post('log_again')
+        copy_id = self.client.session['logged_again']
+        url = reverse('undo_log_again', args=[copy_id])
+        self.assertRedirects(self.client.post(url), reverse('home'))
+        self.assertRedirects(self.client.post(url), reverse('home'))
+        self.assertEqual(Meal.objects.count(), 1)
+
+    def test_someone_elses_meal_is_still_a_404(self):
+        self.post('log_meal')
+        self.client.force_login(User.objects.create_user('bo@example.com', password='a-long-password'))
+        for name in ('log_meal', 'undo_log', 'just_checking', 'delete_meal', 'undo_delete_meal', 'undo_log_again'):
+            with self.subTest(name):
+                self.assertEqual(self.post(name).status_code, 404)
+
+    def test_a_draft_without_items_cannot_be_logged(self):
+        empty = Meal.objects.create(user=self.user, input_method='text', text='something')
+        response = self.client.post(reverse('log_meal', args=[empty.id]), {'slot': 'lunch'})
+        self.assertRedirects(response, reverse('result', args=[empty.id]), fetch_redirect_response=False)
+        empty.refresh_from_db()
+        self.assertEqual(empty.status, 'draft')
+
+    def test_post_forms_are_sent_once(self):
+        self.assertContains(self.client.get(reverse('result', args=[self.meal.id])), 'js/send_once.js?v=')
+
+
+class SwitchInputTests(TestCase):
+    """H2: the two input pages link to each other, so a guest (who has no Add meal sheet) can reach
+    the camera, and anyone can type instead of taking a photo. Slot, day and mine=1 go along."""
+
+    def test_a_guest_reaches_the_photo_page_from_try_it(self):
+        page = self.client.get(reverse('add_meal'), follow=True)
+        self.assertContains(page, 'Use a photo instead')
+        self.assertContains(page, f'href="{reverse("photo_input")}?slot=')
+
+    def test_the_photo_page_links_back_to_text(self):
+        page = self.client.get(reverse('photo_input') + '?slot=dinner')
+        self.assertContains(page, f'href="{reverse("text_input")}?slot=dinner"')
+        self.assertContains(page, 'Type it instead')
+
+    def test_slot_day_and_mine_go_along(self):
+        self.client.force_login(User.objects.create_user('ana@example.com', password='a-long-password'))
+        day = (timezone.localdate() - timedelta(days=2)).isoformat()
+        page = self.client.get(reverse('text_input') + f'?slot=snack&day={day}')
+        self.assertContains(page, f'href="{reverse("photo_input")}?slot=snack&amp;day={day}"')
+        page = self.client.get(reverse('photo_input') + '?slot=snack&mine=1')
+        self.assertContains(page, f'href="{reverse("text_input")}?slot=snack&amp;mine=1"')
+
+    def test_a_draft_switches_on_its_own_url(self):
+        with patch('meals.services.ai._ask_model', side_effect=AnalysisError('down')):
+            self.client.post(reverse('text_input'), {'text': 'beans', 'slot': 'lunch'})
+        meal = Meal.objects.get()
+        page = self.client.get(reverse('edit_text', args=[meal.id]))
+        self.assertContains(page, f'href="{reverse("edit_photo", args=[meal.id])}"')
+        self.assertEqual(Meal.objects.count(), 1)
+
+
+@override_settings(ZALAK_AI_FAKE=True, ZALAK_AI_FAKE_DELAY=0)
+class MyMealDraftTests(TestCase):
+    """M1: a "Create your own meal" draft is marked on the meal, so signing out and in doesn't turn
+    it into a normal draft (it used to be remembered in the session only)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.client.post(reverse('text_input'), {'text': 'my oats', 'slot': 'breakfast', 'mine': '1'})
+        self.meal = Meal.objects.get()
+        self.result_url = reverse('result', args=[self.meal.id])
+
+    def test_it_stays_a_my_meal_draft_after_signing_out_and_in(self):
+        self.assertTrue(self.meal.for_my_meals)
+        self.client.post(reverse('sign_out'))
+        self.client.force_login(self.user)
+        self.assertNotContains(self.client.get(reverse('home')), 'To finish')
+        page = self.client.get(self.result_url)
+        self.assertContains(page, 'Save to My meals')
+        self.assertNotContains(page, 'Log to')
+
+    def test_saving_it_makes_a_my_meal(self):
+        response = self.client.post(reverse('save_my_meal', args=[self.meal.id]), {'slot': 'breakfast'})
+        self.assertRedirects(response, reverse('your_meals') + '?tab=mine')
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.status, 'mine')
+        self.assertFalse(self.meal.for_my_meals)
+
+    def test_the_same_words_checked_normally_make_it_a_normal_draft(self):
+        self.client.post(reverse('text_input'), {'text': 'my oats', 'slot': 'breakfast'})
+        self.meal.refresh_from_db()
+        self.assertFalse(self.meal.for_my_meals)
+        self.assertContains(self.client.get(reverse('home')), 'To finish')
+
+
+class AnswerLimitTests(TestCase):
+    """M2: numbers no real food has are a bad answer (an AnalysisError), not a saved meal."""
+
+    def broken(self, **change):
+        answer = good_answer()
+        answer['items'][0].update(change)
+        return answer
+
+    def test_impossible_numbers_raise(self):
+        cases = {
+            'a quarter of a tonne': {'grams': 250000},
+            'a huge amount': {'amount': 12345678},
+            'more kcal than pure fat': {'kcal_min': 80000, 'kcal_max': 90000},
+            'more protein than the food weighs': {'protein_max': 900},
+            'not a number': {'kcal_max': float('nan')},
+            'infinity': {'fat_max': float('inf')},
+        }
+        for label, change in cases.items():
+            with self.subTest(label), self.assertRaises(AnalysisError):
+                validate(self.broken(**change))
+
+    def test_real_foods_at_the_edges_pass(self):
+        oil = {'name': 'Olive oil', 'amount': 1, 'unit': 'tsp', 'grams': 5, 'kcal_min': 40, 'kcal_max': 45,
+               'protein_min': 0, 'protein_max': 0, 'carbs_min': 0, 'carbs_max': 0, 'fat_min': 4, 'fat_max': 5,
+               'confidence': 'sure', 'reason': '', 'question': ''}
+        big = dict(oil, name='Watermelon', unit='g', amount=5000, grams=5000, kcal_min=1400, kcal_max=1600,
+                   fat_min=0, fat_max=10, carbs_min=350, carbs_max=400)
+        answer = good_answer() | {'items': [oil, big], 'lighter_idea': {'name': '', 'kcal_min': 0, 'kcal_max': 0}}
+        self.assertEqual(len(validate(answer)['items']), 2)
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+@patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
+class AskModelEdgeTests(TestCase):
+    """M3, M9: whatever goes wrong in the call is an AnalysisError; one try, no silent retry."""
+
+    def call(self, **response):
+        with patch('meals.services.ai.anthropic.Anthropic') as client_class:
+            create = client_class.return_value.messages.create
+            if 'error' in response:
+                create.side_effect = response['error']
+            else:
+                create.return_value.stop_reason = response['stop_reason']
+                create.return_value.content = []
+            with self.assertRaises(AnalysisError) as caught, self.assertLogs('meals.services.ai', 'WARNING'):
+                analyze_text('tavče gravče')
+        return caught.exception, client_class, create
+
+    def test_an_unexpected_error_is_a_failed_analysis(self):
+        error, client_class, create = self.call(error=RuntimeError('something new'))
+        self.assertEqual(error.kind, 'failed')
+
+    def test_a_cut_off_or_refused_answer_is_a_failed_analysis(self):
+        for stop_reason in ('max_tokens', 'refusal'):
+            with self.subTest(stop_reason):
+                self.assertEqual(self.call(stop_reason=stop_reason)[0].kind, 'failed')
+
+    def test_one_try_with_room_for_the_answer(self):
+        error, client_class, create = self.call(error=RuntimeError('x'))
+        client_class.assert_called_once_with(timeout=20, max_retries=0)
+        self.assertEqual(create.call_args.kwargs['max_tokens'], 8000)
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class MissingPhotoTests(TestCase):
+    """M3: a photo file that is gone from media/ gives the calm error page, not a server error."""
+
+    def setUp(self):
+        use_temp_media(self)
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, slot='lunch')
+        Meal.objects.filter(id=self.meal.id).update(photo='meals/gone.jpg', input_method='photo')
+
+    def test_try_again_explains_and_offers_another_photo(self):
+        with patch('meals.services.ai._ask_model') as ask_model:
+            response = self.client.post(reverse('retry', args=[self.meal.id]))
+        ask_model.assert_not_called()
+        self.assertRedirects(response, reverse('analysis_error', args=[self.meal.id]) + '?why=photo&fresh=1')
+        page = self.client.get(reverse('analysis_error', args=[self.meal.id]) + '?why=photo')
+        self.assertContains(page, "Zalak can't find the photo")
+        self.assertContains(page, reverse('edit_photo', args=[self.meal.id]))
+        self.assertContains(page, 'Describe it instead')
+        self.assertNotContains(page, 'Try again')
+
+    def test_tell_zalak_still_works_from_the_items(self):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()) as ask_model:
+            response = self.client.post(reverse('tell_zalak', args=[self.meal.id]), {'correction': 'no bread'})
+        self.assertRedirects(response, reverse('result', args=[self.meal.id]))
+        self.assertIsInstance(ask_model.call_args.args[0], str)   # words only: no image block
+
+
+@override_settings(ZALAK_AI_FAKE=False)
+class TextLimitTests(TestCase):
+    """M8: a typed meal and a photo note stop at 1,000 characters before they reach the AI."""
+
+    def test_a_very_long_meal_is_refused_calmly(self):
+        with patch('meals.services.ai._ask_model') as ask_model:
+            page = self.client.post(reverse('text_input'), {'text': 'beans ' * 400, 'slot': 'lunch'})
+        self.assertContains(page, 'under 1,000 characters')
+        self.assertContains(page, 'maxlength="1000"')
+        ask_model.assert_not_called()
+        self.assertFalse(Meal.objects.exists())
+
+    def test_a_long_photo_note_is_cut(self):
+        use_temp_media(self)
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('photo_input'), {'photo': jpeg(), 'text': 'x' * 3000, 'slot': 'lunch'})
+        self.assertEqual(len(Meal.objects.get().text), 1000)
+
+
+class OddDateTests(TestCase):
+    """M4: a hand-typed date far in the past shows today's page instead of a server error."""
+
+    def setUp(self):
+        self.client.force_login(User.objects.create_user('ana@example.com', password='a-long-password'))
+
+    def test_pages_open_on_today(self):
+        urls = ['/?date=0001-01-01', '/?month=1-1', '/diary/?date=0001-01-01', '/diary/?month=1-1',
+                '/statistics/?date=0001-01-01', '/statistics/?period=month&date=0001-01-05',
+                '/diary/your-meals/?month=1-1']
+        for url in urls:
+            with self.subTest(url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_a_day_before_the_first_day_means_today(self):
+        from .views import FIRST_DAY, parse_day, parse_month
+        today = timezone.localdate()
+        self.assertIsNone(parse_day('2019-12-31'))
+        self.assertEqual(parse_day('2020-01-01'), FIRST_DAY)
+        self.assertEqual(parse_month('1-1', today), (FIRST_DAY, True))
+
+
+class CleanUpTests(TestCase):
+    """M6: with each new draft, meals deleted more than a day ago really go (with their photo), and
+    so do a signed-in user's drafts older than a week. Everything else stays."""
+
+    def setUp(self):
+        use_temp_media(self)
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+
+    def new_draft(self):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('text_input'), {'text': 'tavče gravče', 'slot': 'lunch'})
+
+    def test_a_meal_deleted_long_ago_goes_with_its_photo(self):
+        old = make_draft(self.user, status='logged')
+        old.photo.save('plate.jpg', SimpleUploadedFile('plate.jpg', b'not really a jpeg'))
+        path = old.photo.path
+        fresh = make_draft(self.user, status='logged')
+        kept = make_draft(self.user, status='logged')
+        now = timezone.now()
+        Meal.objects.filter(id=old.id).update(deleted_at=now - timedelta(hours=25))
+        Meal.objects.filter(id=fresh.id).update(deleted_at=now - timedelta(hours=1))   # Undo may still come
+
+        self.new_draft()
+
+        self.assertFalse(Meal.objects.filter(id=old.id).exists())
+        self.assertFalse(os.path.exists(path))
+        self.assertTrue(Meal.objects.filter(id=fresh.id).exists())
+        self.assertTrue(Meal.objects.filter(id=kept.id).exists())
+
+    def test_a_week_old_draft_goes_and_newer_ones_stay(self):
+        old = make_draft(self.user)
+        recent = make_draft(self.user)
+        old_logged = make_draft(self.user, status='logged')
+        old_mine = make_draft(self.user, status='mine')
+        now = timezone.now()
+        Meal.objects.filter(id__in=[old.id, old_logged.id, old_mine.id]).update(created_at=now - timedelta(days=8))
+        Meal.objects.filter(id=recent.id).update(created_at=now - timedelta(days=6))
+
+        self.new_draft()
+
+        self.assertFalse(Meal.objects.filter(id=old.id).exists())
+        for meal in (recent, old_logged, old_mine):
+            self.assertTrue(Meal.objects.filter(id=meal.id).exists())
+
+
+class ErrorPageTests(TestCase):
+    """H3: with DEBUG off (as in every test run) Zalak shows its own calm error pages."""
+
+    def test_an_unknown_page_is_the_zalak_404(self):
+        response = self.client.get('/no-such-page/')
+        self.assertContains(response, "This page isn't here", status_code=404)
+        self.assertContains(response, f'href="{reverse("home")}"', status_code=404)
+
+    def test_someone_elses_meal_is_the_same_404(self):
+        meal = make_draft(User.objects.create_user('ana@example.com', password='a-long-password'))
+        self.client.force_login(User.objects.create_user('bo@example.com', password='a-long-password'))
+        response = self.client.get(reverse('result', args=[meal.id]))
+        self.assertContains(response, "This page isn't here", status_code=404)
+        self.assertNotContains(response, 'Chicken', status_code=404)
+
+    def test_a_crash_is_the_zalak_500(self):
+        from django.test import Client
+        client = Client(raise_request_exception=False)
+        with patch('meals.views.render', side_effect=RuntimeError('boom')), self.assertLogs('django.request', 'ERROR'):
+            response = client.get(reverse('home'))
+        self.assertContains(response, 'Something went wrong', status_code=500)
+        self.assertNotContains(response, 'boom', status_code=500)
+
+    def test_an_old_form_gets_a_calm_page(self):
+        from django.test import Client
+        client = Client(enforce_csrf_checks=True)
+        with self.assertLogs('django.security.csrf', 'WARNING'):
+            response = client.post(reverse('sign_out'))
+        self.assertContains(response, 'That page was open for a while', status_code=403)
+
+    def test_photos_are_served_with_debug_off(self):
+        use_temp_media(self)
+        from django.conf import settings
+        os.makedirs(os.path.join(settings.MEDIA_ROOT, 'meals'))
+        with open(os.path.join(settings.MEDIA_ROOT, 'meals', 'plate.jpg'), 'wb') as photo:
+            photo.write(b'a photo')
+        response = self.client.get('/media/meals/plate.jpg')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b''.join(response.streaming_content), b'a photo')
+
+
+class PhotoUploadEdgeTests(TestCase):
+    """Audit, section 5: the photo checks that had no test."""
+
+    def setUp(self):
+        use_temp_media(self)
+
+    def post(self, photo):
+        with patch('meals.services.ai._ask_model', return_value=good_answer()) as ask_model:
+            response = self.client.post(reverse('photo_input'), {'photo': photo, 'slot': 'lunch'})
+        return response, ask_model
+
+    @patch('meals.forms.PHOTO_MAX_BYTES', 100)
+    def test_a_photo_that_is_too_large_is_refused_calmly(self):
+        response, ask_model = self.post(jpeg(size=(400, 300)))
+        self.assertContains(response, 'That photo is too large. Try another one.')
+        self.assertFalse(Meal.objects.exists())
+        ask_model.assert_not_called()
+
+    def test_a_sideways_phone_photo_is_turned_upright(self):
+        # Phones store a portrait photo as a landscape picture plus "rotate it" (EXIF orientation 6)
+        image = Image.new('RGB', (40, 30), (200, 120, 60))
+        exif = image.getexif()
+        exif[0x0112] = 6
+        buffer = BytesIO()
+        image.save(buffer, 'JPEG', exif=exif)
+        self.post(SimpleUploadedFile('phone.jpg', buffer.getvalue(), content_type='image/jpeg'))
+        with Image.open(Meal.objects.get().photo.path) as saved:
+            self.assertEqual(saved.size, (30, 40))
+
+    def test_the_saved_name_is_random(self):
+        self.post(jpeg(name='my-lunch-at-home.jpg'))
+        self.assertNotIn('my-lunch', Meal.objects.get().photo.name)
+
+
+class RenameSavedTests(TestCase):
+    """Audit, section 5: the Rename sheet of a My meal."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, status='mine', ai_response={'status': 'ok', 'title': 'Chicken plate'})
+        self.url = reverse('rename_saved', args=[self.meal.id])
+
+    def test_rename(self):
+        response = self.client.post(self.url, {'title': '  Gym lunch '})
+        self.assertRedirects(response, reverse('saved_meal', args=[self.meal.id]))
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.title, 'Gym lunch')
+
+    def test_an_empty_name_gives_back_zalaks(self):
+        self.client.post(self.url, {'title': ''})
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.title, 'Chicken plate')
+
+    def test_only_my_own_my_meals(self):
+        favorite = make_draft(self.user, status='logged', is_favorite=True)
+        self.assertEqual(self.client.post(reverse('rename_saved', args=[favorite.id]), {'title': 'x'}).status_code, 404)
+        self.client.force_login(User.objects.create_user('bo@example.com', password='a-long-password'))
+        self.assertEqual(self.client.post(self.url, {'title': 'x'}).status_code, 404)
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.title, 'Chicken')
+
+
+class MidnightTests(TestCase):
+    """Audit, section 5: days are Skopje days. A meal at 23:30 and one at 00:30 are an hour apart
+    but belong to two different days on Home and in the Diary."""
+
+    def test_meals_around_midnight_land_on_their_own_days(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        yesterday = timezone.localdate() - timedelta(days=1)
+        before = timezone.make_aware(datetime.combine(yesterday - timedelta(days=1), datetime.min.time())) \
+            + timedelta(hours=23, minutes=30)
+        after = before + timedelta(hours=1)
+        for title, eaten_at in (('Late snack', before), ('Night toast', after)):
+            meal = make_draft(user, status='logged', slot='snack', eaten_at=eaten_at)
+            Meal.objects.filter(id=meal.id).update(title=title)
+
+        # The day's own meals, from the context (the Recent list in the Add meal sheet shows every
+        # recent title on every page, so the HTML alone can't tell the days apart)
+        def home_titles(day):
+            slots = self.client.get(reverse('home') + f'?date={day.isoformat()}').context['slots']
+            return [meal.title for slot in slots for meal in slot['meals']]
+
+        def diary_titles(day):
+            page = self.client.get(reverse('diary') + f'?date={day.isoformat()}').context['right_page']
+            return [meal.title for meal in page['meals']]
+
+        for titles in (home_titles, diary_titles):
+            with self.subTest(titles.__name__):
+                self.assertEqual(titles(yesterday - timedelta(days=1)), ['Late snack'])
+                self.assertEqual(titles(yesterday), ['Night toast'])
+
+
+class UnsavedNoteTests(TestCase):
+    """M7: Meal detail carries the "unsaved changes" line that meal_detail.js fills."""
+
+    def test_meal_detail_has_the_note(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        meal = make_draft(user, status='logged', slot='lunch')
+        page = self.client.get(reverse('result', args=[meal.id]))
+        self.assertContains(page, 'id="unsavedNote"')
+        self.assertContains(page, 'You have unsaved changes')
+
+
+class PrivacyWordsTests(TestCase):
+    """M10 (NFR20): the app says that meals go to an AI service, at sign-up and in Help."""
+
+    def test_sign_up_says_it(self):
+        self.assertContains(self.client.get(reverse('signup')), 'Meals are sent to an AI service (Claude)')
+
+    def test_help_says_it(self):
+        self.client.force_login(User.objects.create_user('ana@example.com', password='a-long-password'))
+        page = self.client.get(reverse('profile_help'))
+        self.assertContains(page, 'Where your meals go')
+        self.assertContains(page, 'Anthropic')
+
+
+class UiRequestTests(TestCase):
+    """12 Nov requests: Use a photo instead is a button, Recent has arrows, no Save a copy on Meal detail."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+
+    def test_use_a_photo_instead_is_a_button(self):
+        page = self.client.get(reverse('text_input'))
+        self.assertContains(page, 'class="btn btn-outline-secondary z-switch-input mt-3"')
+
+    def test_recent_meals_have_left_and_right_buttons(self):
+        make_draft(self.user, status='logged')
+        page = self.client.get(reverse('home'))
+        self.assertContains(page, 'id="recentList"')
+        self.assertContains(page, 'aria-label="Earlier recent meals"')
+        self.assertContains(page, 'aria-label="More recent meals"')
+
+    def test_meal_detail_has_no_save_a_copy(self):
+        meal = make_draft(self.user, status='logged', slot='lunch')
+        self.assertNotContains(self.client.get(reverse('result', args=[meal.id])), 'Save a copy')
+        self.assertEqual(self.client.post(f'/meal/{meal.id}/save-as-mine/').status_code, 404)
+
+
+class Phase3Tests(TestCase):
+    """Phase 3 clean-up: meals/urls.py, and the small fixes L1, L2, L3, L17 from docs/audit.md."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+
+    def test_the_meals_urls_live_in_the_app(self):
+        from django.urls import resolve
+        self.assertEqual(resolve('/meal/1/').func.__module__, 'meals.views')
+        self.assertEqual(reverse('home'), '/')
+        self.assertEqual(reverse('sign_in'), '/sign-in/')
+
+    def test_the_only_item_note_fits_the_page(self):
+        for status, words in (('draft', 'Use Just checking'), ('logged', 'Use Delete meal'),
+                              ('mine', 'Use Delete from My meals')):
+            meal = make_draft(self.user, status=status, slot='lunch')
+            with self.subTest(status):
+                page = self.client.get(reverse('edit_item', args=[meal.id, meal.items.get().id]))
+                self.assertContains(page, words)
+
+    @override_settings(ZALAK_AI_FAKE=False)
+    def test_tell_zalak_drops_a_waiting_item_undo(self):
+        meal = make_draft(self.user, slot='lunch')
+        meal.items.create(name='Bread', unit='slice', grams=30, kcal_min_100g=250, kcal_max_100g=270,
+                          protein_min_100g=8, protein_max_100g=9, carbs_min_100g=48, carbs_max_100g=50,
+                          fat_min_100g=3, fat_max_100g=4, confidence='sure', position=1)
+        bread = meal.items.get(name='Bread')
+        self.client.post(reverse('delete_item', args=[meal.id, bread.id]))
+        self.assertIn('removed_item', self.client.session)
+        with patch('meals.services.ai._ask_model', return_value=good_answer()):
+            self.client.post(reverse('tell_zalak', args=[meal.id]), {'correction': 'no bread'})
+        self.assertNotIn('removed_item', self.client.session)
+
+    def test_save_keeps_the_meals_own_day(self):
+        meal = make_draft(self.user, status='logged', slot='lunch')
+        day = timezone.localdate(meal.eaten_at)
+        self.client.post(reverse('save_meal', args=[meal.id]), {
+            'slot': 'lunch', 'title': 'Chicken', 'eaten_day': (day - timedelta(days=3)).isoformat(),
+            'eaten_time': '00:05', 'remove_photo': ''})
+        meal.refresh_from_db()
+        self.assertEqual(timezone.localdate(meal.eaten_at), day)
+
+    def test_the_admin_name_uses_skopje_time(self):
+        eaten = timezone.make_aware(datetime(2026, 11, 1, 0, 30))   # 23:30 UTC the day before
+        meal = Meal(slot='snack', eaten_at=eaten)
+        self.assertEqual(str(meal), 'Snack on 2026-11-01 00:30')
+        self.assertEqual(meal.tint, 'sky')

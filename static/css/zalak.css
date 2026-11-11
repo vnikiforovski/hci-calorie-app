@@ -105,7 +105,7 @@ body {
     background: var(--z-bg);
 }
 
-h1, h2, h3, h4, h5, h6, .z-heading {
+h1, h2, h3, h4, h5, h6 {
     font-family: var(--z-font-heading);
     font-weight: 600;
     color: var(--z-ink);
@@ -125,13 +125,6 @@ h3 { font-size: 1rem; }
 .z-total { font-size: 2rem; line-height: 1.1; }   /* total range 32 px */
 .z-small { font-size: 0.875rem; }                 /* 14 px */
 .z-caption { font-size: 0.75rem; }                /* 12 px */
-.z-label {                                        /* capitals only for tiny labels */
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--z-muted);
-}
 .z-tabular { font-variant-numeric: tabular-nums; }
 
 /* ---------- Focus (keyboard) ---------- */
@@ -157,12 +150,6 @@ h3 { font-size: 1rem; }
     --bs-btn-font-size: 1rem;
     --bs-btn-border-radius: 50rem;
     min-height: 52px;
-}
-
-.btn-sm {
-    --bs-btn-padding-x: 1rem;
-    --bs-btn-padding-y: 0.375rem;
-    --bs-btn-border-radius: 50rem;
 }
 
 /* Main action: caramel with ink text (6.1:1) */
@@ -195,19 +182,6 @@ h3 { font-size: 1rem; }
     --bs-btn-disabled-color: var(--z-muted);
     --bs-btn-disabled-bg: var(--z-card);
     --bs-btn-disabled-border-color: var(--z-line);
-}
-
-/* Dark: ink filled (Figma "Dark") */
-.btn-dark {
-    --bs-btn-color: #FFFFFF;
-    --bs-btn-bg: var(--z-ink);
-    --bs-btn-border-color: var(--z-ink);
-    --bs-btn-hover-color: #FFFFFF;
-    --bs-btn-hover-bg: var(--z-ink-pressed);
-    --bs-btn-hover-border-color: var(--z-ink-pressed);
-    --bs-btn-active-color: #FFFFFF;
-    --bs-btn-active-bg: var(--z-ink-pressed);
-    --bs-btn-active-border-color: var(--z-ink-pressed);
 }
 
 /* Destructive only: deep red label on rose */
@@ -268,16 +242,14 @@ h3 { font-size: 1rem; }
 .z-chip.active,
 .z-chip[aria-pressed="true"] { background: var(--z-tint); border-color: var(--z-ink); }
 
-.form-control,
-.form-select {
+.form-control {
     --bs-border-radius: 12px;
     min-height: 48px;
     font-size: 1rem;                /* 16 px stops phones zooming in */
     border-color: var(--z-field-line);
     background-color: var(--z-card);
 }
-.form-control:focus,
-.form-select:focus {
+.form-control:focus {
     border-color: var(--z-ink);
     box-shadow: 0 0 0 0.25rem var(--bs-focus-ring-color);
 }
@@ -716,10 +688,6 @@ h3 { font-size: 1rem; }
 @media (min-width: 992px) and (min-height: 820px) {
     .z-result-layout:not(.is-detail) .z-result-side { position: sticky; top: 1rem; }
 }
-/* Meal detail on the desktop: Save changes | Delete meal side by side, so the bar stays low */
-@media (min-width: 992px) {
-    .z-actions-buttons.z-actions-pair { grid-template-columns: 1fr 1fr; }
-}
 
 /* ---------- Text input (chunk 4) ---------- */
 
@@ -1101,6 +1069,17 @@ button.z-chip:hover { background: var(--z-tint); }
     text-underline-offset: 3px;
 }
 .z-gallery-link { display: block; margin: 0.75rem auto 0; }
+/* "Use a photo instead" / "Type it instead" on the two input pages: an outlined pill (the secondary
+   button), smaller than Analyze so the main action stays first; 44 px high */
+.z-switch-input {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.375rem 1.125rem;
+    font-weight: 600;
+}
+.z-switch-input i { font-size: 1.125rem; }
 .z-note-sheet h2:focus { outline: none; }   /* focused by JS for screen readers, not by the user */
 
 /* Desktop step 1: the drop zone (the whole page takes a drop, the zone shows it) */
@@ -1537,6 +1516,10 @@ button.z-chip:hover { background: var(--z-tint); }
     font-size: 0.9375rem;
     line-height: 1.4;
 }
+/* 404.html, 500.html, 403_csrf.html: the cookie, the words and one button, in the middle */
+.z-error-page { max-width: 30rem; margin: 0 auto; padding-top: 15vh; }
+.z-error-cookie { width: 72px; height: 72px; }
+.z-error-page .btn { margin-top: 0.5rem; }
 .z-state .z-seen { color: var(--z-muted); font-size: 0.8125rem; }
 .z-state .z-seen .z-tag { padding: 5px 10px; font-size: 0.8125rem; line-height: 1.35; }
 .z-tips-label { margin: 20px 0 10px; color: var(--z-muted); font-family: var(--z-font-body); font-size: 0.75rem; font-weight: 700; line-height: 1.3; letter-spacing: 0.06em; text-align: left; }
@@ -2630,8 +2613,8 @@ a.z-cal-day:hover { background: var(--z-tint); color: var(--z-ink); }
 .z-rename-btn { flex: none; margin-top: -0.25rem; font-size: 1rem; }
 .z-rename { margin-bottom: 0.75rem; }
 
-/* Two buttons stacked: Save changes over Delete meal, so more room under the items (on the
-   desktop they sit side by side, see .z-actions-pair) */
+/* Meal detail's bar is taller (two buttons, Delete meal under them), so more room under the items;
+   on the desktop the three buttons sit in one row (.z-actions-detail) */
 .z-result-layout.is-detail .z-result-items { padding-bottom: 13rem; }
 @media (min-width: 992px) {
     .z-result-layout.is-detail .z-result-items { padding-bottom: 9rem; }
@@ -3178,21 +3161,6 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
 .z-heart-btn { font-size: 1.125rem; }
 .z-heart-btn.is-on { color: var(--z-ink); }   /* the heart is ink, never red: red is for delete only */
 
-/* A quiet text button: "Save a copy to My meals" under Meal detail's items */
-.z-text-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    min-height: 44px;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--z-ink);
-    font-size: 0.9375rem;
-    font-weight: 600;
-}
-.z-text-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
-
 /* Meal detail / Saved meal bar (Figma): two buttons, the red one under them; on the desktop all three in a row */
 .z-actions-buttons.z-actions-detail { grid-template-columns: 1fr 1fr; }
 .z-actions-detail .z-actions-wide { grid-column: 1 / -1; }
@@ -3237,9 +3205,22 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
     .z-book .z-book-tab { right: -18px; }
 }
 
-/* Your meals: one page, also on the desktop (no desktop frame in Figma) */
-.z-book-one { max-width: 560px; margin: 0 auto; }
-.z-book-one .z-diary-page { min-height: 32rem; padding-right: 2.25rem; }
+/* Your meals: the back of the book, one page, the same size as the other Diary pages. Phones: the screen
+   between the header and the arrows, like a day page. Desktop: one page of the open book (half its
+   width, the same height), in the middle (no desktop frame in Figma). */
+.z-book-one .z-diary-page {
+    min-height: max(32rem, calc(100vh - 17.5rem));
+    min-height: max(32rem, calc(100dvh - 17.5rem));
+    padding-right: 2.25rem;
+}
+@media (min-width: 992px) {
+    .z-book-one .z-diary-page {
+        min-height: max(38rem, calc(100vh - 13rem));
+        margin-right: 0;
+        padding: 1.5rem 2.5rem 1.25rem 1.75rem;
+    }
+    .z-book-one { width: 50%; min-width: 480px; margin: 0 auto; }
+}
 .z-saved-tabs { margin: 0.5rem 0 0.75rem; }
 .z-saved-tabs .z-segment { text-decoration: none; font-weight: 500; }
 .z-saved-tabs .z-segment:focus-visible { outline: 3px solid var(--z-ink); outline-offset: 2px; }
@@ -3265,7 +3246,7 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
 .z-create-btn:hover { border-style: solid; background: var(--z-tint); }
 
 /* Add meal sheet: the third option, and Recent */
-.z-add-sheet.offcanvas-bottom { overflow-y: auto; }
+.z-add-sheet.offcanvas-bottom { overflow-x: hidden; overflow-y: auto; }   /* never a sideways bar on the sheet */
 .z-add-option-saved { background: var(--z-lilac); text-decoration: none; }
 .z-add-option-saved:hover { color: var(--z-ink); }
 
@@ -3289,17 +3270,36 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
     text-decoration: none;
 }
 .z-recent-all:hover { text-decoration: underline; text-underline-offset: 3px; }
-/* A row that scrolls sideways, one card at a time; the next card peeks in (Figma) */
+/* A row of cards; the next card peeks in (Figma). The ‹ › buttons move it one card at a time
+   (add_meal_sheet.js); a finger can still swipe it. No scrollbar. */
 .z-recent-list {
     display: flex;
     gap: 0.75rem;
-    margin: 0 -1.25rem;
-    padding: 0 1.25rem 0.25rem;
+    margin: 0;
+    padding: 0 0 0.25rem;
     list-style: none;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
-    scroll-padding: 0 1.25rem;
+    scrollbar-width: none;
 }
+.z-recent-list::-webkit-scrollbar { display: none; }
+.z-recent-end { display: flex; align-items: center; gap: 0.25rem; }
+.z-recent-arrows { display: flex; gap: 0.25rem; }
+.z-recent-arrows[hidden] { display: none; }
+.z-recent-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--z-line);
+    border-radius: 50%;
+    background: var(--z-card);
+    color: var(--z-ink);
+}
+.z-recent-arrow:hover:not(:disabled) { background: var(--z-tint); }
+.z-recent-arrow:disabled { opacity: 0.4; cursor: default; }
+.z-recent-arrow:focus-visible { outline: 3px solid var(--z-ink); outline-offset: 2px; }
 .z-recent-list li { flex: 0 0 148px; scroll-snap-align: start; }
 .z-recent-card {
     display: flex;
@@ -3367,6 +3367,18 @@ a.z-page-btn:hover { background: var(--z-tint); color: var(--z-ink); }
 /* After Cancel during Analyzing: where the draft went */
 .z-cancel-note { margin: 0.75rem 0 0; color: var(--z-muted); font-size: 0.875rem; }
 .z-cancel-note:empty { display: none; }
+/* Meal detail: "You have unsaved changes" above the buttons (ink on the soft caramel tint, never red) */
+.z-unsaved-note {
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    background: var(--z-butter);
+    color: var(--z-ink);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-align: center;
+}
+.z-unsaved-note:empty { display: none; }
 
 /* "Something else wrong? Tell Zalak" (Figma "Meal detail"): a white field with the mic inside */
 .z-tell { margin-top: 1rem; scroll-margin-top: 1rem; }

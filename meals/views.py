@@ -8,6 +8,7 @@ from urllib.parse import urlencode
 from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_POST
@@ -40,8 +41,7 @@ def home(request):
     # To finish (chunk 24, docs/05, T5): drafts checked but never logged or thrown away. Never counted.
     # "Create your own meal" drafts are left out: they are not meals eaten.
     day_drafts = list(Meal.objects.filter(user=request.user, status='draft', deleted_at__isnull=True,
-                                          eaten_at__date=day)
-                      .exclude(id__in=request.session.get('mine_drafts', []))
+                                          for_my_meals=False, eaten_at__date=day)
                       .order_by('eaten_at'))
 
     # One queryset per slot, like the exam's index grouped by specialty
@@ -105,6 +105,8 @@ def home(request):
 # ---------- Home helpers (chunk 14) ----------
 
 WEEKDAY_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
+# No page goes back further than this: a hand-typed ?date=0001-01-01 used to overflow (audit M4)
+FIRST_DAY = date(2020, 1, 1)
 
 
 def parse_day(value):
@@ -114,7 +116,7 @@ def parse_day(value):
         day = date.fromisoformat(value or '')
     except ValueError:
         return None
-    return day if day <= timezone.localdate() else None
+    return day if FIRST_DAY <= day <= timezone.localdate() else None
 
 
 def parse_month(value, day):
@@ -126,7 +128,7 @@ def parse_month(value, day):
         first = date(year, month, 1)
     except ValueError:
         return day.replace(day=1), False
-    return min(first, this_month), True
+    return max(min(first, this_month), FIRST_DAY), True
 
 
 def day_url(view_name, day=None, month=None):
@@ -280,7 +282,7 @@ def signup(request):
 def signup_details(request):
     """Create account, step 2 ("A bit about you"): height, weight and activity, all optional.
     Finish saves them; "Skip for now" saves nothing. Both end on Home with a welcome toast."""
-    profile, created = Profile.objects.get_or_create(user=request.user)
+    profile = own_profile(request)
 
     if request.method == 'POST':
         if 'skip' in request.POST:
@@ -420,13 +422,23 @@ def hide_lighter_idea(request, meal_id):
 
 
 GUEST_DRAFT_HOURS = 24
+DELETED_MEAL_HOURS = 24   # how long a deleted meal waits after its Undo toast before it really goes
+USER_DRAFT_DAYS = 7       # a signed-in user's draft that was never finished
 
 
 def delete_old_guest_drafts():
-    """Guest drafts nobody came back to for a day are deleted. A queryset delete still sends
-    post_delete for each meal, so signals.remove_photo_file removes their photos too."""
-    cutoff = timezone.now() - timedelta(hours=GUEST_DRAFT_HOURS)
-    Meal.objects.filter(user=None, status='draft', created_at__lt=cutoff).delete()
+    """The clean-up, run whenever a new draft is made. A queryset delete still sends post_delete
+    for each meal, so signals.remove_photo_file removes their photos too.
+    - Guest drafts nobody came back to for a day.
+    - Meals deleted more than a day ago (audit M6): "Delete meal" is a soft delete so Undo works,
+      but once Undo is long gone the meal and its photo should not stay on the server.
+    - A signed-in user's drafts older than a week: To finish is for today's interrupted meals."""
+    now = timezone.now()
+    Meal.objects.filter(user=None, status='draft',
+                        created_at__lt=now - timedelta(hours=GUEST_DRAFT_HOURS)).delete()
+    Meal.objects.filter(deleted_at__lt=now - timedelta(hours=DELETED_MEAL_HOURS)).delete()
+    Meal.objects.filter(user__isnull=False, status='draft',
+                        created_at__lt=now - timedelta(days=USER_DRAFT_DAYS)).delete()
 
 
 # ---------- Meal detail (chunk 15): a logged meal's slot, time, name and photo; delete with Undo ----------
@@ -524,9 +536,7 @@ def save_meal(request, meal_id):
     if form.cleaned_data['eaten_at'] != old_eaten:
         meal.eaten_at = form.cleaned_data['eaten_at']   # untouched: the exact time stays
     if not meal.title:
-        # An emptied name gives back Zalak's, so a meal is never untitled (decided 1 Nov)
-        answer = meal.ai_response if isinstance(meal.ai_response, dict) else {}
-        meal.title = answer.get('title', '')
+        meal.title = meal.zalak_title   # an emptied name gives back Zalak's: a meal is never untitled
     if form.cleaned_data['remove_photo'] and not request.FILES.get('photo'):
         meal.photo = None
     meal.save()
@@ -540,6 +550,11 @@ def save_meal(request, meal_id):
 @require_POST
 def delete_meal(request, meal_id):
     """Delete meal (FR25): a soft delete, so Undo is one update. Back to Home or the Diary."""
+    if request.user.is_authenticated:
+        # A second tap: the first one already deleted it, so go where that one went (not a 404)
+        deleted = Meal.objects.filter(id=meal_id, user=request.user, deleted_at__isnull=False).first()
+        if deleted:
+            return redirect(meal_back_url(request, deleted))
     meal = get_own_logged_meal(request, meal_id)
     meal.deleted_at = timezone.now()
     meal.save()
@@ -555,9 +570,10 @@ def undo_delete_meal(request, meal_id):
     """Undo in the "Meal deleted" toast. get_own_meal skips deleted meals, so this looks itself."""
     if not request.user.is_authenticated:
         raise Http404
-    meal = get_object_or_404(Meal, id=meal_id, user=request.user, deleted_at__isnull=False)
-    meal.deleted_at = None
-    meal.save()
+    meal = get_object_or_404(Meal, id=meal_id, user=request.user)
+    if meal.deleted_at is not None:   # a second tap finds it already back: nothing to do
+        meal.deleted_at = None
+        meal.save()
     return redirect(meal_back_url(request, meal))
 
 
@@ -596,14 +612,16 @@ def item_fields(ai_item):
     }
 
 
+@transaction.atomic
 def apply_analysis(meal, data):
-    """Save a validated AI answer on the draft: title, description and the items."""
+    """Save a validated AI answer on the draft: title, description and the items. All or nothing,
+    so a crash halfway never leaves a meal without items."""
     meal.title = data['title']
     meal.description = data['description']
     meal.ai_response = data
     meal.save()
 
-    meal.items.all().delete()   # a Retry (chunk 6) replaces the old items
+    meal.items.all().delete()   # a Retry or Tell Zalak replaces the old items
     for position, ai_item in enumerate(data['items']):
         MealItem.objects.create(meal=meal, position=position, **item_fields(ai_item))
 
@@ -645,13 +663,22 @@ def ai_problem(error):
     return "Zalak couldn't estimate that just now. Try again."
 
 
+def read_photo(meal):
+    """The bytes of the meal's photo. A file that is gone from media/ is an AnalysisError of the
+    kind 'photo', so the user gets the calm error page instead of a server error (audit M3)."""
+    try:
+        with meal.photo.open('rb') as photo:
+            return photo.read()
+    except OSError as error:
+        raise AnalysisError('The photo file is missing.', kind='photo') from error
+
+
 def analyze_meal(meal):
     """Ask the AI about a saved draft and redirect to what comes next:
     Result, No food found, or the error page. Used by Analyze and Try again."""
     try:
         if meal.photo:
-            with meal.photo.open('rb') as photo:
-                data = analyze_photo(photo.read(), meal.text)
+            data = analyze_photo(read_photo(meal), meal.text)
         else:
             data = analyze_text(meal.text)
     except AnalysisError as error:
@@ -697,6 +724,19 @@ def checker_back(request, mine, meal):
     if mine or is_mine_draft(request, meal):
         return {'back_url': your_meals_url('mine'), 'back_to': 'Your meals'}
     return {'back_url': reverse('home'), 'back_to': 'Home'}
+
+
+def switch_input_url(view_name, edit_name, meal, slot, day, mine):
+    """The other input page, for "Use a photo instead" and "Type it instead" (audit H2): a draft
+    keeps its own URL (so no second draft is made); a new meal keeps its slot, day and mine=1."""
+    if meal:
+        return reverse(edit_name, args=[meal.id])
+    params = {'slot': slot}
+    if day:
+        params['day'] = day.isoformat()
+    if mine:
+        params['mine'] = '1'
+    return f'{reverse(view_name)}?{urlencode(params)}'
 
 
 def text_input(request, meal_id=None):
@@ -748,6 +788,7 @@ def text_input(request, meal_id=None):
         'mine': mine,
         **checker_back(request, mine, meal),
         'steps': TEXT_STEPS,
+        'photo_url': switch_input_url('photo_input', 'edit_photo', meal, form['slot'].value(), day, mine),
     }
     return render(request, 'meals/text_input.html', context)
 
@@ -816,6 +857,7 @@ def photo_input(request, meal_id=None):
         'mine': mine,
         **checker_back(request, mine, meal),
         'steps': PHOTO_STEPS,
+        'text_url': switch_input_url('text_input', 'edit_text', meal, slot, day, mine),
         'show_tips': not tips_seen(request),   # the tips open by themselves until "Don't show again"
     }
     return render(request, 'meals/photo_input.html', context)
@@ -832,8 +874,7 @@ def tips_seen(request):
 def photo_tips_seen(request):
     """Sent by photo_tips.js when the tips close with "Don't show these tips again" ticked."""
     if request.user.is_authenticated:
-        # get_or_create: the Profile signal for new users only arrives in chunk 12
-        profile, created = Profile.objects.get_or_create(user=request.user)
+        profile = own_profile(request)
         profile.seen_photo_tips = True
         profile.save()
     else:
@@ -850,17 +891,25 @@ def retry(request, meal_id):
     return analyze_meal(meal)
 
 
+# Why an analysis failed (AnalysisError.kind) -> the step the overlay marks and its words
+ERROR_STEPS = {
+    'connection': (0, 'Connection lost'),
+    'photo': (0, 'Photo not found'),
+    'failed': (1, 'Something went wrong'),
+}
+
+
 def analysis_error(request, meal_id):
     meal = get_own_draft(request, meal_id)
     why = request.GET.get('why')
-    if why != 'connection':
+    if why not in ERROR_STEPS:
         why = 'failed'
+    index, words = ERROR_STEPS[why]
     context = {
         'meal': meal,
         'why': why,
         'steps': steps_for(meal),
-        'failed': failed_step(request, 0 if why == 'connection' else 1,
-                              'Connection lost' if why == 'connection' else 'Something went wrong'),
+        'failed': failed_step(request, index, words),
     }
     return render(request, 'meals/error.html', context)
 
@@ -1101,11 +1150,13 @@ def tell_zalak(request, meal_id):
                 'grams': item.grams, 'kcal_min': item.kcal_min, 'kcal_max': item.kcal_max}
                for item in items]
     try:
+        photo = None
         if meal.photo:
-            with meal.photo.open('rb') as photo:
-                data = correct_meal(meal.text, current, correction, photo.read())
-        else:
-            data = correct_meal(meal.text, current, correction)
+            try:
+                photo = read_photo(meal)
+            except AnalysisError:
+                pass   # the file is gone: Zalak corrects from the note and the items alone
+        data = correct_meal(meal.text, current, correction, photo)
     except AnalysisError as error:
         request.session['tell_error'] = {'text': correction, 'message': ai_problem(error)}
         return redirect(back + '#tell-zalak')
@@ -1124,6 +1175,9 @@ def tell_zalak(request, meal_id):
     renamed = bool(meal.title) and meal.title != old_answer.get('title', '')
     title = meal.title
     apply_analysis(meal, data)   # the new items, description and answer (so Reset means this one)
+    removed = request.session.get('removed_item')
+    if removed and removed['meal_id'] == meal.id:
+        del request.session['removed_item']   # its place in the list now belongs to another item
     if renamed:
         meal.title = title
         meal.save(update_fields=['title'])
@@ -1142,13 +1196,14 @@ def undo_tell_zalak(request, meal_id):
     if not saved or saved['meal_id'] != meal.id:
         raise Http404
     del request.session['corrected_meal']
-    meal.title = saved['title']
-    meal.description = saved['description']
-    meal.ai_response = saved['ai_response']
-    meal.save()
-    meal.items.all().delete()
-    for fields in saved['items']:
-        MealItem.objects.create(meal=meal, **fields)
+    with transaction.atomic():   # all or nothing, as in apply_analysis
+        meal.title = saved['title']
+        meal.description = saved['description']
+        meal.ai_response = saved['ai_response']
+        meal.save()
+        meal.items.all().delete()
+        for fields in saved['items']:
+            MealItem.objects.create(meal=meal, **fields)
     return redirect('result', meal_id=meal.id)
 
 
@@ -1157,7 +1212,15 @@ def log_meal(request, meal_id):
     """Log on Result: the draft becomes a logged meal in the chosen slot (FR23).
     The pre_save signal counts it in Profile.meals_logged.
     A guest gets here from "Keep this meal?" (FR2, T7): the draft waits for the account."""
-    meal = get_own_draft(request, meal_id)
+    meal = get_own_meal(request, meal_id)
+    if meal.status == 'logged':
+        # A second tap on Log: the first one already logged it, so go where that one went (not a 404)
+        return redirect(home_url(timezone.localdate(meal.eaten_at)))
+    if meal.status != 'draft':
+        raise Http404
+    if not meal.items.exists():
+        # A draft whose analysis failed has nothing to log: back to its error or No food page
+        return redirect('result', meal_id=meal.id)
 
     slot = request.POST.get('slot')
     if slot in SLOT_ICONS:
@@ -1189,10 +1252,11 @@ def log_meal(request, meal_id):
 def undo_log(request, meal_id):
     """Undo in the "Logged to lunch" toast: the meal is a draft again, back on its Result."""
     meal = get_own_meal(request, meal_id)
-    if meal.status != 'logged':
+    if meal.status == 'logged':   # a second tap finds a draft already: straight to its Result
+        meal.status = 'draft'
+        meal.save()   # the signal takes the meal off the counter again
+    elif meal.status != 'draft':
         raise Http404
-    meal.status = 'draft'
-    meal.save()   # the signal takes the meal off the counter again
     return redirect('result', meal_id=meal.id)
 
 
@@ -1200,12 +1264,13 @@ def undo_log(request, meal_id):
 def just_checking(request, meal_id):
     """Just checking on Result: the draft is thrown away (FR34). Nothing was logged.
     The post_delete signal removes the photo file."""
+    if not Meal.objects.filter(id=meal_id).exists():
+        return redirect('home')   # a second tap: the first one already threw it away (not a 404)
     meal = get_own_draft(request, meal_id)
     waiting = request.session.get('guest_meal')
     if waiting and waiting['id'] == meal.id:
         del request.session['guest_meal']   # nothing is waiting for an account any more
     mine = is_mine_draft(request, meal)
-    forget_mine_draft(request, meal)
     meal.delete()
     if mine:
         return redirect(your_meals_url('mine'))   # Cancel on "Create your own meal"
@@ -1225,8 +1290,8 @@ def no_food(request, meal_id):
     return render(request, 'meals/no_food.html', context)
 
 
-# Placeholders until their chunk is built, so the navigation never breaks.
-# They are personal pages, so a guest is sent to Sign in first (LOGIN_URL in settings).
+# The Diary, Statistics, Your meals and Profile are personal pages: @login_required sends a guest
+# to Sign in first (LOGIN_URL in settings).
 
 @login_required
 def diary(request):
@@ -1282,17 +1347,11 @@ def first_logged_day(logged):
     return timezone.localtime(first).date() if first else timezone.localdate()
 
 
-# The slot colors of the Diary's polaroids when a meal has no photo
-SLOT_TINTS = {'breakfast': 'butter', 'lunch': 'peach', 'snack': 'sky', 'dinner': 'lilac'}
-
-
 def diary_page(logged, day, first_day):
     """One Diary page: the day's logged meals in time order (one queryset per page), its words
     and its total. Today also lists the slots that are still empty, to add to them."""
     today = timezone.localdate()
     meals = list(logged.filter(eaten_at__date=day).prefetch_related('items').order_by('eaten_at'))
-    for meal in meals:
-        meal.tint = SLOT_TINTS.get(meal.slot, 'sky')
 
     if day == today:
         kicker = f'{day:%A} · Today'
@@ -1530,7 +1589,7 @@ def most_logged(meals):
             'title': latest.title.strip(),
             'count': len(same),
             'photo': photos[-1] if photos else None,
-            'tint': SLOT_TINTS.get(latest.slot, 'sky'),
+            'tint': latest.tint,
             'latest': latest.eaten_at,
         })
     rows.sort(key=lambda row: (row['count'], row['latest']), reverse=True)
@@ -1541,7 +1600,7 @@ def most_logged(meals):
 
 def own_profile(request):
     """The signed-in user's Profile. get_or_create: the post_save signal makes one for every new
-    user, but accounts from before chunk 12 (e.g. the superuser) may have none."""
+    user, but an account made before that signal existed may have none."""
     profile, created = Profile.objects.get_or_create(user=request.user)
     return profile
 
@@ -1720,14 +1779,11 @@ def recent_meals(user):
         if len(ids) == RECENT_COUNT:
             break
     meals = {meal.id: meal for meal in logged.filter(id__in=ids).prefetch_related('items')}
-    recent = [meals[meal_id] for meal_id in ids]
-    for meal in recent:
-        meal.tint = SLOT_TINTS.get(meal.slot, 'sky')
-    return recent
+    return [meals[meal_id] for meal_id in ids]
 
 
-# "Create your own meal": the normal checker, whose draft is remembered in the session so its
-# Result shows Save to My meals instead of Log. Only signed-in users have Your meals.
+# "Create your own meal": the normal checker, whose draft is marked for_my_meals so its Result
+# shows Save to My meals instead of Log. Only signed-in users have Your meals.
 
 def wants_mine(request, meal_id):
     if meal_id is not None or not request.user.is_authenticated:
@@ -1737,19 +1793,19 @@ def wants_mine(request, meal_id):
 
 
 def remember_mine_draft(request, meal):
-    drafts = request.session.get('mine_drafts', [])
-    if meal.id not in drafts:
-        request.session['mine_drafts'] = drafts + [meal.id]
+    if not meal.for_my_meals:
+        meal.for_my_meals = True
+        meal.save(update_fields=['for_my_meals'])
 
 
 def forget_mine_draft(request, meal):
-    drafts = request.session.get('mine_drafts', [])
-    if meal.id in drafts:
-        request.session['mine_drafts'] = [draft for draft in drafts if draft != meal.id]
+    if meal.for_my_meals:
+        meal.for_my_meals = False
+        meal.save(update_fields=['for_my_meals'])
 
 
 def is_mine_draft(request, meal):
-    return bool(meal and meal.id in request.session.get('mine_drafts', []))
+    return bool(meal and meal.status == 'draft' and meal.for_my_meals)
 
 
 @login_required
@@ -1764,8 +1820,6 @@ def your_meals(request):
     else:
         meals = own.filter(status='logged', is_favorite=True).order_by('-eaten_at')
     meals = list(meals.prefetch_related('items'))
-    for meal in meals:
-        meal.tint = SLOT_TINTS.get(meal.slot, 'sky')
     today = timezone.localdate()
     logged = own.filter(status='logged')
     month, calendar_open = parse_month(request.GET.get('month'), today)
@@ -1826,8 +1880,7 @@ def rename_saved(request, meal_id):
     if form.is_valid():
         meal = form.save(commit=False)
         if not meal.title:
-            answer = meal.ai_response if isinstance(meal.ai_response, dict) else {}
-            meal.title = answer.get('title', '')
+            meal.title = meal.zalak_title
         meal.save()
         request.session['toast'] = {'text': 'Changes saved'}
     return redirect('saved_meal', meal_id=meal.id)
@@ -1877,6 +1930,8 @@ def undo_log_again(request, meal_id):
     """Undo in "Logged again to lunch": the copy goes. Back to draft first, so the signal takes it
     off the counter again; deleting it then removes its photo file (post_delete)."""
     if request.session.get('logged_again') != meal_id:
+        if not Meal.objects.filter(id=meal_id).exists():
+            return redirect('home')   # a second tap: the first one already took the copy away
         raise Http404   # only the copy just made, never any other logged meal
     meal = get_own_logged_meal(request, meal_id)
     day = timezone.localdate(meal.eaten_at)
@@ -1889,27 +1944,19 @@ def undo_log_again(request, meal_id):
 
 @login_required
 @require_POST
-def save_as_my_meal(request, meal_id):
-    """ "Save a copy to My meals" on Meal detail (FR39): a template made from a logged meal."""
-    meal = get_own_logged_meal(request, meal_id)
-    copy_meal(meal, meal.slot, timezone.now(), 'mine')
-    request.session['toast'] = {'text': 'Saved to Your meals'}
-    return redirect('result', meal_id=meal.id)
-
-
-@login_required
-@require_POST
 def save_my_meal(request, meal_id):
     """Save to My meals on the Result of "Create your own meal" (FR39): the draft becomes a My meal."""
     meal = get_own_draft(request, meal_id)
     if not is_mine_draft(request, meal):
         raise Http404
+    if not meal.items.exists():
+        return redirect('result', meal_id=meal.id)   # a failed analysis: nothing to save yet
     slot = request.POST.get('slot')
     if slot in SLOT_ICONS:
         meal.slot = slot
     meal.status = 'mine'
+    meal.for_my_meals = False   # no longer a draft waiting for Save
     meal.save()
-    forget_mine_draft(request, meal)
     request.session['toast'] = {'text': 'Saved to Your meals'}
     return redirect(your_meals_url('mine'))
 
@@ -1946,5 +1993,6 @@ def undo_remove_saved(request, meal_id):
 
 
 def add_meal(request):
-    # Until the Add meal sheet (chunk 14), "+" goes straight to Text and voice
+    """/add/: "Try it without an account" on Welcome, and the "+" without JavaScript (with it, the
+    "+" opens the Add meal sheet instead). Text and voice links to the photo input from there."""
     return redirect('text_input')

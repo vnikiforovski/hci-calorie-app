@@ -1,0 +1,24 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+{# Django shows this when a view crashes and DEBUG is off. It gets no context (no user, no request), #}
+{# so it can't extend base.html: a small page of its own with the same theme.                        #}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Something went wrong · Zalak</title>
+    <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{% static 'vendor/bootstrap/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/zalak.css' %}">
+</head>
+<body>
+<main class="z-main">
+    <div class="z-state z-error-page">
+        <img class="z-error-cookie" src="{% static 'img/logo.svg' %}" alt="">
+        <h1>Something went wrong</h1>
+        <p class="z-state-text">That's on Zalak's side, not yours. Meals you logged are safe. Go back and try again, or start from Home.</p>
+        <a class="btn btn-primary btn-lg" href="/">Go to Home</a>
+    </div>
+</main>
+</body>
+</html>

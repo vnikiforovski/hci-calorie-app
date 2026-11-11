@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -37,14 +38,20 @@ def env_list(name, defaults):
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY is missing. Copy .env.example to .env in the project folder and fill it in '
+        '(see README.md).')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Off unless .env says DJANGO_DEBUG=1 (development). With it off, the Zalak error pages show
+# (templates/404.html, 500.html) and runserver needs --insecure to serve static/ (see README.md).
+DEBUG = os.environ.get('DJANGO_DEBUG') == '1'
 
 # localhost for the laptop, *.trycloudflare.com for phone tests through the https tunnel;
 # more hosts (a LAN IP) come from .env
-ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['localhost', '127.0.0.1', '.trycloudflare.com'])
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS', ['localhost', '127.0.0.1', '.trycloudflare.com', '172.20.10.2'])
 CSRF_TRUSTED_ORIGINS = env_list('DJANGO_CSRF_TRUSTED_ORIGINS', ['https://*.trycloudflare.com'])
 
 
@@ -154,7 +161,7 @@ STATICFILES_DIRS = [
 
 # Added as ?v= to our own CSS and JS links (meals/context_processors.py).
 # Bump it whenever zalak.css or a file in static/js changes, so browsers reload them.
-STATIC_VERSION = '29'
+STATIC_VERSION = '32'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

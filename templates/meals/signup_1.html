@@ -32,6 +32,8 @@
                 {{ form.agree }}
                 <label class="form-check-label" for="{{ form.agree.id_for_label }}">{{ form.agree.label }}</label>
             </div>
+            {# NFR20 (audit M10): told before the account exists, in one line #}
+            <p class="z-caption text-body-secondary mt-2 mb-0">Meals are sent to an AI service (Claude) to be estimated. Your name and e-mail are not.</p>
             {% if form.agree.errors %}
                 <div id="{{ form.agree.auto_id }}_error">
                     {% for error in form.agree.errors %}

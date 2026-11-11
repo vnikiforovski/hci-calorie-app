@@ -44,4 +44,32 @@
     radios.forEach(function (radio) {
         radio.addEventListener('change', function () { choose(radio.value, false); });
     });
+
+    // Recent: ‹ › move the row by one card. They show only when the cards don't all fit, and each is
+    // off at its end. Without JavaScript the row can still be swiped or scrolled.
+    const list = document.getElementById('recentList');
+    const arrows = sheet.querySelector('[data-recent-arrows]');
+    if (!list || !arrows) return;
+    const back = arrows.querySelector('[data-recent-move="-1"]');
+    const next = arrows.querySelector('[data-recent-move="1"]');
+    const smooth = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+
+    function updateArrows() {
+        const room = list.scrollWidth - list.clientWidth;
+        arrows.hidden = room <= 1;
+        back.disabled = list.scrollLeft <= 1;
+        next.disabled = list.scrollLeft >= room - 1;
+    }
+
+    arrows.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-recent-move]');
+        if (!button) return;
+        const card = list.querySelector('li');
+        const gap = parseFloat(getComputedStyle(list).columnGap) || 0;
+        const step = card ? card.offsetWidth + gap : list.clientWidth;
+        list.scrollBy({ left: Number(button.dataset.recentMove) * step, behavior: smooth });
+    });
+    list.addEventListener('scroll', updateArrows);
+    window.addEventListener('resize', updateArrows);
+    sheet.addEventListener('shown.bs.offcanvas', updateArrows);   // the sizes are known once it is open
 })();

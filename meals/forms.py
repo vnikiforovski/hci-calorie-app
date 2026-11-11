@@ -16,6 +16,7 @@ from .units import MAX_GRAMS, grams_for
 
 PHOTO_MAX_SIDE = 1568            # px on the long side: what the AI looks at anyway
 PHOTO_MAX_BYTES = 20 * 1024 * 1024
+MEAL_TEXT_MAX = 1000             # characters of a typed meal or a photo note: plenty for a meal (audit M8)
 
 
 class TextMealForm(forms.ModelForm):
@@ -32,6 +33,7 @@ class TextMealForm(forms.ModelForm):
                 'rows': 5,
                 'placeholder': 'e.g. two eggs, toast with butter, coffee with milk',
                 'aria-label': 'Describe your meal',
+                'maxlength': MEAL_TEXT_MAX,
                 'data-voice-field': '',   # voice.js writes the dictated words here (chunk 24: by data attribute)
             }),
             'slot': forms.HiddenInput(),
@@ -41,6 +43,8 @@ class TextMealForm(forms.ModelForm):
         text = self.cleaned_data['text'].strip()
         if not text:
             raise forms.ValidationError('Write what you ate, e.g. "two eggs and toast".')
+        if len(text) > MEAL_TEXT_MAX:
+            raise forms.ValidationError('That is a lot of text. Keep it to the meal itself, under 1,000 characters.')
         return text
 
     def clean_input_method(self):
@@ -92,6 +96,7 @@ class PhotoMealForm(forms.ModelForm):
                 'rows': 4,
                 'placeholder': 'e.g. cooked in butter, I ate half',
                 'aria-labelledby': 'noteTitle',
+                'maxlength': MEAL_TEXT_MAX,
             }),
             'slot': forms.HiddenInput(),
         }
@@ -111,7 +116,8 @@ class PhotoMealForm(forms.ModelForm):
         return clean_uploaded_photo(self.cleaned_data['photo'])
 
     def clean_text(self):
-        return self.cleaned_data['text'].strip()   # the note is optional
+        # The note is optional. The field stops at MEAL_TEXT_MAX in the browser; anything longer is cut
+        return self.cleaned_data['text'].strip()[:MEAL_TEXT_MAX]
 
 
 class MealTitleForm(forms.ModelForm):
@@ -169,7 +175,9 @@ class MealDetailForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        day, time = cleaned.get('eaten_day'), cleaned.get('eaten_time')
+        time = cleaned.get('eaten_time')
+        # The time sheet changes only the time: the day is always the meal's own, whatever is posted
+        day = timezone.localtime(self.instance.eaten_at).date() if self.instance.pk else cleaned.get('eaten_day')
         if day and time:
             eaten_at = timezone.make_aware(datetime.combine(day, time))
             if eaten_at > timezone.now():

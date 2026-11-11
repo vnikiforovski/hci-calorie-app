@@ -8,6 +8,7 @@ validate() then checks the rules a schema can't express (min <= max, unsure need
 import base64
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -15,7 +16,7 @@ import time
 import anthropic
 from django.conf import settings
 
-from ..units import GRAMS_PER_UNIT, round_to
+from ..units import GRAMS_PER_UNIT, MAX_GRAMS, round_to
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,16 @@ CONFIDENCES = ('sure', 'likely', 'unsure')
 RANGES = ('kcal', 'protein', 'carbs', 'fat')
 
 
+# Limits no real food passes (audit M2): pure fat has about 900 kcal in 100 g, and a food can't
+# hold more grams of a macro than it weighs. A little room is left for rounding.
+MAX_KCAL_PER_100G = 1000
+MACRO_ROOM_GRAMS = 5
+
+
 class AnalysisError(Exception):
     """The AI failed or answered something we can't use.
-    kind is 'connection' (the AI couldn't be reached) or 'failed' (anything else);
-    the error page words its message by it."""
+    kind is 'connection' (the AI couldn't be reached), 'photo' (the meal's photo file is gone)
+    or 'failed' (anything else); the error page words its message by it."""
 
     def __init__(self, message, kind='failed'):
         super().__init__(message)
@@ -279,11 +286,13 @@ def _ask_model(user_content, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA):
         logger.warning('ANTHROPIC_API_KEY is not set in .env')
         raise AnalysisError('No API key.')
 
-    client = anthropic.Anthropic(timeout=30, max_retries=1)
     try:
+        # One try of at most 20 s: "Try again" on the error page is the retry, and the user sees it.
+        # max_tokens leaves room for the model's thinking as well as a 20-item answer.
+        client = anthropic.Anthropic(timeout=20, max_retries=0)
         response = client.messages.create(
             model=settings.ZALAK_AI_MODEL,
-            max_tokens=4000,
+            max_tokens=8000,
             system=system,
             output_config={
                 'effort': 'low',
@@ -299,6 +308,10 @@ def _ask_model(user_content, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA):
         # Wrong key, rate limit, server error...: the user sees the same calm message
         logger.warning('AI call failed: %s', error)
         raise AnalysisError('The AI call failed.') from error
+    except Exception as error:
+        # Anything else the SDK may raise: still the calm error page, never a server error
+        logger.warning('AI call broke: %r', error)
+        raise AnalysisError('The AI call broke.') from error
 
     if response.stop_reason in ('refusal', 'max_tokens'):
         logger.warning('AI stopped early: %s', response.stop_reason)
@@ -408,11 +421,15 @@ def _validate_item(item):
     if confidence == 'unsure' and not reason:
         raise AnalysisError(f'{name}: unsure needs a reason.')
 
+    grams = max(5, round_to(_number(item.get('grams')), 5))
+    if grams > MAX_GRAMS or amount > MAX_GRAMS:
+        raise AnalysisError(f'{name}: the portion is too big to be real.')
+
     clean = {
         'name': name,
         'amount': amount or 1,
         'unit': unit,
-        'grams': max(5, round_to(_number(item.get('grams')), 5)),
+        'grams': grams,
         'confidence': confidence,
         'reason': reason,
         'question': _text(item.get('question'), 150),
@@ -422,12 +439,17 @@ def _validate_item(item):
         if low > high:
             raise AnalysisError(f'{name}: {key}_min is bigger than {key}_max.')
         clean[f'{key}_min'], clean[f'{key}_max'] = low, high
+    if clean['kcal_max'] * 100 / grams > MAX_KCAL_PER_100G:
+        raise AnalysisError(f'{name}: more kcal than any food has.')
+    for key in ('protein', 'carbs', 'fat'):
+        if clean[f'{key}_max'] > grams + MACRO_ROOM_GRAMS:
+            raise AnalysisError(f'{name}: more {key} than the food weighs.')
     return clean
 
 
 def _number(value):
-    """A number >= 0 (True/False and text are rejected)."""
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+    """A real number >= 0 (True/False, text, NaN and infinity are rejected)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
         raise AnalysisError(f'Not a number >= 0: {value!r}')
     return value
 

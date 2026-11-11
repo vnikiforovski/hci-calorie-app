@@ -7,6 +7,10 @@ from django.utils import timezone
 from .units import NO_PLURAL, UNIT_CHOICES, format_amount, round_to
 
 
+# The pastel a meal without a photo gets in the Diary, Your meals, Recent and Most logged
+SLOT_TINTS = {'breakfast': 'butter', 'lunch': 'peach', 'snack': 'sky', 'dinner': 'lilac'}
+
+
 def slot_for_time(dt):
     """Suggest a meal slot from the local time (FR8), with the hours from the Figma slot sheet.
     Also used by the signal in chunk 9."""
@@ -39,7 +43,6 @@ class Profile(models.Model):
     birth_year = models.PositiveSmallIntegerField(null=True, blank=True)  # Personal details (chunk 18)
     activity_level = models.CharField(max_length=10, choices=ACTIVITY_CHOICES, blank=True)
     uncertainty = models.CharField(max_length=10, choices=UNCERTAINTY_CHOICES, default='ask')
-    food_preferences = models.CharField(max_length=200, blank=True)  # sent to the AI (FR38)
     show_lighter_ideas = models.BooleanField(default=True)
     seen_photo_tips = models.BooleanField(default=False)
     meals_logged = models.PositiveIntegerField(default=0)  # set only by the signal
@@ -83,6 +86,9 @@ class Meal(models.Model):
     # The × on Result's lighter idea (chunk 25). A field, not in ai_response, so Try again and
     # Tell Zalak (which replace ai_response) don't bring a hidden card back.
     hide_lighter_idea = models.BooleanField(default=False)
+    # A draft from "Create your own meal": its Result offers Save to My meals, and Home never lists it
+    # under To finish. On the meal, not in the session, so it survives signing out (audit M1).
+    for_my_meals = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)  # soft delete for Undo
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -90,7 +96,18 @@ class Meal(models.Model):
         ordering = ['-eaten_at']
 
     def __str__(self):
-        return self.title or f"{self.get_slot_display() or 'Meal'} on {self.eaten_at.strftime('%Y-%m-%d %H:%M')}"
+        when = timezone.localtime(self.eaten_at).strftime('%Y-%m-%d %H:%M')   # Skopje time, as on every page
+        return self.title or f"{self.get_slot_display() or 'Meal'} on {when}"
+
+    @property
+    def tint(self):
+        return SLOT_TINTS.get(self.slot, 'sky')
+
+    @property
+    def zalak_title(self):
+        """Zalak's own name for the meal, which an emptied name falls back to (Meal detail, Rename)."""
+        answer = self.ai_response if isinstance(self.ai_response, dict) else {}
+        return answer.get('title', '')
 
     def _total(self, name):
         return sum(getattr(item, name) for item in self.items.all())

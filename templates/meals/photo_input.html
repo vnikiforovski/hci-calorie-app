@@ -28,7 +28,10 @@
                         <i class="bi bi-x-lg" aria-hidden="true"></i>
                     </a>
                     <span class="z-camera-slot"><span class="visually-hidden">Meal slot:</span> {{ slot|capfirst }}{% if day %} · {{ day|date:'D j' }}{% endif %}</span>
-                    <span class="z-camera-spacer" aria-hidden="true"></span>
+                    {# Not in Figma (audit H2, docs/03): text is always next to the camera #}
+                    <a class="z-camera-btn" href="{{ text_url }}" aria-label="Type it instead" title="Type it instead">
+                        <i class="bi bi-keyboard" aria-hidden="true"></i>
+                    </a>
                 </div>
 
                 <div class="z-viewfinder">
@@ -81,6 +84,9 @@
                 <button type="button" class="z-link-btn mt-2" data-bs-toggle="offcanvas" data-bs-target="#photoTips" aria-controls="photoTips">
                     <i class="bi bi-lightbulb" aria-hidden="true"></i> Tips for a good photo
                 </button>
+                <a class="btn btn-outline-secondary z-switch-input mt-2 ms-3" href="{{ text_url }}">
+                    <i class="bi bi-keyboard" aria-hidden="true"></i> Type it instead
+                </a>
             </section>
 
             {# The note step, Figma "Photo · Add a note". On desktop: the photo left, the note right. #}
@@ -122,6 +128,10 @@
                         <button type="button" class="z-chip" data-insert="sauce on the side"><i class="bi bi-plus-lg" aria-hidden="true"></i> Sauce on the side</button>
                         <button type="button" class="z-chip" data-insert="shared dish"><i class="bi bi-plus-lg" aria-hidden="true"></i> Shared dish</button>
                     </div>
+
+                    <a class="btn btn-outline-secondary z-switch-input mt-3" href="{{ text_url }}">
+                        <i class="bi bi-keyboard" aria-hidden="true"></i> Type it instead
+                    </a>
 
                     {% include 'meals/_cancel_note.html' %}
 

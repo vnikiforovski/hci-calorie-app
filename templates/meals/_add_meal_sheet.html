@@ -68,9 +68,20 @@
         <section class="z-recent" aria-labelledby="recentTitle">
             <div class="z-recent-head">
                 <h3 class="z-recent-title mb-0" id="recentTitle">Recent</h3>
-                <a class="z-recent-all" href="{% url 'diary' %}">See all</a>
+                <div class="z-recent-end">
+                    <a class="z-recent-all" href="{% url 'diary' %}">See all</a>
+                    {# ‹ › move the row one card (add_meal_sheet.js); hidden when every card fits #}
+                    <div class="z-recent-arrows" data-recent-arrows hidden>
+                        <button type="button" class="z-recent-arrow" data-recent-move="-1" aria-controls="recentList" aria-label="Earlier recent meals">
+                            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                        </button>
+                        <button type="button" class="z-recent-arrow" data-recent-move="1" aria-controls="recentList" aria-label="More recent meals">
+                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
-            <ul class="z-recent-list">
+            <ul class="z-recent-list" id="recentList">
                 {% for meal in recent_meals %}
                     <li>
                         <form method="post" action="{% url 'log_again' meal.id %}" class="z-recent-card">

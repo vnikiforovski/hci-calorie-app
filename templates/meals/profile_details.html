@@ -12,7 +12,7 @@
     <div class="z-profile z-profile-form">
         {% url 'profile' as profile_url %}
         {% include 'meals/_profile_head.html' with back=profile_url back_label='Back to Profile' title='Personal details' %}
-        <p class="z-profile-intro">Used only to put the numbers in context. Never shared.</p>
+        <p class="z-profile-intro">Used only to put the numbers in context. These details are never sent to the AI or shared.</p>
 
         <form method="post" action="{% url 'profile_details' %}" novalidate data-auth-form>
             {% csrf_token %}
