@@ -97,6 +97,7 @@
     {% if meal.status == 'draft' and not user.is_authenticated %}
         {% include 'meals/_guest_sheet.html' %}
     {% endif %}
+    {% include 'meals/_reading_sheet.html' %}
     {# Tell Zalak (chunk 24): the overlay while Zalak reads the correction #}
     {% include 'meals/_analyzing.html' with steps=correction_steps %}
 {% endblock %}

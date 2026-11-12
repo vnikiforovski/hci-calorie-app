@@ -1,10 +1,11 @@
-// Meal detail (chunk 15, templates/meals/meal_detail.html).
-// 1. The time sheet: an hour : minute wheel (Figma "Overlay · Time", as in phone clock apps).
-//    Done copies the day and time into the meal form's hidden fields and the pill. Opening the
-//    sheet again starts from those fields, so closing it another way changes nothing.
-//    The server checks the time again on Save.
-// 2. The photo: Add / Replace open the hidden file input and show the chosen photo at once;
-//    Remove hides it. Nothing is saved until Save changes.
+// Meal detail (chunk 15, templates/meals/meal_detail.html). HCI idea 2: every change saves the moment
+// it is made, so nothing waits for a button and nothing is lost by leaving the page.
+// 1. The slot (slot_select.js fills the hidden input), the time and the name are small forms sent with
+//    fetch; a line under the pills says "Saving…", "Saved" or what went wrong. Without JavaScript they
+//    post the normal way and the page comes back with a toast.
+// 2. The time sheet: an hour : minute wheel (Figma "Overlay · Time", as in phone clock apps). Done saves
+//    the time on the meal's own day; a time that hasn't come yet is refused here and on the server.
+// 3. The photo: choosing a file sends it at once; Remove asks first (it can't be undone).
 (function () {
     const smooth = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
@@ -78,10 +79,42 @@
         };
     }
 
+    // ---------- Saving one change (HCI idea 2) ----------
+    const status = document.getElementById('saveStatus');
+
+    // Sends one of the small forms. onDone gets the server's text (the name as saved);
+    // onFail gets the calm message. A failed fetch (offline) says so and changes nothing.
+    function saveField(form, onDone, onFail) {
+        status.textContent = 'Saving…';
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { 'X-Requested-With': 'fetch' },
+            credentials: 'same-origin',
+        }).then(function (response) {
+            return response.text().then(function (text) {
+                if (!response.ok) throw new Error(text || "Couldn't save that. Try again.");
+                status.textContent = 'Saved';
+                if (onDone) onDone(text);
+            });
+        }).catch(function (error) {
+            const message = error instanceof TypeError ? "Couldn't save. Check your connection and try again." : error.message;
+            status.textContent = '';
+            if (onFail) onFail(message); else status.textContent = message;
+        });
+    }
+
+    // The slot: slot_select.js has already written the hidden input when this runs
+    const slotForm = document.getElementById('slotForm');
+    document.querySelectorAll('.z-slot-option').forEach(function (option) {
+        option.addEventListener('click', function () { saveField(slotForm); });
+    });
+
     // ---------- Time ----------
     const sheet = document.getElementById('timeSheet');
     const error = document.getElementById('timeError');
     const reset = document.getElementById('timeReset');   // missing when the logged day isn't offered
+    const timeForm = document.getElementById('timeForm');
     const eatenTime = document.getElementById('eatenTime');
     function hideError() { error.hidden = true; }
     const hour = Wheel(document.getElementById('timeHour'), hideError);
@@ -93,8 +126,8 @@
         hideError();
     }
 
-    // Each time it opens, the sheet starts from what the form will send. "show" comes before the
-    // slide-in, so the wheels are already in place when the sheet appears.
+    // Each time it opens, the sheet starts from the saved time. "show" comes before the slide-in,
+    // so the wheels are already in place when the sheet appears.
     sheet.addEventListener('show.bs.offcanvas', function () {
         const parts = eatenTime.value.split(':');
         pick(parts[0], parts[1]);
@@ -106,24 +139,44 @@
         });
     }
 
+    function showTimeError(message) {
+        error.textContent = message;
+        error.hidden = false;
+    }
+
     document.getElementById('timeDone').addEventListener('click', function () {
         // The day stays the meal's own; only the time changes
         const time = hour.value() + ':' + minute.value();
         // Both are "YYYY-MM-DDTHH:MM" in Zalak's time zone, so text order is time order
         if (sheet.dataset.day + 'T' + time > sheet.dataset.now) {
-            error.hidden = false;
+            showTimeError("That time hasn't come yet. Pick an earlier one.");
             return;
         }
+        const before = eatenTime.value;
         eatenTime.value = time;
-        document.getElementById('timeLabel').textContent = sheet.dataset.dayLabel + ', ' + time;
-        bootstrap.Offcanvas.getOrCreateInstance(sheet).hide();
+        saveField(timeForm, function () {
+            document.getElementById('timeLabel').textContent = sheet.dataset.dayLabel + ', ' + time;
+            bootstrap.Offcanvas.getOrCreateInstance(sheet).hide();
+        }, function (message) {
+            eatenTime.value = before;
+            showTimeError(message);
+        });
+    });
+
+    // ---------- Name ----------
+    const renameForm = document.getElementById('renameForm');
+    renameForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        saveField(renameForm, function (title) {
+            document.getElementById('mealTitle').textContent = title;
+            renameForm.querySelector('input[name="title"]').value = title;
+            bootstrap.Collapse.getOrCreateInstance(document.getElementById('renameField')).hide();
+        });
     });
 
     // ---------- Photo ----------
-    const hero = document.getElementById('mealHero');
+    const photoForm = document.getElementById('photoForm');
     const input = document.getElementById('id_photo');
-    const photo = document.getElementById('mealPhoto');
-    const removeFlag = document.getElementById('removePhoto');
     const note = document.getElementById('photoNote');
 
     document.querySelectorAll('[data-photo-pick]').forEach(function (button) {
@@ -131,79 +184,15 @@
     });
 
     input.addEventListener('change', function () {
-        const file = input.files[0];
-        if (!file) return;
-        photo.src = URL.createObjectURL(file);
-        removeFlag.value = '';
-        hero.dataset.state = 'photo';
-        note.textContent = 'New photo. Save changes to keep it.';
-        showUnsaved();
+        if (!input.files.length) return;
+        note.textContent = 'Saving the photo…';
+        photoForm.submit();   // the page comes back with the new photo and a toast
     });
 
-    document.getElementById('photoRemove').addEventListener('click', function () {
-        input.value = '';
-        removeFlag.value = '1';
-        hero.dataset.state = 'none';
-        note.textContent = 'Photo removed. Save changes to keep it this way.';
-        showUnsaved();
-    });
-
-    // ---------- Unsaved changes (audit M7) ----------
-    // The slot, time, name and photo wait for Save changes, but everything else on this page (an
-    // item's pencil, the heart, Log again, Tell Zalak, Back) leaves or reloads it at once. So while
-    // one of the four differs from what is saved, a line above the buttons says so, and leaving
-    // another way asks first.
-    const mealForm = document.getElementById('mealForm');
-    const slotInput = document.getElementById('slotInput');
-    const title = document.getElementById('id_title');
-    const unsavedNote = document.getElementById('unsavedNote');
-    const saved = { slot: slotInput.value, time: eatenTime.value, title: title.value };
-    let leaving = false;   // Save changes was pressed, or the user chose to leave
-
-    function isUnsaved() {
-        return slotInput.value !== saved.slot || eatenTime.value !== saved.time ||
-            title.value.trim() !== saved.title.trim() || input.files.length > 0 || removeFlag.value === '1';
+    const removeForm = document.getElementById('photoRemoveForm');
+    if (removeForm) {
+        removeForm.addEventListener('submit', function (event) {
+            if (!window.confirm(removeForm.dataset.confirm)) event.preventDefault();
+        });
     }
-
-    function showUnsaved() {
-        unsavedNote.textContent = isUnsaved() ? unsavedNote.dataset.text : '';
-    }
-
-    function mayLeave() {
-        if (leaving || !isUnsaved()) return true;
-        leaving = window.confirm('Leave without saving? Your changes to the slot, time, name or photo will be lost.');
-        return leaving;
-    }
-
-    // slot_select.js and Done (above) write the hidden fields in their own click handlers, which run
-    // before this one on the document
-    document.addEventListener('click', function (event) {
-        if (event.target.closest('.z-slot-option, #timeDone')) showUnsaved();
-    });
-    title.addEventListener('input', showUnsaved);
-
-    // Links that leave the page (not the ones that only open a sheet or a menu)
-    document.addEventListener('click', function (event) {
-        const link = event.target.closest('a[href]');
-        if (link && !link.hasAttribute('data-bs-toggle') && !mayLeave()) event.preventDefault();
-    });
-
-    // Every other form on the page posts at once and comes back without the unsaved fields.
-    // In the capture phase, so a stopped send never starts the Analyzing overlay or send_once.js.
-    document.addEventListener('submit', function (event) {
-        if (event.target === mealForm) {
-            leaving = true;
-        } else if (!mayLeave()) {
-            event.preventDefault();
-            event.stopPropagation();
-        }
-    }, true);
-
-    // Back, reload or closing the tab: the browser's own question
-    window.addEventListener('beforeunload', function (event) {
-        if (!leaving && isUnsaved()) {
-            event.preventDefault();
-            event.returnValue = '';
-        }
-    });
 })();

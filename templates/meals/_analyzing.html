@@ -67,7 +67,9 @@
                 <span class="z-crumb z-crumb-3 z-crumb-fade" style="left: 150px; top: 105px; --fx: -11px; --fy: -47px;"></span>
             </div>
             <h2 class="z-analyzing-title" id="analyzingTitle">Zalak is taking a bite…</h2>
-            <p class="z-analyzing-sub">This takes a few seconds</p>
+            {# After 8 s analyzing.js swaps in data-slow (HCI idea 4); aria-live reads the new words #}
+            <p class="z-analyzing-sub" aria-live="polite"
+               data-slow="Still working. You can cancel: what you added is kept.">This takes a few seconds</p>
 
             {# Each step: an icon (dashed = now, check = done, empty = waiting) plus its word #}
             <ol class="card z-steps">

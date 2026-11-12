@@ -29,7 +29,7 @@ from meals.views import apply_analysis
 
 FIRST_DAY = date(2026, 10, 26)          # a Monday: a full week, then Mon 2 and Tue 3 Nov (9 days)
 EMAIL = 'ana@zalak.demo'
-PASSWORD = 'zalak-demo-2026'            # written in docs/demo-script.md
+PASSWORD = 'zalak-demo-2026'            # written in docs/dev/demo-script.md
 USER_ID = 900                           # high ids, so loading never overwrites someone's own rows
 FIRST_MEAL_ID = 9001
 FIRST_ITEM_ID = 90001

@@ -15,7 +15,8 @@ from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import (AccountDetailsForm, DeleteAccountForm, MealDetailForm, MealItemForm, MealTitleForm, PersonalDetailsForm,
+from .forms import (AccountDetailsForm, DeleteAccountForm, MealItemForm, MealPhotoForm, MealSlotForm, MealTimeForm,
+                    MealTitleForm, PersonalDetailsForm,
                     PhotoMealForm, PreferencesForm, ProfileDetailsForm, SignUpForm, TextMealForm,
                     ZalakPasswordChangeForm)
 from .models import Meal, MealItem, Profile, slot_for_time
@@ -366,7 +367,7 @@ def result(request, meal_id):
     Meal detail (chunk 15). So every item change, which comes back here, works for both."""
     meal = get_own_meal(request, meal_id)
     if meal.status == 'logged':
-        return render_meal_detail(request, meal, MealDetailForm(instance=meal))
+        return render_meal_detail(request, meal)
     if meal.status == 'mine':
         # A My meal (chunk 22) lives on its Saved meal page; item changes come back here, so they
         # land there too (the browser keeps the #item-… part of the address over the redirect)
@@ -478,16 +479,18 @@ def meal_back_url(request, meal):
     return MEAL_PAGES[page](timezone.localdate(meal.eaten_at))
 
 
-def render_meal_detail(request, meal, form):
-    """Figma "Meal detail". The time sheet changes the time on the meal's own day (no day switch,
-    decided 2 Nov); the hidden time in the form only changes when Done is pressed."""
+def render_meal_detail(request, meal, error=''):
+    """Figma "Meal detail". Each change saves at once (HCI idea 2): the slot, the time (on the meal's
+    own day), the name and the photo each have their own small form posting to save_meal.
+    error: what went wrong with the last change, when it came without JavaScript."""
     eaten = timezone.localtime(meal.eaten_at)
     logged = timezone.localtime(meal.created_at)
     minutes = sorted(set(range(0, 60, 5)) | {eaten.minute, logged.minute})
     back_url = meal_back_url(request, meal)
     context = {
         'meal': meal,
-        'form': form,
+        'rename_form': MealTitleForm(instance=meal),
+        'error': error,
         'items': meal.items_with_bars,
         'slot': meal.slot,
         'slot_icon': SLOT_ICONS[meal.slot],
@@ -519,32 +522,60 @@ def back_label(url):
     return 'Back to Home'
 
 
+# What the toast says after each change on Meal detail without JavaScript
+SAVED_WORDS = {'slot': 'Slot saved', 'time': 'Time saved', 'title': 'Name saved',
+               'photo': 'Photo saved', 'remove_photo': 'Photo removed'}
+
+
 @require_POST
 def save_meal(request, meal_id):
-    """Save changes on Meal detail (FR25): slot, time, name and photo, then back to Home or the Diary.
-    The items are not here: each item change is saved straight away."""
+    """One change on Meal detail, saved at once (FR25, HCI idea 2): the slot, the time, the name, a new
+    photo, or removing the photo, named by the posted "field". meal_detail.js sends the slot, time and
+    name with fetch: it gets a 204 (the name: 200 with the name as saved) or a 400 with the calm message,
+    and the page stays. The photo forms post normally and come back to Meal detail with a toast."""
     meal = get_own_logged_meal(request, meal_id)
+    field = request.POST.get('field')
+    if field not in SAVED_WORDS:
+        return HttpResponse(status=400)
+    by_fetch = request.headers.get('X-Requested-With') == 'fetch'
     old_photo = meal.photo.name if meal.photo else ''
-    old_eaten = timezone.localtime(meal.eaten_at).replace(second=0, microsecond=0)
 
-    form = MealDetailForm(request.POST, request.FILES, instance=meal)
-    if not form.is_valid():
+    form = None
+    if field == 'slot':
+        form = MealSlotForm(request.POST, instance=meal)
+    elif field == 'title':
+        form = MealTitleForm(request.POST, instance=meal)
+    elif field == 'photo':
+        form = MealPhotoForm(request.POST, request.FILES, instance=meal)
+    elif field == 'time':
+        form = MealTimeForm(meal, request.POST)
+
+    if form is not None and not form.is_valid():
+        errors = form.non_field_errors() or [error for errors in form.errors.values() for error in errors]
+        message = errors[0]
+        if by_fetch:
+            return HttpResponse(message, status=400, content_type='text/plain; charset=utf-8')
         # A fresh copy for the page: is_valid() already put the posted values on `meal`
-        return render_meal_detail(request, get_own_logged_meal(request, meal_id), form)
+        return render_meal_detail(request, get_own_logged_meal(request, meal_id), error=message)
 
-    meal = form.save(commit=False)
-    if form.cleaned_data['eaten_at'] != old_eaten:
-        meal.eaten_at = form.cleaned_data['eaten_at']   # untouched: the exact time stays
-    if not meal.title:
-        meal.title = meal.zalak_title   # an emptied name gives back Zalak's: a meal is never untitled
-    if form.cleaned_data['remove_photo'] and not request.FILES.get('photo'):
+    if field == 'time':
+        meal.eaten_at = form.cleaned_data['eaten_at']
+    elif field == 'remove_photo':
         meal.photo = None
+    else:
+        meal = form.save(commit=False)
+        if field == 'title':
+            meal.title = meal.title.strip() or meal.zalak_title   # an emptied name gives back Zalak's
     meal.save()
     if old_photo and old_photo != (meal.photo.name if meal.photo else ''):
         Meal._meta.get_field('photo').storage.delete(old_photo)   # replaced or removed: the file goes
 
-    request.session['toast'] = {'text': 'Changes saved'}
-    return redirect(meal_back_url(request, meal))   # on the meal's (maybe new) day
+    if by_fetch:
+        if field == 'title':
+            return HttpResponse(meal.title, content_type='text/plain; charset=utf-8')
+        return HttpResponse(status=204)
+    request.session['toast'] = {'text': SAVED_WORDS[field]}
+    return redirect('result', meal_id=meal.id)
 
 
 @require_POST

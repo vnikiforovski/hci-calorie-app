@@ -4,8 +4,9 @@
 {% block title %}{{ meal.title|default:'Meal' }}{% endblock %}
 
 {# Meal detail (chunk 15, Figma "Meal detail"): a logged meal, at the same URL as Result (views.result).  #}
-{# Slot, time, name and photo are saved with Save changes (MealDetailForm, the form in the bottom bar);   #}
-{# the fields elsewhere on the page join it with form="mealForm". Item changes save straight away.       #}
+{# HCI idea 2: every change saves the moment it is made, like the items always did. The slot, time and    #}
+{# name are small forms that meal_detail.js sends with fetch ("Saved" under the pills); the photo forms   #}
+{# post and come back here. So there is no Save changes, and nothing can be lost by leaving.              #}
 {% block header %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
 
@@ -22,7 +23,7 @@
             <div class="z-hero-top-end">
                 <span class="z-chip"><i class="bi bi-stars" aria-hidden="true"></i> AI estimate</span>
                 {# The heart (FR10, chunk 22): the meal goes under Your meals · Favorites. A POST, so it works #}
-                {# without JavaScript; Save changes is not needed for it.                                   #}
+                {# without JavaScript.                                                                       #}
                 <form method="post" action="{% url 'toggle_favorite' meal.id %}">
                     {% csrf_token %}
                     <button type="submit" class="z-icon-btn z-heart-btn{% if meal.is_favorite %} is-on{% endif %}"
@@ -45,27 +46,46 @@
             {% endif %}
         </div>
 
-        {# Not in Figma (decided 1 Nov): change the photo without asking Zalak again; the numbers stay #}
+        {# Not in Figma (decided 1 Nov): change the photo without asking Zalak again; the numbers stay. #}
+        {# Choosing a file sends it at once (meal_detail.js); Remove asks first, because it can't be undone. #}
         <div class="z-photo-actions">
-            <button type="button" class="z-photo-btn z-when-none" data-photo-pick>
-                <i class="bi bi-camera" aria-hidden="true"></i> Add a photo
-            </button>
-            <button type="button" class="z-photo-btn z-when-photo" data-photo-pick>
-                <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Replace photo
-            </button>
-            <button type="button" class="z-photo-btn z-when-photo" id="photoRemove">
-                <i class="bi bi-x-lg" aria-hidden="true"></i> Remove photo
-            </button>
+            <form method="post" action="{% url 'save_meal' meal.id %}" enctype="multipart/form-data" id="photoForm">
+                {% csrf_token %}
+                <input type="hidden" name="field" value="photo">
+                <input type="file" name="photo" id="id_photo" accept="image/*" class="visually-hidden" tabindex="-1"
+                       aria-label="Choose a photo">
+                <button type="button" class="z-photo-btn" data-photo-pick>
+                    {% if meal.photo %}<i class="bi bi-arrow-repeat" aria-hidden="true"></i> Replace photo
+                    {% else %}<i class="bi bi-camera" aria-hidden="true"></i> Add a photo{% endif %}
+                </button>
+            </form>
+            {% if meal.photo %}
+                <form method="post" action="{% url 'save_meal' meal.id %}" id="photoRemoveForm"
+                      data-confirm="Remove the photo? The meal and its numbers stay.">
+                    {% csrf_token %}
+                    <input type="hidden" name="field" value="remove_photo">
+                    <button type="submit" class="z-photo-btn">
+                        <i class="bi bi-x-lg" aria-hidden="true"></i> Remove photo
+                    </button>
+                </form>
+            {% endif %}
         </div>
         <p class="z-caption text-center mt-2 mb-0" id="photoNote" role="status"></p>
-        {% for error in form.photo.errors %}
-            <p class="z-field-error text-center" role="alert">{{ error }}</p>
-        {% endfor %}
     </section>
 
     <div class="z-result z-result-top">
+        {# The slot and the time each save on their own (HCI idea 2) #}
+        <form method="post" action="{% url 'save_meal' meal.id %}" id="slotForm" data-save-field>
+            {% csrf_token %}
+            <input type="hidden" name="field" value="slot">
+        </form>
+        <form method="post" action="{% url 'save_meal' meal.id %}" id="timeForm" data-save-field>
+            {% csrf_token %}
+            <input type="hidden" name="field" value="time">
+            <input type="hidden" name="eaten_time" id="eatenTime" value="{{ eaten|time:'H:i' }}">
+        </form>
         <div class="z-detail-pills">
-            {% include 'meals/_slot_dropdown.html' with form_id='mealForm' %}
+            {% include 'meals/_slot_dropdown.html' with form_id='slotForm' %}
             <button type="button" class="z-slot-pill" data-bs-toggle="offcanvas" data-bs-target="#timeSheet" aria-controls="timeSheet">
                 <i class="bi bi-clock" aria-hidden="true"></i>
                 <span class="visually-hidden">Eaten:</span>
@@ -73,14 +93,16 @@
                 <i class="bi bi-chevron-down z-slot-chevron" aria-hidden="true"></i>
             </button>
         </div>
-        <p class="z-caption text-body-secondary mt-2 mb-0">Logged at {{ logged_at|time:'H:i' }}. Tap the time if you ate earlier or later.</p>
+        <p class="z-caption text-body-secondary mt-2 mb-0">Logged at {{ logged_at|time:'H:i' }}. Tap the slot or the time to change it: it saves at once.</p>
+        {# "Saving…", "Saved" or what went wrong, after each change (meal_detail.js) #}
+        <p class="z-save-status" id="saveStatus" role="status"></p>
 
-        {% for error in form.non_field_errors %}
+        {% if error %}
             <div class="z-form-alert mt-3" role="alert">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
                 <span>{{ error }}</span>
             </div>
-        {% endfor %}
+        {% endif %}
 
         {% include 'meals/_meal_summary.html' %}
     </div>
@@ -92,28 +114,16 @@
     </div>{# .z-result-layout #}
 
     <div class="z-actions">
-        {# Not in Figma (audit M7): slot, time, name and photo wait for Save changes while everything else here #}
-        {# saves at once. meal_detail.js fills this line while one of them is changed, and asks before leaving.  #}
-        <p class="z-unsaved-note" id="unsavedNote" role="status"
-           data-text="You have unsaved changes. Tap Save changes to keep them."></p>
-        {# Figma "Meal detail": Log again | Save changes, Delete meal under them (on the desktop all three in a row) #}
-        <div class="z-actions-buttons z-actions-detail">
+        {# Figma had Log again | Save changes and Delete meal; with every change saved at once (HCI idea 2) #}
+        {# the bar is Log again | Delete meal.                                                            #}
+        <div class="z-actions-buttons z-actions-detail is-pair">
             {# Log again (FR27, chunk 22): a copy, now, on today, in the slot from the time #}
             <form method="post" action="{% url 'log_again' meal.id %}">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-outline-secondary btn-lg w-100">Log again</button>
             </form>
-            <form method="post" action="{% url 'save_meal' meal.id %}" enctype="multipart/form-data" id="mealForm" novalidate>
-                {% csrf_token %}
-                {# Written by the time sheet's Done; untouched, the saved time stays exactly as it was #}
-                <input type="hidden" name="eaten_day" id="eatenDay" value="{{ eaten|date:'Y-m-d' }}">
-                <input type="hidden" name="eaten_time" id="eatenTime" value="{{ eaten|time:'H:i' }}">
-                <input type="hidden" name="remove_photo" id="removePhoto" value="">
-                {{ form.photo }}
-                <button type="submit" class="btn btn-primary btn-lg w-100">Save changes</button>
-            </form>
             {# Red only for delete (docs/06). A soft delete with Undo, so no "Are you sure?" #}
-            <form method="post" action="{% url 'delete_meal' meal.id %}" class="z-actions-wide">
+            <form method="post" action="{% url 'delete_meal' meal.id %}">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-danger btn-lg w-100">
                     <i class="bi bi-trash" aria-hidden="true"></i> Delete meal
@@ -124,6 +134,7 @@
     </div>
 
     {% include 'meals/_time_sheet.html' %}
+    {% include 'meals/_reading_sheet.html' %}
     {# Tell Zalak (chunk 24): the overlay while Zalak reads the correction #}
     {% include 'meals/_analyzing.html' with steps=correction_steps %}
 {% endblock %}

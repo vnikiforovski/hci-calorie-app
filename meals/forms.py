@@ -121,68 +121,76 @@ class PhotoMealForm(forms.ModelForm):
 
 
 class MealTitleForm(forms.ModelForm):
-    """Rename a My meal on its Saved meal page (chunk 22). A My meal has no Meal detail, so this
-    small sheet is its "Edit meal"; the items are edited on the page itself. Empty gives Zalak's name."""
+    """The meal's name: the Rename sheet of a My meal (Saved meal) and the pencil on Meal detail.
+    Empty gives back Zalak's name (the views do that)."""
 
     class Meta:
         model = Meal
         fields = ['title']
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off',
-                                            'placeholder': 'e.g. My protein oats'}),
+                                            'placeholder': 'e.g. Sunday lunch'}),
         }
         labels = {'title': 'Meal name'}
 
 
-class MealDetailForm(forms.ModelForm):
-    """Meal detail (chunk 15): the slot, the title and the photo of a logged meal, plus when it
-    was eaten. The day and the time come from the time sheet (meal_detail.js) as two hidden
-    fields; the view puts cleaned_data['eaten_at'] on the meal. The items save on their own."""
-    eaten_day = forms.DateField(widget=forms.HiddenInput)
-    eaten_time = forms.TimeField(widget=forms.HiddenInput)
-    remove_photo = forms.BooleanField(required=False, widget=forms.HiddenInput)
+# ---------- Meal detail (HCI idea 2): every change is saved the moment it is made ----------
+# One small form per change, so a post holds one field and nothing else on the meal can change.
+# The name uses MealTitleForm above.
+
+class MealSlotForm(forms.ModelForm):
+    """The slot dropdown on Meal detail."""
 
     class Meta:
         model = Meal
-        fields = ['slot', 'title', 'photo']
-        widgets = {
-            'slot': forms.HiddenInput(),   # set by the slot dropdown (slot_select.js)
-            # form="mealForm": the fields sit around the page, the form is the bottom bar's
-            'title': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off',
-                                            'placeholder': 'e.g. Sunday lunch', 'form': 'mealForm'}),
-            # Visually hidden: the Add / Replace photo buttons open it (meal_detail.js)
-            'photo': forms.FileInput(attrs={'accept': 'image/*', 'class': 'visually-hidden', 'tabindex': '-1',
-                                            'aria-label': 'Choose a photo',
-                                            'form': 'mealForm'}),
-        }
-        labels = {'title': 'Meal name'}
+        fields = ['slot']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['slot'].required = True   # an empty slot would be refilled from the time
+
+
+class MealPhotoForm(forms.ModelForm):
+    """Add or replace the photo of a logged meal: checked and shrunk like a new meal's photo.
+    The numbers stay; Zalak is not asked again (decided 1 Nov)."""
+
+    class Meta:
+        model = Meal
+        fields = ['photo']
         error_messages = {
-            'photo': {'invalid_image': "Zalak can't read that file. Try another photo."},
+            'photo': {'required': 'Choose a photo first.',
+                      'invalid_image': "Zalak can't read that file. Try another photo."},
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.is_bound:
-            eaten = timezone.localtime(self.instance.eaten_at)
-            self.initial['eaten_day'] = eaten.date()
-            self.initial['eaten_time'] = eaten.time().replace(second=0, microsecond=0)
-
-    def clean_title(self):
-        return self.cleaned_data['title'].strip()   # empty: the view gives back Zalak's title
+        self.fields['photo'].required = True
 
     def clean_photo(self):
         return clean_uploaded_photo(self.cleaned_data['photo'])
 
+
+class MealTimeForm(forms.Form):
+    """The time sheet: a new time on the meal's own day (the day never changes here). An untouched
+    time keeps the exact saved moment; a time that hasn't come yet is refused."""
+    eaten_time = forms.TimeField(error_messages={'required': 'Pick a time.', 'invalid': 'Pick a time.'})
+
+    def __init__(self, meal, *args, **kwargs):
+        self.meal = meal
+        super().__init__(*args, **kwargs)
+
     def clean(self):
         cleaned = super().clean()
         time = cleaned.get('eaten_time')
-        # The time sheet changes only the time: the day is always the meal's own, whatever is posted
-        day = timezone.localtime(self.instance.eaten_at).date() if self.instance.pk else cleaned.get('eaten_day')
-        if day and time:
-            eaten_at = timezone.make_aware(datetime.combine(day, time))
-            if eaten_at > timezone.now():
-                raise forms.ValidationError("That time hasn't come yet. Pick an earlier one.")
-            cleaned['eaten_at'] = eaten_at
+        if time:
+            eaten = timezone.localtime(self.meal.eaten_at)
+            if (eaten.hour, eaten.minute) == (time.hour, time.minute):
+                cleaned['eaten_at'] = self.meal.eaten_at
+            else:
+                eaten_at = timezone.make_aware(datetime.combine(eaten.date(), time))
+                if eaten_at > timezone.now():
+                    raise forms.ValidationError("That time hasn't come yet. Pick an earlier one.")
+                cleaned['eaten_at'] = eaten_at
         return cleaned
 
 

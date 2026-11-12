@@ -14,6 +14,11 @@
     var BAR_WIDTHS = [28, 60, 90];      // % per step, as in the Figma frames "Analyzing 1-3 of 3"
     var timers = [];
     var sentButton = null;
+    // HCI idea 4: the AI usually answers in 1-2 s. If it takes longer than this, the line under the
+    // title stops promising "a few seconds" and says what is going on and what the user can do.
+    var SLOW_MS = 8000;
+    var subLine = overlay.querySelector('.z-analyzing-sub');
+    var subText = subLine.textContent;
 
     function showStep(index) {
         steps.forEach(function (step, i) {
@@ -36,6 +41,9 @@
         steps.forEach(function (step, i) {
             timers.push(setTimeout(function () { showStep(i); }, STEP_TIMES[i] || 0));
         });
+        timers.push(setTimeout(function () {
+            subLine.textContent = subLine.dataset.slow;
+        }, SLOW_MS));
         cancelButton.focus();
     }
 
@@ -47,6 +55,7 @@
         steps.forEach(function (step) { step.classList.remove('is-done', 'is-now'); });
         delete overlay.dataset.stage;   // the next analysis starts with a whole cookie
         nowText.textContent = '';
+        subLine.textContent = subText;
         if (sentButton) {
             sentButton.disabled = false;
             sentButton.focus();

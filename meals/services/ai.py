@@ -326,7 +326,7 @@ def _ask_model(user_content, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA):
 
 
 def validate(data):
-    """Check the AI answer against the rules in docs/build-plan.md and clean it.
+    """Check the AI answer against the rules in docs/dev/build-plan.md and clean it.
     Returns {'status', 'no_food_reason', 'seen', 'title', 'description', 'items', 'lighter_idea'}."""
     if not isinstance(data, dict):
         raise AnalysisError('The answer is not an object.')

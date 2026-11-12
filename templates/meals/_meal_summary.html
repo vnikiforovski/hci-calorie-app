@@ -1,23 +1,29 @@
-{# The meal's name, total range, neutral line and macro bars, on Result and Meal detail.     #}
-{# With `form` (Meal detail) a pencil opens the name field under the title (Bootstrap collapse). #}
+{# The meal's name, total range, neutral line and macro bars, on Result, Meal detail and Saved meal. #}
+{# With rename_form (Meal detail) a pencil opens the name field under the title (Bootstrap collapse); #}
+{# it saves on its own (HCI idea 2): meal_detail.js sends it with fetch, otherwise it posts.          #}
 <section class="card z-summary mt-3">
     <div class="card-body">
         <div class="z-title-row">
-            <h1 class="mb-2">{{ meal.title|default:'Your meal' }}</h1>
-            {% if form %}
+            <h1 class="mb-2" id="mealTitle">{{ meal.title|default:'Your meal' }}</h1>
+            {% if rename_form %}
                 <button type="button" class="z-icon-btn z-rename-btn" data-bs-toggle="collapse" data-bs-target="#renameField"
-                        aria-expanded="{% if form.title.errors %}true{% else %}false{% endif %}" aria-controls="renameField" aria-label="Rename this meal">
+                        aria-expanded="false" aria-controls="renameField" aria-label="Rename this meal">
                     <i class="bi bi-pencil" aria-hidden="true"></i>
                 </button>
             {% endif %}
         </div>
-        {% if form %}
-            <div class="collapse{% if form.title.errors %} show{% endif %}" id="renameField">
-                <div class="z-rename">
-                    <label class="form-label z-small" for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
-                    {{ form.title }}
-                    <p class="z-caption text-body-secondary mt-1 mb-0">Leave it empty to use Zalak's name. Saved with Save changes.</p>
-                </div>
+        {% if rename_form %}
+            <div class="collapse" id="renameField">
+                <form method="post" action="{% url 'save_meal' meal.id %}" class="z-rename" id="renameForm" data-save-field>
+                    {% csrf_token %}
+                    <input type="hidden" name="field" value="title">
+                    <label class="form-label z-small" for="{{ rename_form.title.id_for_label }}">{{ rename_form.title.label }}</label>
+                    <div class="z-rename-row">
+                        {{ rename_form.title }}
+                        <button type="submit" class="btn btn-outline-secondary z-rename-save">Save name</button>
+                    </div>
+                    <p class="z-caption text-body-secondary mt-1 mb-0">Leave it empty to use Zalak's name.</p>
+                </form>
             </div>
         {% endif %}
         <p class="mb-1">
@@ -41,5 +47,12 @@
                 </li>
             {% endfor %}
         </ul>
+
+        {# HCI idea 5: what the range, kcal and macros mean (_reading_sheet.html). At the bottom of the card, #}
+        {# under the numbers it explains, and away from the rename pencil at the top.                          #}
+        <button type="button" class="z-guide-link" data-bs-toggle="offcanvas" data-bs-target="#readingSheet"
+                aria-controls="readingSheet">
+            <i class="bi bi-question-circle" aria-hidden="true"></i> How to read this estimate
+        </button>
     </div>
 </section>

@@ -19,22 +19,10 @@
                "Just checking" throws the estimate away.</p>
         </section>
 
-        <section class="z-help-card" aria-labelledby="helpSure">
-            <h2 id="helpSure">How sure is Zalak?</h2>
-            <ul class="z-help-list">
-                <li>
-                    <span class="z-badge z-badge-sure"><i class="bi bi-check-circle" aria-hidden="true"></i> Sure</span>
-                    <span>Clear to see and easy to estimate.</span>
-                </li>
-                <li>
-                    <span class="z-badge z-badge-likely"><i class="bi bi-dash-circle" aria-hidden="true"></i> Likely</span>
-                    <span>Probably right. Check the portion.</span>
-                </li>
-                <li>
-                    <span class="z-badge z-badge-unsure"><i class="bi bi-question-circle" aria-hidden="true"></i> Unsure</span>
-                    <span>Hard to tell, and Zalak says why. In Preferences you choose whether it asks you or makes its best guess.</span>
-                </li>
-            </ul>
+        {# The same words as the "?" sheet on Result (HCI idea 5) #}
+        <section class="z-help-card" aria-labelledby="helpRead">
+            <h2 id="helpRead">How to read an estimate</h2>
+            {% include 'meals/_reading_guide.html' %}
         </section>
 
         <section class="z-help-card" aria-labelledby="helpAdvice">

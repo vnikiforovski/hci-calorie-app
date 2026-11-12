@@ -112,6 +112,7 @@
             </form>
         </div>
     {% endif %}
+    {% include 'meals/_reading_sheet.html' %}
     {# Tell Zalak (chunk 24): the overlay while Zalak reads the correction #}
     {% include 'meals/_analyzing.html' with steps=correction_steps %}
 {% endblock %}

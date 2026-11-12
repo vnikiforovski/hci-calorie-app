@@ -32,8 +32,41 @@
                 <a class="btn btn-primary btn-lg" href="{% url 'signup' %}">Create account</a>
                 <a class="btn btn-outline-secondary btn-lg" href="{% url 'sign_in' %}">Sign in</a>
                 {# The guest checker (FR2, D14): nothing is saved until Log #}
-                <a class="z-link-btn z-small" href="{% url 'add_meal' %}">Try it without an account</a>
+                {# HCI idea 1: a small chooser, like the Add meal sheet. Without JavaScript the link opens Text and voice. #}
+                <a class="z-link-btn z-small" href="{% url 'add_meal' %}"
+                   data-bs-toggle="offcanvas" data-bs-target="#tryItSheet" aria-controls="tryItSheet">Try it without an account</a>
             </div>
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-bottom z-sheet z-add-sheet" tabindex="-1" id="tryItSheet" aria-labelledby="tryItTitle">
+        <div class="z-sheet-handle" aria-hidden="true"></div>
+        <div class="z-sheet-title">
+            <div>
+                <h2 class="z-add-title mb-0" id="tryItTitle">Check a meal</h2>
+                <p class="z-small text-body-secondary mt-2 mb-0">No account needed. Nothing is saved unless you choose to.</p>
+            </div>
+            <button type="button" class="z-icon-btn z-icon-btn-tint" data-bs-dismiss="offcanvas" aria-label="Close">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="z-add-options">
+            <a class="z-add-option z-add-option-photo" href="{% url 'photo_input' %}">
+                <span class="z-add-option-icon" aria-hidden="true"><i class="bi bi-camera"></i></span>
+                <span class="z-add-option-text">
+                    <span class="z-add-option-title">Photo</span>
+                    <span class="z-add-option-hint">Snap your plate, add a note if you like</span>
+                </span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
+            <a class="z-add-option z-add-option-text-voice" href="{% url 'text_input' %}">
+                <span class="z-add-option-icon" aria-hidden="true"><i class="bi bi-mic"></i></span>
+                <span class="z-add-option-text">
+                    <span class="z-add-option-title">Text and voice</span>
+                    <span class="z-add-option-hint">Type or say what you ate</span>
+                </span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </a>
         </div>
     </div>
 {% endblock %}

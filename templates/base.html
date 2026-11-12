@@ -13,6 +13,7 @@
 {% with page=request.resolver_match.url_name %}
 {# Focused pages (Welcome, sign-up step 2) override body_class and drop the navigation #}
 <body class="{% block body_class %}{% if user.is_authenticated %}has-sidebar has-bottombar{% endif %}{% endblock %}">
+{% include 'meals/_toast.html' %}
 
 {% if user.is_authenticated %}
     {# Desktop: left sidebar #}
@@ -106,8 +107,6 @@
     {# The Add meal sheet (chunk 14); the hrefs above to add_meal are the fallback without JavaScript #}
     {% include 'meals/_add_meal_sheet.html' %}
 {% endif %}
-
-{% include 'meals/_toast.html' %}
 
 <script src="{% static 'vendor/bootstrap/bootstrap.bundle.min.js' %}"></script>
 {% if user.is_authenticated %}<script src="{% static 'js/add_meal_sheet.js' %}?v={{ STATIC_VERSION }}"></script>{% endif %}

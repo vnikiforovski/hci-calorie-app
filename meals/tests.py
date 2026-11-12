@@ -1842,7 +1842,8 @@ class PastDayTests(TestCase):
 
 
 class MealDetailTests(TestCase):
-    """Chunk 15: Meal detail edits a logged meal's slot, time, name and photo; delete with Undo."""
+    """Chunk 15 and HCI idea 2: Meal detail saves a logged meal's slot, time, name and photo the moment
+    each one changes (one small post per change); delete with Undo."""
 
     def setUp(self):
         use_temp_media(self)
@@ -1852,18 +1853,15 @@ class MealDetailTests(TestCase):
                                ai_response={'status': 'ok', 'title': 'Chicken'})
         self.url = reverse('result', args=[self.meal.id])
 
-    def save(self, **changes):
-        eaten = timezone.localtime(self.meal.eaten_at)
-        data = {'slot': self.meal.slot, 'title': self.meal.title,
-                'eaten_day': eaten.date().isoformat(), 'eaten_time': eaten.strftime('%H:%M'),
-                'remove_photo': ''}
-        data.update(changes)
-        return self.client.post(reverse('save_meal', args=[self.meal.id]), data)
+    def save(self, field, fetch=False, **data):
+        headers = {'HTTP_X_REQUESTED_WITH': 'fetch'} if fetch else {}
+        return self.client.post(reverse('save_meal', args=[self.meal.id]), {'field': field, **data}, **headers)
 
     def test_logged_meal_shows_meal_detail_and_a_draft_shows_result(self):
         page = self.client.get(self.url)
         self.assertTemplateUsed(page, 'meals/meal_detail.html')
-        self.assertContains(page, 'Save changes')
+        self.assertNotContains(page, 'Save changes')   # every change saves at once (HCI idea 2)
+        self.assertContains(page, 'Log again')
         self.assertContains(page, 'Delete meal')
         self.assertContains(page, 'When did you eat it?')
         # The wheel: two spinbuttons that start on the saved hour and minute
@@ -1878,12 +1876,12 @@ class MealDetailTests(TestCase):
         other = User.objects.create_user('ivan@example.com', password='a-long-password')
         self.client.force_login(other)
         self.assertEqual(self.client.get(self.url).status_code, 404)
-        self.assertEqual(self.save(title='Mine now').status_code, 404)
+        self.assertEqual(self.save('title', title='Mine now').status_code, 404)
         self.assertEqual(self.client.post(reverse('delete_meal', args=[self.meal.id])).status_code, 404)
 
     def test_a_draft_cannot_be_saved_or_deleted_here(self):
         draft = make_draft(user=self.user)
-        self.assertEqual(self.client.post(reverse('save_meal', args=[draft.id])).status_code, 404)
+        self.assertEqual(self.client.post(reverse('save_meal', args=[draft.id]), {'field': 'title'}).status_code, 404)
         self.assertEqual(self.client.post(reverse('delete_meal', args=[draft.id])).status_code, 404)
 
     def test_change_slot_and_time(self):
@@ -1892,59 +1890,64 @@ class MealDetailTests(TestCase):
         noon = timezone.make_aware(datetime(yesterday.year, yesterday.month, yesterday.day, 12, 0))
         Meal.objects.filter(id=self.meal.id).update(eaten_at=noon)
         self.meal.refresh_from_db()
-        response = self.save(slot='snack', eaten_time='21:40')
-        # Not fetched here: that would show (and use up) the toast before the check below
-        self.assertRedirects(response, f'/?date={yesterday.isoformat()}', fetch_redirect_response=False)
+        self.assertRedirects(self.save('slot', slot='snack'), self.url, fetch_redirect_response=False)
+        response = self.save('time', eaten_time='21:40')
+        # Without JavaScript the page comes back, still Meal detail, with the toast
+        self.assertRedirects(response, self.url, fetch_redirect_response=False)
         self.meal.refresh_from_db()
         eaten = timezone.localtime(self.meal.eaten_at)
         self.assertEqual((eaten.date(), eaten.hour, eaten.minute), (yesterday, 21, 40))
         self.assertEqual(self.meal.slot, 'snack')
-        home = self.client.get(response.url)
-        self.assertContains(home, 'Changes saved')
+        self.assertContains(self.client.get(self.url), 'Time saved')
 
     def test_an_untouched_time_stays_exactly(self):
         exact = timezone.now().replace(second=45, microsecond=123000) - timedelta(hours=1)
         Meal.objects.filter(id=self.meal.id).update(eaten_at=exact)
         self.meal.refresh_from_db()
-        self.save(title='Lunch at work')
+        self.save('time', eaten_time=timezone.localtime(exact).strftime('%H:%M'))
+        self.save('title', title='Lunch at work')
         self.meal.refresh_from_db()
         self.assertEqual(self.meal.eaten_at, exact)
         self.assertEqual(self.meal.title, 'Lunch at work')
 
     def test_a_future_time_is_refused(self):
-        tomorrow = timezone.localdate() + timedelta(days=1)
+        later = timezone.localtime() + timedelta(minutes=30)
+        if later.date() != timezone.localdate():
+            self.skipTest('half an hour from now is tomorrow')
         before = self.meal.eaten_at
-        page = self.save(eaten_day=tomorrow.isoformat(), eaten_time='08:00', title='Changed')
+        page = self.save('time', eaten_time=later.strftime('%H:%M'))
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'That time hasn')
+        response = self.save('time', fetch=True, eaten_time=later.strftime('%H:%M'))
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("That time hasn't come yet", response.content.decode())
         self.meal.refresh_from_db()
         self.assertEqual(self.meal.eaten_at, before)
-        self.assertEqual(self.meal.title, 'Chicken')
 
     def test_an_emptied_name_gives_back_zalaks(self):
-        self.save(title='   ')
+        self.save('title', title='   ')
         self.meal.refresh_from_db()
         self.assertEqual(self.meal.title, 'Chicken')
 
     def test_add_replace_and_remove_a_photo(self):
-        self.save(photo=jpeg())
+        self.save('photo', photo=jpeg())
         self.meal.refresh_from_db()
         first = self.meal.photo.path
         self.assertTrue(os.path.exists(first))
 
-        self.save(photo=jpeg('again.jpg'))
+        self.save('photo', photo=jpeg('again.jpg'))
         self.meal.refresh_from_db()
         self.assertTrue(os.path.exists(self.meal.photo.path))
         self.assertFalse(os.path.exists(first))   # the replaced file is gone
 
         second = self.meal.photo.path
-        self.save(remove_photo='1')
+        self.save('remove_photo')
         self.meal.refresh_from_db()
         self.assertFalse(self.meal.photo)
         self.assertFalse(os.path.exists(second))
 
     def test_a_bad_photo_is_refused(self):
-        page = self.save(photo=SimpleUploadedFile('note.jpg', b'not a picture'))
+        page = self.save('photo', photo=SimpleUploadedFile('note.jpg', b'not a picture'))
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'Try another photo')
         self.meal.refresh_from_db()
@@ -2086,12 +2089,10 @@ class DiaryTests(TestCase):
         item = meal.items.get()
         self.client.post(reverse('edit_item', args=[meal.id, item.id]), {'name': 'Chicken', 'amount': '200', 'unit': 'g'})
         self.assertEqual(self.client.get(reverse('result', args=[meal.id])).context['back_url'], diary_day)
-        # Save changes and Delete go back there too
-        eaten = timezone.localtime(meal.eaten_at)
-        response = self.client.post(reverse('save_meal', args=[meal.id]), {
-            'slot': 'dinner', 'title': 'Soup', 'eaten_day': eaten.date().isoformat(),
-            'eaten_time': eaten.strftime('%H:%M'), 'remove_photo': ''})
-        self.assertRedirects(response, diary_day, fetch_redirect_response=False)
+        # A saved change stays on Meal detail, which still goes back to the Diary; Delete goes there too
+        response = self.client.post(reverse('save_meal', args=[meal.id]), {'field': 'title', 'title': 'Soup'})
+        self.assertRedirects(response, reverse('result', args=[meal.id]), fetch_redirect_response=False)
+        self.assertEqual(self.client.get(reverse('result', args=[meal.id])).context['back_url'], diary_day)
         response = self.client.post(reverse('delete_meal', args=[meal.id]))
         self.assertRedirects(response, diary_day, fetch_redirect_response=False)
         response = self.client.post(reverse('undo_delete_meal', args=[meal.id]))
@@ -3005,7 +3006,7 @@ class LighterIdeaTests(AnalyzedMealMixin, TestCase):
         self.assertEqual(profile.uncertainty, 'guess')
 
 
-# ---------- Audit fixes (Phase 2, docs/audit.md) ----------
+# ---------- Audit fixes (Phase 2, docs/dev/audit.md) ----------
 
 class SecondTapTests(TestCase):
     """H1, M5: a second tap on Log, Just checking, Delete or Undo repeats nothing and ends where
@@ -3452,16 +3453,41 @@ class MidnightTests(TestCase):
                 self.assertEqual(titles(yesterday), ['Night toast'])
 
 
-class UnsavedNoteTests(TestCase):
-    """M7: Meal detail carries the "unsaved changes" line that meal_detail.js fills."""
+class SaveAtOnceTests(TestCase):
+    """HCI idea 2 (replaces the M7 warning): with fetch, each change on Meal detail answers without a
+    page load, and only the one field changes."""
 
-    def test_meal_detail_has_the_note(self):
-        user = User.objects.create_user('ana@example.com', password='a-long-password')
-        self.client.force_login(user)
-        meal = make_draft(user, status='logged', slot='lunch')
-        page = self.client.get(reverse('result', args=[meal.id]))
-        self.assertContains(page, 'id="unsavedNote"')
-        self.assertContains(page, 'You have unsaved changes')
+    def setUp(self):
+        self.user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(self.user)
+        self.meal = make_draft(self.user, status='logged', slot='lunch',
+                               ai_response={'status': 'ok', 'title': 'Chicken'})
+        self.url = reverse('save_meal', args=[self.meal.id])
+
+    def post(self, **data):
+        return self.client.post(self.url, data, HTTP_X_REQUESTED_WITH='fetch')
+
+    def test_the_slot_alone(self):
+        self.assertEqual(self.post(field='slot', slot='dinner', title='Ignored').status_code, 204)
+        self.meal.refresh_from_db()
+        self.assertEqual((self.meal.slot, self.meal.title), ('dinner', 'Chicken'))
+        self.assertNotIn('toast', self.client.session)
+
+    def test_the_name_comes_back_as_saved(self):
+        response = self.post(field='title', title='  Gym lunch ')
+        self.assertEqual(response.content.decode(), 'Gym lunch')
+        self.assertEqual(self.post(field='title', title='').content.decode(), 'Chicken')
+
+    def test_a_wrong_slot_or_field_is_refused(self):
+        self.assertEqual(self.post(field='slot', slot='brunch').status_code, 400)
+        self.assertEqual(self.post(field='eaten_at').status_code, 400)
+        self.meal.refresh_from_db()
+        self.assertEqual(self.meal.slot, 'lunch')
+
+    def test_the_page_has_the_small_forms(self):
+        page = self.client.get(reverse('result', args=[self.meal.id]))
+        for form_id in ('slotForm', 'timeForm', 'renameForm', 'photoForm', 'saveStatus'):
+            self.assertContains(page, f'id="{form_id}"')
 
 
 class PrivacyWordsTests(TestCase):
@@ -3502,7 +3528,7 @@ class UiRequestTests(TestCase):
 
 
 class Phase3Tests(TestCase):
-    """Phase 3 clean-up: meals/urls.py, and the small fixes L1, L2, L3, L17 from docs/audit.md."""
+    """Phase 3 clean-up: meals/urls.py, and the small fixes L1, L2, L3, L17 from docs/dev/audit.md."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -3539,8 +3565,7 @@ class Phase3Tests(TestCase):
         meal = make_draft(self.user, status='logged', slot='lunch')
         day = timezone.localdate(meal.eaten_at)
         self.client.post(reverse('save_meal', args=[meal.id]), {
-            'slot': 'lunch', 'title': 'Chicken', 'eaten_day': (day - timedelta(days=3)).isoformat(),
-            'eaten_time': '00:05', 'remove_photo': ''})
+            'field': 'time', 'eaten_day': (day - timedelta(days=3)).isoformat(), 'eaten_time': '00:05'})
         meal.refresh_from_db()
         self.assertEqual(timezone.localdate(meal.eaten_at), day)
 
@@ -3549,3 +3574,50 @@ class Phase3Tests(TestCase):
         meal = Meal(slot='snack', eaten_at=eaten)
         self.assertEqual(str(meal), 'Snack on 2026-11-01 00:30')
         self.assertEqual(meal.tint, 'sky')
+
+
+class HciIdeaTests(TestCase):
+    """Phase 5: the guest's chooser (idea 1), typing the amount (3), the Undo that waits (4) and
+    "How to read this" (5). Idea 2 is in MealDetailTests and SaveAtOnceTests."""
+
+    def test_try_it_opens_a_chooser(self):
+        page = self.client.get(reverse('home'))
+        self.assertContains(page, 'data-bs-target="#tryItSheet"')
+        self.assertContains(page, f'href="{reverse("photo_input")}"')
+        self.assertContains(page, f'href="{reverse("text_input")}"')
+
+    def test_the_amount_can_be_typed(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        meal = make_draft(user)
+        page = self.client.get(reverse('edit_item', args=[meal.id, meal.items.get().id]))
+        self.assertContains(page, 'id="amountButton"')
+        self.assertContains(page, 'id="amountField"')
+        self.assertContains(page, 'Tap the number to type it')
+        # A typed amount is saved like a stepped one
+        self.client.post(reverse('edit_item', args=[meal.id, meal.items.get().id]),
+                         {'name': 'Chicken breast', 'amount': '235', 'unit': 'g'})
+        self.assertEqual(meal.items.get().grams, 235)
+
+    def test_the_toast_with_undo_comes_first_and_can_be_closed(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        meal = make_draft(user, slot='lunch')
+        self.client.post(reverse('log_meal', args=[meal.id]), {'slot': 'lunch'})
+        html = self.client.get(reverse('home')).content.decode()
+        self.assertIn('data-toast-close', html)
+        self.assertLess(html.index('id="toast"'), html.index('class="z-sidebar"'))   # the first Tab reaches it
+
+    def test_analyzing_says_still_working(self):
+        self.assertContains(self.client.get(reverse('text_input')), 'Still working. You can cancel')
+
+    def test_how_to_read_this(self):
+        user = User.objects.create_user('ana@example.com', password='a-long-password')
+        self.client.force_login(user)
+        for status in ('draft', 'logged'):
+            meal = make_draft(user, status=status, slot='lunch')
+            with self.subTest(status):
+                page = self.client.get(reverse('result', args=[meal.id]))
+                self.assertContains(page, 'How to read this estimate')
+                self.assertContains(page, 'kilocalories')
+        self.assertContains(self.client.get(reverse('profile_help')), 'How to read an estimate')

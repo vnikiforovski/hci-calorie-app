@@ -104,6 +104,73 @@
     document.getElementById('stepDown').addEventListener('click', function () { step(-1); });
     document.getElementById('stepUp').addEventListener('click', function () { step(1); });
 
+    // ---------- Typing the amount (HCI idea 3) ----------
+    // Tapping the big number swaps it for a number field: 150 g -> 200 g is tap, type, done, instead
+    // of five taps on +. Every valid number updates the preview at once; Enter or leaving the field
+    // goes back to the number, Escape puts the old amount back. The server checks it again on Save.
+    var amountButton = document.getElementById('amountButton');
+    var amountField = document.getElementById('amountField');
+    var amountError = document.getElementById('amountError');
+    var typedFrom = null;   // the amount before typing, for Escape
+
+    function showAmountError(text) {
+        amountError.textContent = text;
+        amountError.hidden = !text;
+    }
+
+    function typed() {
+        var value = parseFloat(String(amountField.value).replace(',', '.'));
+        if (!(value > 0)) return null;
+        return clean(value);
+    }
+
+    amountButton.addEventListener('click', function () {
+        typedFrom = state.amount;
+        amountField.value = clean(state.amount);
+        amountButton.hidden = true;
+        amountField.hidden = false;
+        amountField.focus();
+        amountField.select();
+    });
+
+    amountField.addEventListener('input', function () {
+        var value = typed();
+        if (value === null) {
+            showAmountError(amountField.value === '' ? '' : 'Write a number above 0, e.g. 200.');
+            return;
+        }
+        if (gramsFor(value, state.unit) > data.maxGrams) {
+            showAmountError("That's more than 5 kg. Check the amount.");
+            return;
+        }
+        showAmountError('');
+        state.amount = value;
+        render();
+    });
+
+    function closeField(restore) {
+        if (amountField.hidden) return;
+        if (restore || typed() === null || gramsFor(typed(), state.unit) > data.maxGrams) {
+            state.amount = typedFrom;
+            render();
+        }
+        showAmountError('');
+        amountField.hidden = true;
+        amountButton.hidden = false;
+        amountButton.focus();
+    }
+
+    amountField.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();   // Enter here must not send the form
+            closeField(false);
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            closeField(true);
+        }
+    });
+    amountField.addEventListener('blur', function () { closeField(false); });
+
     // ---------- Drawing ----------
 
     function render() {

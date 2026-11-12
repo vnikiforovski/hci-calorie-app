@@ -47,8 +47,13 @@
                             <i class="bi bi-dash-lg" aria-hidden="true"></i>
                         </button>
                         <div class="z-step-value">
-                            {# Read out after every step: "1½ medium bowls" #}
-                            <span class="z-num z-step-number" id="amountText" aria-live="polite">{{ amount_text }}</span>
+                            {# HCI idea 3: tap the number to type it (portion.js swaps in the field); read out after every step #}
+                            <button type="button" class="z-amount-btn" id="amountButton" aria-describedby="amountHint">
+                                <span class="z-num z-step-number" id="amountText" aria-live="polite">{{ amount_text }}</span>
+                                <span class="visually-hidden">: type an amount</span>
+                            </button>
+                            <input type="number" class="form-control z-amount-field" id="amountField" inputmode="decimal"
+                                   min="0" step="any" aria-label="Amount" aria-describedby="amountHint" hidden>
                             <button type="button" class="z-unit-chip" data-bs-toggle="offcanvas" data-bs-target="#unitSheet"
                                     aria-controls="unitSheet" aria-label="Unit: {{ unit_text }}. Change the unit">
                                 <span id="unitText">{{ unit_text }}</span>
@@ -59,6 +64,9 @@
                             <i class="bi bi-plus-lg" aria-hidden="true"></i>
                         </button>
                     </div>
+
+                    <p class="z-caption text-body-secondary text-center mt-2 mb-0" id="amountHint">Tap the number to type it</p>
+                    <p class="z-field-error text-center mt-1 mb-0" id="amountError" role="alert" hidden></p>
 
                     {# The gram equivalent; hidden when the unit is already grams #}
                     <p class="z-grams-line" id="gramsLine" {% if item.unit == 'g' %}hidden{% endif %}>
