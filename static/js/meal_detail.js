@@ -1,4 +1,4 @@
-// Meal detail (chunk 15, templates/meals/meal_detail.html). HCI idea 2: every change saves the moment
+// Meal detail (templates/meals/meal_detail.html). Every change saves the moment
 // it is made, so nothing waits for a button and nothing is lost by leaving the page.
 // 1. The slot (slot_select.js fills the hidden input), the time and the name are small forms sent with
 //    fetch; a line under the pills says "Saving…", "Saved" or what went wrong. Without JavaScript they
@@ -79,7 +79,7 @@
         };
     }
 
-    // ---------- Saving one change (HCI idea 2) ----------
+    // ---------- Saving one change ----------
     const status = document.getElementById('saveStatus');
 
     // Sends one of the small forms. onDone gets the server's text (the name as saved);

@@ -106,7 +106,7 @@ templates/             base.html, the error pages, meals/ (pages and _partials),
 static/                css/zalak.css (the Sage & caramel theme over Bootstrap), js/, fonts, Bootstrap
 docs/                  the HCI design documents 01–06 and the Figma export
   dev/                 the build plan, the audit, the demo script, the Django exam notes
-reference/             the course's official exam solution (the style followed)
+  reference/           the course's official exam solution (the style followed)
 ```
 
 **How a meal moves:** the input page saves a **draft** first (so nothing is lost if the AI fails), `services/ai.py` asks Claude for structured JSON and validates it, and the draft's items are saved per 100 g with `grams` as the one source, so changing a portion rescales everything. **Log** turns the draft into a **logged** meal; **Just checking** deletes it. A guest's draft belongs to their session and is logged once they sign up.

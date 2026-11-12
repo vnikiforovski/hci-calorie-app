@@ -1,6 +1,6 @@
 {# Analyzing overlay (docs/05, Figma "Analyzing 1-3 of 3"). Hidden until analyzing.js shows it  #}
 {# the moment a form[data-analyzing] is sent. "steps" comes from the view (TEXT_STEPS).          #}
-{# "failed" (chunk 19, Figma "Analyzing · Connection lost / No food"): straight after a failed     #}
+{# "failed" (Figma "Analyzing · Connection lost / No food"): straight after a failed #}
 {# analysis the page opens with this overlay showing the failed step, then analyzing.js fades it   #}
 {# away. It only repeats what the page's h1 says, so screen readers skip it (aria-hidden).        #}
 <div class="z-analyzing{% if failed %} is-intro{% endif %}" id="analyzing"
@@ -67,7 +67,7 @@
                 <span class="z-crumb z-crumb-3 z-crumb-fade" style="left: 150px; top: 105px; --fx: -11px; --fy: -47px;"></span>
             </div>
             <h2 class="z-analyzing-title" id="analyzingTitle">Zalak is taking a bite…</h2>
-            {# After 8 s analyzing.js swaps in data-slow (HCI idea 4); aria-live reads the new words #}
+            {# After 8 s analyzing.js swaps in data-slow; aria-live reads the new words #}
             <p class="z-analyzing-sub" aria-live="polite"
                data-slow="Still working. You can cancel: what you added is kept.">This takes a few seconds</p>
 

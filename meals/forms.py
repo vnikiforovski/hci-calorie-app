@@ -16,11 +16,11 @@ from .units import MAX_GRAMS, grams_for
 
 PHOTO_MAX_SIDE = 1568            # px on the long side: what the AI looks at anyway
 PHOTO_MAX_BYTES = 20 * 1024 * 1024
-MEAL_TEXT_MAX = 1000             # characters of a typed meal or a photo note: plenty for a meal (audit M8)
+MEAL_TEXT_MAX = 1000             # characters of a typed meal or a photo note: plenty for a meal
 
 
 class TextMealForm(forms.ModelForm):
-    # Set to "voice" by voice.js once words were dictated (chunk 7). A plain hidden field,
+    # Set to "voice" by voice.js once words were dictated. A plain hidden field,
     # not the model's choice field, so an odd value can't block the form with an error nobody sees.
     input_method = forms.CharField(required=False, widget=forms.HiddenInput(attrs={'data-voice-method': ''}))
 
@@ -34,7 +34,7 @@ class TextMealForm(forms.ModelForm):
                 'placeholder': 'e.g. two eggs, toast with butter, coffee with milk',
                 'aria-label': 'Describe your meal',
                 'maxlength': MEAL_TEXT_MAX,
-                'data-voice-field': '',   # voice.js writes the dictated words here (chunk 24: by data attribute)
+                'data-voice-field': '',   # voice.js finds the field by this attribute and writes the words here
             }),
             'slot': forms.HiddenInput(),
         }
@@ -134,7 +134,7 @@ class MealTitleForm(forms.ModelForm):
         labels = {'title': 'Meal name'}
 
 
-# ---------- Meal detail (HCI idea 2): every change is saved the moment it is made ----------
+# ---------- Meal detail: every change is saved the moment it is made ----------
 # One small form per change, so a post holds one field and nothing else on the meal can change.
 # The name uses MealTitleForm above.
 
@@ -152,7 +152,7 @@ class MealSlotForm(forms.ModelForm):
 
 class MealPhotoForm(forms.ModelForm):
     """Add or replace the photo of a logged meal: checked and shrunk like a new meal's photo.
-    The numbers stay; Zalak is not asked again (decided 1 Nov)."""
+    The numbers stay; Zalak is not asked again."""
 
     class Meta:
         model = Meal
@@ -239,7 +239,7 @@ class MealItemForm(forms.ModelForm):
         return cleaned
 
 
-# ---------- Accounts (chunk 12) ----------
+# ---------- Accounts ----------
 
 # Calmer words for Django's password validators (AUTH_PASSWORD_VALIDATORS in settings), by error code
 PASSWORD_HINTS = {
@@ -353,7 +353,7 @@ class ProfileDetailsForm(forms.ModelForm):
             'height_cm': forms.NumberInput(attrs={
                 'class': 'form-control z-unit-field', 'inputmode': 'numeric', 'placeholder': '170',
             }),
-            # One decimal, e.g. 78.4 (Figma "Personal details", chunk 18)
+            # One decimal, e.g. 78.4 (Figma "Personal details")
             'weight_kg': forms.NumberInput(attrs={
                 'class': 'form-control z-unit-field', 'inputmode': 'decimal', 'step': '0.1', 'placeholder': '70',
             }),
@@ -392,7 +392,7 @@ class ProfileDetailsForm(forms.ModelForm):
         return weight
 
 
-# ---------- Profile (chunk 18) ----------
+# ---------- Profile ----------
 
 class PersonalDetailsForm(ProfileDetailsForm):
     """Profile · Personal details: sign-up step 2's fields plus the year of birth."""
@@ -446,7 +446,7 @@ class AccountDetailsForm(forms.ModelForm):
 
 
 class PreferencesForm(forms.ModelForm):
-    """Profile · Preferences: "When Zalak is unsure" (FR37) and "Show lighter ideas" (FR17, chunk 25).
+    """Profile · Preferences: "When Zalak is unsure" (FR37) and "Show lighter ideas" (FR17).
     Ask me shows the inline question on Result (FR16); Best guess hides it. The switch shows or hides
     the lighter idea card on a draft's Result."""
 

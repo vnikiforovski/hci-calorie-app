@@ -1,6 +1,6 @@
-{# "When did you eat it?" (Figma "Overlay · Time") on Meal detail: an hour : minute wheel on the meal's  #}
-{# own day (the Yesterday / Today switch was dropped, 2 Nov). Done (meal_detail.js) saves the time at   #}
-{# once (HCI idea 2); a refused time shows its message here and the sheet stays open.                   #}
+{# "When did you eat it?" (Figma "Overlay · Time") on Meal detail: an hour : minute wheel on the meal's #}
+{# own day. Done (meal_detail.js) saves the time at once; a refused time shows its message here and   #}
+{# the sheet stays open.                                                                               #}
 <div class="offcanvas offcanvas-bottom z-sheet" tabindex="-1" id="timeSheet" aria-labelledby="timeSheetTitle"
      data-day="{{ eaten|date:'Y-m-d' }}" data-day-label="{{ day_label }}"
      data-now="{{ now|date:'Y-m-d' }}T{{ now|time:'H:i' }}">

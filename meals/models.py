@@ -13,7 +13,7 @@ SLOT_TINTS = {'breakfast': 'butter', 'lunch': 'peach', 'snack': 'sky', 'dinner':
 
 def slot_for_time(dt):
     """Suggest a meal slot from the local time (FR8), with the hours from the Figma slot sheet.
-    Also used by the signal in chunk 9."""
+    Also used by the signal."""
     local = timezone.localtime(dt)
     minutes = local.hour * 60 + local.minute
     if minutes < 10 * 60 + 30:
@@ -39,8 +39,8 @@ class Profile(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     height_cm = models.PositiveIntegerField(null=True, blank=True)
-    weight_kg = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)  # 78.4 (chunk 18)
-    birth_year = models.PositiveSmallIntegerField(null=True, blank=True)  # Personal details (chunk 18)
+    weight_kg = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)  # 78.4
+    birth_year = models.PositiveSmallIntegerField(null=True, blank=True)  # Personal details
     activity_level = models.CharField(max_length=10, choices=ACTIVITY_CHOICES, blank=True)
     uncertainty = models.CharField(max_length=10, choices=UNCERTAINTY_CHOICES, default='ask')
     show_lighter_ideas = models.BooleanField(default=True)
@@ -68,7 +68,7 @@ class Meal(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
         ('logged', 'Logged'),
-        ('mine', 'My meal'),   # a template under Your meals (chunk 22): never counted anywhere
+        ('mine', 'My meal'),   # a template under Your meals: never counted anywhere
     ]
 
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE, related_name='meals')
@@ -83,11 +83,11 @@ class Meal(models.Model):
     eaten_at = models.DateTimeField(default=timezone.now)
     is_favorite = models.BooleanField(default=False)
     ai_response = models.JSONField(null=True, blank=True)  # validated AI output, for "Reset"
-    # The × on Result's lighter idea (chunk 25). A field, not in ai_response, so Try again and
+    # The × on Result's lighter idea. A field, not in ai_response, so Try again and
     # Tell Zalak (which replace ai_response) don't bring a hidden card back.
     hide_lighter_idea = models.BooleanField(default=False)
     # A draft from "Create your own meal": its Result offers Save to My meals, and Home never lists it
-    # under To finish. On the meal, not in the session, so it survives signing out (audit M1).
+    # under To finish. On the meal, not in the session, so it survives signing out.
     for_my_meals = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)  # soft delete for Undo
     created_at = models.DateTimeField(auto_now_add=True)

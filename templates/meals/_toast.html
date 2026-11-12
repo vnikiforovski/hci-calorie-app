@@ -1,6 +1,6 @@
 {# Toast (Figma "Home · Logged"): set by a view in request.session['toast'], shown once. #}
 {# role="status" lets screen readers announce it. It is the first thing in <body> (base.html), so the  #}
-{# first Tab reaches Undo without taking the focus away (HCI idea 4). With Undo it stays until closed;  #}
+{# first Tab reaches Undo without taking the focus away. With Undo it stays until closed; #}
 {# without Undo toast.js closes it after 2.5 s.                                                        #}
 {% if toast %}
     <div class="z-toast" id="toast" role="status" {% if toast.undo_url %}data-undo{% endif %}>

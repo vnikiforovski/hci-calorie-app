@@ -2,7 +2,7 @@
 
 {% block title %}Profile{% endblock %}
 
-{# The Profile hub (chunk 18), Figma "Profile". Left out of Figma: the Goals and targets and Water     #}
+{# The Profile hub, Figma "Profile". Left out of Figma: the Goals and targets and Water #}
 {# rows (not built). Like Meal detail it has its own header and no bottom bar (Figma).              #}
 {% block header %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
@@ -27,7 +27,7 @@
             {% with line='When unsure: '|add:profile.get_uncertainty_display %}
                 {% include 'meals/_profile_row.html' with url=preferences_url icon='bi-sliders' title='Preferences' %}
             {% endwith %}
-            {# Chunk 22: favorites and My meals together #}
+            {# Favorites and My meals together #}
             {% url 'your_meals' as your_meals_url %}
             {% with line=saved_count|stringformat:'d'|add:' saved' %}
                 {% include 'meals/_profile_row.html' with url=your_meals_url icon='bi-heart' title='Your meals' %}

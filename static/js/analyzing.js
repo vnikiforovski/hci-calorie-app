@@ -14,7 +14,7 @@
     var BAR_WIDTHS = [28, 60, 90];      // % per step, as in the Figma frames "Analyzing 1-3 of 3"
     var timers = [];
     var sentButton = null;
-    // HCI idea 4: the AI usually answers in 1-2 s. If it takes longer than this, the line under the
+    // The AI usually answers in 1-2 s. If it takes longer than this, the line under the
     // title stops promising "a few seconds" and says what is going on and what the user can do.
     var SLOW_MS = 8000;
     var subLine = overlay.querySelector('.z-analyzing-sub');
@@ -69,7 +69,7 @@
     });
 
     // Cancel stops waiting for the answer; the input is still in the form (docs/05). The server
-    // already saved the draft, so the input pages say where it is (#cancelNote, chunk 24).
+    // already saved the draft, so the input pages say where it is (#cancelNote).
     var cancelNote = document.getElementById('cancelNote');
     cancelButton.addEventListener('click', function () {
         window.stop();
@@ -92,7 +92,7 @@
         }
     });
 
-    // Figma "Analyzing · Connection lost / No food" (chunk 19): straight after a failed analysis the
+    // Figma "Analyzing · Connection lost / No food": straight after a failed analysis the
     // page opens with the overlay showing the failed step (_analyzing.html shows it before the first
     // paint). After a moment it fades to the page; a tap or a key skips the wait. It is aria-hidden and
     // inert meanwhile: the page's h1 says the same. Afterwards the overlay is the normal one again,

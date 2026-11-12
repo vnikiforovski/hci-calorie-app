@@ -26,7 +26,7 @@ from .units import (BOWL_SIZES, COUNT_LADDER, GRAMS_PER_UNIT, MAX_GRAMS, MEASURE
 
 
 def home(request):
-    """The landing page. A guest gets Welcome (chunk 12); a signed-in user gets Home (chunk 14):
+    """The landing page. A guest gets Welcome; a signed-in user gets Home:
     the week strip, what was eaten that day, and the four meal slots. ?date= picks the day."""
     if not request.user.is_authenticated:
         return render(request, 'meals/welcome.html')
@@ -39,7 +39,7 @@ def home(request):
     day = parse_day(request.GET.get('date')) or today
     logged = Meal.objects.filter(user=request.user, status='logged', deleted_at__isnull=True)
     day_meals = logged.filter(eaten_at__date=day).prefetch_related('items').order_by('eaten_at')
-    # To finish (chunk 24, docs/05, T5): drafts checked but never logged or thrown away. Never counted.
+    # To finish (docs/05, T5): drafts checked but never logged or thrown away. Never counted.
     # "Create your own meal" drafts are left out: they are not meals eaten.
     day_drafts = list(Meal.objects.filter(user=request.user, status='draft', deleted_at__isnull=True,
                                           for_my_meals=False, eaten_at__date=day)
@@ -97,16 +97,16 @@ def home(request):
         'bar': bar,
         # Figma "Home · First day": until the very first meal is logged
         'first_day': not logged.exists(),
-        # The Add meal sheet logs to the day on screen (decided 2 Nov); today needs nothing
+        # The Add meal sheet logs to the day on screen; today needs nothing
         'add_day': day if day != today else None,
     }
     return render(request, 'meals/home.html', context)
 
 
-# ---------- Home helpers (chunk 14) ----------
+# ---------- Home helpers ----------
 
 WEEKDAY_SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
-# No page goes back further than this: a hand-typed ?date=0001-01-01 used to overflow (audit M4)
+# No page goes back further than this: a hand-typed ?date=0001-01-01 used to overflow
 FIRST_DAY = date(2020, 1, 1)
 
 
@@ -252,7 +252,7 @@ def calendar_month(logged, first, selected, url_for=home_url):
     }
 
 
-# ---------- Accounts (chunk 12). Sign in and Sign out are Django's LoginView / LogoutView (urls.py). ----------
+# ---------- Accounts. Sign in and Sign out are Django's LoginView / LogoutView (urls.py). ----------
 
 def signup(request):
     """Create account, step 1. The account is made here and signed in, so step 2 only
@@ -364,12 +364,12 @@ def steps_for(meal):
 
 def result(request, meal_id):
     """One URL for a meal: a draft shows Result (Log / Just checking), a logged meal shows
-    Meal detail (chunk 15). So every item change, which comes back here, works for both."""
+    Meal detail. So every item change, which comes back here, works for both."""
     meal = get_own_meal(request, meal_id)
     if meal.status == 'logged':
         return render_meal_detail(request, meal)
     if meal.status == 'mine':
-        # A My meal (chunk 22) lives on its Saved meal page; item changes come back here, so they
+        # A My meal lives on its Saved meal page; item changes come back here, so they
         # land there too (the browser keeps the #item-… part of the address over the redirect)
         return redirect('saved_meal', meal_id=meal.id)
     if not meal.items.exists():
@@ -386,11 +386,11 @@ def result(request, meal_id):
         'slot_options': SLOT_OPTIONS,
         # Set by add_item when Zalak couldn't add the item: the name comes back with a message
         'add_item_error': request.session.pop('add_item_error', None),
-        'ask_questions': asks_questions(request),   # Profile · Preferences (chunk 18)
+        'ask_questions': asks_questions(request),   # Profile · Preferences
         **tell_zalak_context(request),
-        # "Create your own meal" (chunk 22): Save to My meals instead of Log
+        # "Create your own meal": Save to My meals instead of Log
         'is_mine': is_mine_draft(request, meal),
-        'lighter_idea': lighter_idea_for(request, meal),   # chunk 25
+        'lighter_idea': lighter_idea_for(request, meal),
     }
     return render(request, 'meals/result.html', context)
 
@@ -431,7 +431,7 @@ def delete_old_guest_drafts():
     """The clean-up, run whenever a new draft is made. A queryset delete still sends post_delete
     for each meal, so signals.remove_photo_file removes their photos too.
     - Guest drafts nobody came back to for a day.
-    - Meals deleted more than a day ago (audit M6): "Delete meal" is a soft delete so Undo works,
+    - Meals deleted more than a day ago: "Delete meal" is a soft delete so Undo works,
       but once Undo is long gone the meal and its photo should not stay on the server.
     - A signed-in user's drafts older than a week: To finish is for today's interrupted meals."""
     now = timezone.now()
@@ -442,7 +442,7 @@ def delete_old_guest_drafts():
                         created_at__lt=now - timedelta(days=USER_DRAFT_DAYS)).delete()
 
 
-# ---------- Meal detail (chunk 15): a logged meal's slot, time, name and photo; delete with Undo ----------
+# ---------- Meal detail: a logged meal's slot, time, name and photo; delete with Undo ----------
 
 def day_name(day):
     """ "Today", "Yesterday" or "Sun 1": for the time pill and the time sheet."""
@@ -463,7 +463,7 @@ def get_own_logged_meal(request, meal_id):
 
 # Where Meal detail goes back to (its back arrow, Save changes, Delete and Undo)
 MEAL_PAGES = {'home': home_url, 'diary': diary_url,
-              # "Edit meal" on a favorite's Saved meal page (chunk 22): back to Your meals
+              # "Edit meal" on a favorite's Saved meal page: back to Your meals
               'your_meals': lambda day: your_meals_url('favorites')}
 
 
@@ -480,7 +480,7 @@ def meal_back_url(request, meal):
 
 
 def render_meal_detail(request, meal, error=''):
-    """Figma "Meal detail". Each change saves at once (HCI idea 2): the slot, the time (on the meal's
+    """Figma "Meal detail". Each change saves at once: the slot, the time (on the meal's
     own day), the name and the photo each have their own small form posting to save_meal.
     error: what went wrong with the last change, when it came without JavaScript."""
     eaten = timezone.localtime(meal.eaten_at)
@@ -529,7 +529,7 @@ SAVED_WORDS = {'slot': 'Slot saved', 'time': 'Time saved', 'title': 'Name saved'
 
 @require_POST
 def save_meal(request, meal_id):
-    """One change on Meal detail, saved at once (FR25, HCI idea 2): the slot, the time, the name, a new
+    """One change on Meal detail, saved at once (FR25): the slot, the time, the name, a new
     photo, or removing the photo, named by the posted "field". meal_detail.js sends the slot, time and
     name with fetch: it gets a 204 (the name: 200 with the name as saved) or a 400 with the calm message,
     and the page stays. The photo forms post normally and come back to Meal detail with a toast."""
@@ -696,7 +696,7 @@ def ai_problem(error):
 
 def read_photo(meal):
     """The bytes of the meal's photo. A file that is gone from media/ is an AnalysisError of the
-    kind 'photo', so the user gets the calm error page instead of a server error (audit M3)."""
+    kind 'photo', so the user gets the calm error page instead of a server error."""
     try:
         with meal.photo.open('rb') as photo:
             return photo.read()
@@ -714,7 +714,7 @@ def analyze_meal(meal):
             data = analyze_text(meal.text)
     except AnalysisError as error:
         # The draft and its input stay saved, so nothing is lost (FR29)
-        # fresh=1: the page opens with the overlay showing the failed step first (chunk 19)
+        # fresh=1: the page opens with the overlay showing the failed step first
         return redirect(reverse('analysis_error', args=[meal.id]) + f'?why={error.kind}&fresh=1')
 
     if data['status'] == 'no_food':
@@ -728,7 +728,7 @@ def analyze_meal(meal):
 
 
 def get_own_draft(request, meal_id):
-    """Like get_own_meal, but only a draft: logged meals are edited from meal detail (chunk 15)."""
+    """Like get_own_meal, but only a draft: logged meals are edited from meal detail."""
     meal = get_own_meal(request, meal_id)
     if meal.status != 'draft':
         raise Http404
@@ -736,7 +736,7 @@ def get_own_draft(request, meal_id):
 
 
 def picked_day(request, meal_id):
-    """The past day a new meal goes to: Home on Mon 12 sends day=… with "+" (decided 2 Nov).
+    """The past day a new meal goes to: Home on Mon 12 sends day=… with "+".
     None means now: today, an edited draft, or a missing, odd or future day."""
     if meal_id is not None:
         return None
@@ -758,7 +758,7 @@ def checker_back(request, mine, meal):
 
 
 def switch_input_url(view_name, edit_name, meal, slot, day, mine):
-    """The other input page, for "Use a photo instead" and "Type it instead" (audit H2): a draft
+    """The other input page, for "Use a photo instead" and "Type it instead": a draft
     keeps its own URL (so no second draft is made); a new meal keeps its slot, day and mine=1."""
     if meal:
         return reverse(edit_name, args=[meal.id])
@@ -984,7 +984,7 @@ def portion_data(item):
 
 def edit_item(request, meal_id, item_id):
     """Edit item (FR18, FR19): rename it or change its amount and unit, with a live preview.
-    Works for a draft and for a logged meal (meal detail reuses it in chunk 15)."""
+    Works for a draft and for a logged meal (meal detail reuses it)."""
     meal = get_own_meal(request, meal_id)
     item = get_object_or_404(MealItem, id=item_id, meal=meal)   # the item must be in this meal
     data = portion_data(item)   # before the form changes the instance
@@ -1149,7 +1149,7 @@ def answer_question(request, meal_id, item_id):
     return redirect(item_url(meal, item))
 
 
-# ---------- Tell Zalak (chunk 24, FR18-FR22): correct the whole meal in your own words ----------
+# ---------- Tell Zalak (FR18-FR22): correct the whole meal in your own words ----------
 
 # The Analyzing overlay's steps while Zalak reads a correction
 CORRECTION_STEPS = ['Reading what you said', 'Updating the foods', 'Estimating portions']
@@ -1326,7 +1326,7 @@ def no_food(request, meal_id):
 
 @login_required
 def diary(request):
-    """The Diary (chunk 16, FR26): one page per day, like a book; ?date= picks the day.
+    """The Diary (FR26): one page per day, like a book; ?date= picks the day.
     Phones show that page; the desktop shows the day before beside it (Figma "Desktop · Diary").
     The arrows go one day on phones and two on the desktop, back as far as you like, never past today."""
     today = timezone.localdate()
@@ -1338,8 +1338,7 @@ def diary(request):
     month, calendar_open = parse_month(request.GET.get('month'), day)
 
     # Phones: one day back or on. Desktop: the spread before or after this one, two days away.
-    # Back always works, like turning back the pages of a paper diary (changed 2 Nov: there was
-    # a "Start" at the first logged meal). Forward stops at today.
+    # Back always works, like turning back the pages of a paper diary. Forward stops at today.
     phone_next = desk_next = None
     if day < today:
         phone_next = nav_link(day + timedelta(days=1))
@@ -1417,7 +1416,7 @@ def diary_page(logged, day, first_day):
     }
 
 
-# ---------- Statistics (chunk 17, Figma "Statistics", "Statistics · Last week") ----------
+# ---------- Statistics (Figma "Statistics", "Statistics · Last week") ----------
 
 STATS_PERIODS = ['week', 'month']
 # kcal in a gram of each macro: for the share of the day's energy (Figma "Protein · 20%")
@@ -1627,7 +1626,7 @@ def most_logged(meals):
     return rows[:MOST_LOGGED_COUNT]
 
 
-# ---------- Profile (chunk 18, Figma "Profile", "Profile · Personal details / Preferences / Account and privacy") ----------
+# ---------- Profile (Figma "Profile", "Profile · Personal details / Preferences / Account and privacy") ----------
 
 def own_profile(request):
     """The signed-in user's Profile. get_or_create: the post_save signal makes one for every new
@@ -1638,7 +1637,7 @@ def own_profile(request):
 
 def asks_questions(request):
     """Show the inline question on an unsure item (FR16)? "Ask me" yes, "Best guess" no (FR37).
-    A guest has no Profile, so a guest is always asked (build plan, chunk 18)."""
+    A guest has no Profile, so a guest is always asked."""
     if not request.user.is_authenticated:
         return True
     return own_profile(request).uncertainty == 'ask'
@@ -1649,7 +1648,7 @@ def profile(request):
     """The Profile hub: who is signed in, the rows to the subpages, and Sign out (red)."""
     context = {
         'profile': own_profile(request),
-        'saved_count': saved_meals(request.user).count(),   # "Your meals · 4 saved" (chunk 22)
+        'saved_count': saved_meals(request.user).count(),   # "Your meals · 4 saved"
     }
     return render(request, 'meals/profile.html', context)
 
@@ -1747,7 +1746,7 @@ def help_about(request):
     return render(request, 'meals/help_about.html')
 
 
-# ---------- Your meals (chunk 22, Figma "Diary · Your meals", "Saved meal", "Add meal") ----------
+# ---------- Your meals (Figma "Diary · Your meals", "Saved meal", "Add meal") ----------
 # Favorites are logged meals with the heart (is_favorite). My meals are templates with status "mine":
 # never counted, never on Home, the Diary or Statistics. Logging either one again makes a copy.
 

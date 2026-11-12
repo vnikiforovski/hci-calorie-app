@@ -23,7 +23,7 @@
         {{ form.slot }}
         {{ form.input_method }}
         {% if day %}<input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}">{% endif %}   {# a past day from Home #}
-        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}   {# "Create your own meal" (chunk 22) #}
+        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}   {# "Create your own meal" #}
 
         {# The field and, while listening, the live line inside it (Figma "Text and voice · Listening") #}
         <div class="z-voice-field" id="voiceField" data-voice-fieldbox>
@@ -45,7 +45,7 @@
             <button type="button" class="z-chip" data-insert="brand: "><i class="bi bi-plus-lg" aria-hidden="true"></i> Brand</button>
         </div>
 
-        {# Not in Figma (audit H2): the way to the camera from here, also for a guest, who has no Add meal sheet #}
+        {# Not in Figma: the way to the camera from here, also for a guest, who has no Add meal sheet #}
         <a class="btn btn-outline-secondary z-switch-input mt-3" href="{{ photo_url }}">
             <i class="bi bi-camera" aria-hidden="true"></i> Use a photo instead
         </a>

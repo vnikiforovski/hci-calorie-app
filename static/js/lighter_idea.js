@@ -1,4 +1,4 @@
-// The × on Result's lighter idea (chunk 25): hide it with fetch, so the page and the scroll stay.
+// The × on Result's lighter idea: hide it with fetch, so the page and the scroll stay.
 // The server answers 204; the card goes and the focus moves to the meal's name, so it isn't lost.
 // If fetch fails, the form posts the normal way (the server hides it and shows Result again).
 document.querySelectorAll('[data-lighter-hide]').forEach(function (form) {

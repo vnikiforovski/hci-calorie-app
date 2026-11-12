@@ -19,7 +19,7 @@
             {{ form.slot }}
             {{ form.photo }}
             {% if day %}<input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}">{% endif %}   {# a past day from Home #}
-        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}   {# "Create your own meal" (chunk 22) #}
+        {% if mine %}<input type="hidden" name="mine" value="1">{% endif %}   {# "Create your own meal" #}
 
             {# Live camera, Figma "Photo · Camera" (phones only) #}
             <section class="z-camera" id="cameraState" aria-labelledby="cameraTitle" hidden>
@@ -28,7 +28,7 @@
                         <i class="bi bi-x-lg" aria-hidden="true"></i>
                     </a>
                     <span class="z-camera-slot"><span class="visually-hidden">Meal slot:</span> {{ slot|capfirst }}{% if day %} · {{ day|date:'D j' }}{% endif %}</span>
-                    {# Not in Figma (audit H2, docs/03): text is always next to the camera #}
+                    {# Not in Figma: text is always next to the camera (docs/03) #}
                     <a class="z-camera-btn" href="{{ text_url }}" aria-label="Type it instead" title="Type it instead">
                         <i class="bi bi-keyboard" aria-hidden="true"></i>
                     </a>

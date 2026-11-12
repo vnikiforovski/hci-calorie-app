@@ -8,7 +8,7 @@
 {% block bottom_nav %}{% endblock %}
 
 {% block content %}
-    {# Phones: one column, as before. Desktop (chunk 19, docs/05): the photo, slot and totals on the  #}
+    {# Phones: one column, as before. Desktop (docs/05): the photo, slot and totals on the #}
     {# left, staying in view, and the items on the right. No Figma frame for a desktop Result.         #}
     <div class="z-result-layout">
     <div class="z-result-side">
@@ -56,7 +56,7 @@
     <div class="z-actions">
         {# Only drafts come here: a logged meal opens Meal detail (views.result) #}
         {% if is_mine %}
-            {# "Create your own meal" (chunk 22): the draft becomes a My meal, never logged or counted #}
+            {# "Create your own meal": the draft becomes a My meal, never logged or counted #}
             <div class="z-actions-buttons">
                 <form method="post" action="{% url 'just_checking' meal.id %}" id="discardForm">
                     {% csrf_token %}
@@ -98,7 +98,7 @@
         {% include 'meals/_guest_sheet.html' %}
     {% endif %}
     {% include 'meals/_reading_sheet.html' %}
-    {# Tell Zalak (chunk 24): the overlay while Zalak reads the correction #}
+    {# Tell Zalak: the overlay while Zalak reads the correction #}
     {% include 'meals/_analyzing.html' with steps=correction_steps %}
 {% endblock %}
 

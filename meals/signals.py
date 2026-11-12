@@ -29,7 +29,7 @@ def count_logged_meals(sender, instance, raw=False, **kwargs):
     if old_status == instance.status:
         return
 
-    # get_or_create, not get: accounts made before chunk 12 (e.g. the first superuser)
+    # get_or_create, not get: an account made before create_profile existed (e.g. the first superuser)
     # never went through create_profile below
     profile, created = Profile.objects.get_or_create(user_id=instance.user_id)
     if old_status == 'draft' and instance.status == 'logged':

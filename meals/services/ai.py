@@ -1,6 +1,6 @@
 """The only place that talks to the AI. Views call analyze_text() or analyze_photo() and get back
 validated data, or an AnalysisError that they handle like any AI failure. estimate_item() does one
-item (Add, Re-estimate) and correct_meal() the whole meal again after Tell Zalak (chunk 24).
+item (Add, Re-estimate) and correct_meal() the whole meal again after Tell Zalak.
 
 The model must answer JSON in the shape of RESPONSE_SCHEMA (structured outputs);
 validate() then checks the rules a schema can't express (min <= max, unsure needs a reason)."""
@@ -24,7 +24,7 @@ CONFIDENCES = ('sure', 'likely', 'unsure')
 RANGES = ('kcal', 'protein', 'carbs', 'fat')
 
 
-# Limits no real food passes (audit M2): pure fat has about 900 kcal in 100 g, and a food can't
+# Limits no real food passes: pure fat has about 900 kcal in 100 g, and a food can't
 # hold more grams of a macro than it weighs. A little room is left for rounding.
 MAX_KCAL_PER_100G = 1000
 MACRO_ROOM_GRAMS = 5
@@ -224,7 +224,7 @@ def estimate_item(name, amount=None, unit=None, meal_title=''):
     return validate_item_answer(_ask_model('\n'.join(lines), system=ITEM_PROMPT, schema=ITEM_RESPONSE_SCHEMA))
 
 
-# Tell Zalak (chunk 24): the whole meal again, with the user's correction in their own words
+# Tell Zalak: the whole meal again, with the user's correction in their own words
 CORRECTION_PROMPT = SYSTEM_PROMPT + """
 
 This time the user is correcting your earlier estimate. The message gives the meal as before, then
@@ -326,7 +326,8 @@ def _ask_model(user_content, system=SYSTEM_PROMPT, schema=RESPONSE_SCHEMA):
 
 
 def validate(data):
-    """Check the AI answer against the rules in docs/dev/build-plan.md and clean it.
+    """Check the AI answer (status, 1-20 items, numbers >= 0 and min <= max, a reason when unsure,
+    realistic portions) and clean it.
     Returns {'status', 'no_food_reason', 'seen', 'title', 'description', 'items', 'lighter_idea'}."""
     if not isinstance(data, dict):
         raise AnalysisError('The answer is not an object.')

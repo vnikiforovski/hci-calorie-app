@@ -3,7 +3,7 @@
 
 {% block title %}Home{% endblock %}
 
-{# Home (chunk 14), Figma "Home", "Home · First day" and "Desktop · Home". views.home builds it:    #}
+{# Home, Figma "Home", "Home · First day" and "Desktop · Home". views.home builds it: #}
 {# the week strip, what was eaten that day, and the four slots (one queryset per slot).            #}
 {# Guests get Welcome instead, so this page is always for a signed-in user.                        #}
 {% block content %}
@@ -24,7 +24,7 @@
                     {% for d in week.days %}
                         <li>
                             {% if d.is_future %}
-                                {# A plain span can't carry aria-label (axe, chunk 19): the words are hidden text #}
+                                {# A plain span can't carry aria-label (axe): the words are hidden text #}
                                 <span class="z-week-day is-future">
                                     <span class="z-week-name" aria-hidden="true">{{ d.short }}</span>
                                     <span class="z-week-num" aria-hidden="true">{{ d.date.day }}</span>

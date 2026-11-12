@@ -223,5 +223,5 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Claude Code personal settings
-.claude/settings.local.json
+# Local assistant settings (never part of the project)
+.claude/

@@ -1,5 +1,5 @@
-// Profile · Preferences (chunk 18): a tap on Ask me / Best guess, or on the "Show lighter ideas" switch
-// (chunk 25), saves straight away, as in Figma (no Save button). fetch sends the whole form; the page
+// Profile · Preferences: a tap on Ask me / Best guess, or on the "Show lighter ideas" switch,
+// saves straight away, as in Figma (no Save button). fetch sends the whole form; the page
 // stays, so the keyboard focus stays on the choice. Without JavaScript the <noscript> Save button posts it.
 document.querySelectorAll('[data-preferences]').forEach(function (form) {
     var status = form.querySelector('[data-status]');

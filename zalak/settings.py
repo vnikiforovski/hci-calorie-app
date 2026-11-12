@@ -64,7 +64,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.humanize',   # intcomma: 1,230 kcal on Home (chunk 14)
+    'django.contrib.humanize',   # intcomma: 1,230 kcal on Home
     'meals',
 ]
 
@@ -107,7 +107,7 @@ WSGI_APPLICATION = 'zalak.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        # ZALAK_DB=demo.sqlite3 in .env: a separate database for the demo (chunk 20), so the dev data stays
+        # ZALAK_DB=demo.sqlite3 in .env: a separate database for the demo, so the dev data stays
         'NAME': BASE_DIR / os.environ.get('ZALAK_DB', 'db.sqlite3'),
     }
 }
@@ -131,7 +131,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Accounts (chunk 12): @login_required sends a guest to Sign in (with ?next= to come back);
+# Accounts: @login_required sends a guest to Sign in (with ?next= to come back);
 # after signing in or out, "/" shows Home or Welcome.
 LOGIN_URL = 'sign_in'
 LOGIN_REDIRECT_URL = 'home'

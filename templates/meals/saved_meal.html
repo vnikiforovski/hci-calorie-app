@@ -3,7 +3,7 @@
 
 {% block title %}{{ meal.title|default:'Saved meal' }}{% endblock %}
 
-{# Saved meal (chunk 22, Figma "Saved meal"): a favorite or a My meal, opened from Your meals.          #}
+{# Saved meal (Figma "Saved meal"): a favorite or a My meal, opened from Your meals. #}
 {# Log to <slot> logs a copy now, on today (views.log_again). A favorite's items are read-only here and #}
 {# "Edit meal" opens its Meal detail; a My meal's items are edited right here (item changes come back   #}
 {# through views.result) and Rename opens a small sheet. The red button removes it from Your meals.    #}
@@ -113,7 +113,7 @@
         </div>
     {% endif %}
     {% include 'meals/_reading_sheet.html' %}
-    {# Tell Zalak (chunk 24): the overlay while Zalak reads the correction #}
+    {# Tell Zalak: the overlay while Zalak reads the correction #}
     {% include 'meals/_analyzing.html' with steps=correction_steps %}
 {% endblock %}
 

@@ -1,4 +1,4 @@
-// Toast (templates/meals/_toast.html). HCI idea 4, "an Undo that waits":
+// Toast (templates/meals/_toast.html): an Undo that waits.
 // - With Undo it stays until the × (or Escape) closes it, or the next page replaces it. A timer that
 //   takes Undo away while someone is still reading or tabbing to it is not fair (WCAG 2.2.1).
 // - Without Undo it only confirms ("Changes saved"), so it closes by itself after 2.5 s (docs/06),

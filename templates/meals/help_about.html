@@ -2,7 +2,7 @@
 
 {% block title %}Help and about{% endblock %}
 
-{# Help and about (chunk 18). No Figma frame: plain cards. Calm words, no allergen claims (CLAUDE.md). #}
+{# Help and about. No Figma frame: plain cards. Calm words, no allergen claims. #}
 {% block header %}{% endblock %}
 {% block bottom_nav %}{% endblock %}
 
@@ -19,7 +19,7 @@
                "Just checking" throws the estimate away.</p>
         </section>
 
-        {# The same words as the "?" sheet on Result (HCI idea 5) #}
+        {# The same words as the "How to read this estimate" sheet #}
         <section class="z-help-card" aria-labelledby="helpRead">
             <h2 id="helpRead">How to read an estimate</h2>
             {% include 'meals/_reading_guide.html' %}
@@ -32,7 +32,7 @@
                check the label or ask whoever made it.</p>
         </section>
 
-        {# NFR20 (audit M10): say plainly where a meal goes to be estimated #}
+        {# NFR20: say plainly where a meal goes to be estimated #}
         <section class="z-help-card" aria-labelledby="helpPrivacy">
             <h2 id="helpPrivacy">Where your meals go</h2>
             <p class="mb-0">To estimate a meal, Zalak sends its text, or its photo and note, to an AI service

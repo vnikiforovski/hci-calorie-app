@@ -104,7 +104,7 @@
     document.getElementById('stepDown').addEventListener('click', function () { step(-1); });
     document.getElementById('stepUp').addEventListener('click', function () { step(1); });
 
-    // ---------- Typing the amount (HCI idea 3) ----------
+    // ---------- Typing the amount ----------
     // Tapping the big number swaps it for a number field: 150 g -> 200 g is tap, type, done, instead
     // of five taps on +. Every valid number updates the preview at once; Enter or leaving the field
     // goes back to the number, Escape puts the old amount back. The server checks it again on Save.

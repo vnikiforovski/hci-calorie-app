@@ -9,7 +9,7 @@ urlpatterns = [
     path('sign-up/', views.signup, name='signup'),
     path('sign-up/details/', views.signup_details, name='signup_details'),
     path('diary/', views.diary, name='diary'),
-    # Your meals (chunk 22): the back of the Diary book, and one saved meal
+    # Your meals: the back of the Diary book, and one saved meal
     path('diary/your-meals/', views.your_meals, name='your_meals'),
     path('diary/your-meals/<int:meal_id>/', views.saved_meal, name='saved_meal'),
     path('diary/your-meals/<int:meal_id>/rename/', views.rename_saved, name='rename_saved'),
@@ -17,7 +17,7 @@ urlpatterns = [
     path('diary/your-meals/<int:meal_id>/undo-remove/', views.undo_remove_saved, name='undo_remove_saved'),
     path('statistics/', views.statistics, name='statistics'),
     path('profile/', views.profile, name='profile'),
-    # Profile (chunk 18): every name starts with "profile", so base.html marks the sidebar row on all of them
+    # Profile: every name starts with "profile", so base.html marks the sidebar row on all of them
     path('profile/details/', views.profile_details, name='profile_details'),
     path('profile/preferences/', views.profile_preferences, name='profile_preferences'),
     path('profile/account/', views.account_privacy, name='profile_account'),
@@ -40,7 +40,7 @@ urlpatterns = [
     path('meal/<int:meal_id>/item/<int:item_id>/answer/', views.answer_question, name='answer_question'),
     path('meal/<int:meal_id>/add-item/', views.add_item, name='add_item'),
     path('meal/<int:meal_id>/undo-remove/', views.undo_remove_item, name='undo_remove_item'),
-    # Tell Zalak (chunk 24): the whole meal corrected in the user's own words, with Undo
+    # Tell Zalak: the whole meal corrected in the user's own words, with Undo
     path('meal/<int:meal_id>/tell/', views.tell_zalak, name='tell_zalak'),
     path('meal/<int:meal_id>/undo-tell/', views.undo_tell_zalak, name='undo_tell_zalak'),
     path('meal/<int:meal_id>/log/', views.log_meal, name='log_meal'),

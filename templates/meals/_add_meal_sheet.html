@@ -3,7 +3,7 @@
 {# the sidebar's "Add a meal", a slot's "+" and "Add another snack". A GET form: the chosen slot (and a #}
 {# past day from Home or the Diary) go to the input page as ?slot=…&day=…, with or without JavaScript.    #}
 {# add_meal_sheet.js keeps the title in step with the chips, and takes a slot or a day from the button  #}
-{# that opened it (data-slot, data-day). Chunk 22: "Your meals" (lilac) and Recent, where each card is #}
+{# that opened it (data-slot, data-day). "Your meals" (lilac) and Recent, where each card is #}
 {# its own small POST form to Log again; add_meal_sheet.js copies the chosen slot and day into them.    #}
 <div class="offcanvas offcanvas-bottom z-sheet z-add-sheet" tabindex="-1" id="addMealSheet" aria-labelledby="addMealTitle"
      data-default-slot="{{ add_slot }}" data-default-day="{{ add_day|date:'Y-m-d' }}" data-default-day-label="{{ add_day|date:'D j' }}">

@@ -1,4 +1,4 @@
-// Account pages (chunk 12): Sign in, Create account 1 and 2.
+// Account pages: Sign in, Create account 1 and 2.
 // 1. The eye button shows or hides the password.
 // 2. The "At least 8 characters" hint gets a tick while typing.
 // 3. A field's error message goes away once you change that field.

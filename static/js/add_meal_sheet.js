@@ -1,11 +1,11 @@
-// Add meal sheet (chunk 14, templates/meals/_add_meal_sheet.html).
+// Add meal sheet (templates/meals/_add_meal_sheet.html).
 // The button that opens the sheet can choose for it:
 //   data-slot="dinner"                      a slot's "+" (Home), "Add another snack", "Tap to add it" (Diary)
 //   data-day="2026-11-01" data-day-label="Sun 1"   "Add a meal to this day" (Diary); data-day="" means today
 // Without them the sheet uses the page's defaults: the slot from the time and, on a past day of Home or
 // the Diary, that day. The "picked from the time" hint shows only when the clock really chose the slot.
 // The slot and day travel in the form (a radio and a hidden input); this file keeps the words in step.
-// Recent (chunk 22): each card is its own POST form, so the slot and day are copied into its hidden
+// Recent: each card is its own POST form, so the slot and day are copied into its hidden
 // inputs too. Without JavaScript they keep the page's defaults.
 (function () {
     const sheet = document.getElementById('addMealSheet');

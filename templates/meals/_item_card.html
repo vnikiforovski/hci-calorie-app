@@ -1,5 +1,5 @@
 {# One food item on Result. Expects `item` (a MealItem, with kcal_min_pct / kcal_max_pct from Meal.items_with_bars). #}
-{# With read_only (a favorite's Saved meal, chunk 22) there is no pencil and no question chips.                     #}
+{# With read_only (a favorite's Saved meal) there is no pencil and no question chips. #}
 <article class="card z-item z-item-{{ item.confidence }}" id="item-{{ item.id }}">
     <div class="card-body">
         <div class="d-flex justify-content-between gap-3">
@@ -43,7 +43,7 @@
             <div class="z-reason mt-3">
                 <i class="bi bi-info-circle" aria-hidden="true"></i>
                 <div class="flex-grow-1">
-                    {# "Best guess" in Preferences (chunk 18): the reason stays, the question and chips go #}
+                    {# "Best guess" in Preferences: the reason stays, the question and chips go #}
                     <p class="mb-0" id="question-{{ item.id }}">{{ item.reason }}{% if item.question and ask_questions %} {{ item.question }}{% endif %}</p>
                     {% if item.can_ask and ask_questions and not read_only %}
                         {# The chips scale Zalak's portion x0.5 / x1 / x1.5. After a tap the item is "likely" #}

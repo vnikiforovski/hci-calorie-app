@@ -1,6 +1,6 @@
 {# The meal's name, total range, neutral line and macro bars, on Result, Meal detail and Saved meal. #}
 {# With rename_form (Meal detail) a pencil opens the name field under the title (Bootstrap collapse); #}
-{# it saves on its own (HCI idea 2): meal_detail.js sends it with fetch, otherwise it posts.          #}
+{# it saves on its own: meal_detail.js sends it with fetch, otherwise it posts. #}
 <section class="card z-summary mt-3">
     <div class="card-body">
         <div class="z-title-row">
@@ -48,8 +48,8 @@
             {% endfor %}
         </ul>
 
-        {# HCI idea 5: what the range, kcal and macros mean (_reading_sheet.html). At the bottom of the card, #}
-        {# under the numbers it explains, and away from the rename pencil at the top.                          #}
+        {# What the range, kcal and macros mean (_reading_sheet.html). At the bottom of the card, #}
+        {# under the numbers it explains, and away from the rename pencil at the top. #}
         <button type="button" class="z-guide-link" data-bs-toggle="offcanvas" data-bs-target="#readingSheet"
                 aria-controls="readingSheet">
             <i class="bi bi-question-circle" aria-hidden="true"></i> How to read this estimate

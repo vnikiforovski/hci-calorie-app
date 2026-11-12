@@ -1,4 +1,4 @@
-"""Builds meals/fixtures/demo.json: the demo account Ana and her week of meals (chunk 20).
+"""Builds meals/fixtures/demo.json: the demo account Ana and her week of meals.
 
 Run it from the project folder:
     python manage.py shell -c "exec(open('meals/fixtures/build_demo.py', encoding='utf-8').read())"
@@ -27,7 +27,7 @@ from meals.models import Meal, Profile
 from meals.services.ai import validate
 from meals.views import apply_analysis
 
-FIRST_DAY = date(2026, 10, 26)          # a Monday: a full week, then Mon 2 and Tue 3 Nov (9 days)
+FIRST_DAY = date(2026, 10, 26)          # a Monday: a full week, then two more days (9 days)
 EMAIL = 'ana@zalak.demo'
 PASSWORD = 'zalak-demo-2026'            # written in docs/dev/demo-script.md
 USER_ID = 900                           # high ids, so loading never overwrites someone's own rows

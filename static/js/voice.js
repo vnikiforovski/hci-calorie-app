@@ -3,12 +3,12 @@
 // "Tap to stop") and done (the text stays and can be edited). The browser's own speech recognition
 // is used; where it is missing (Firefox) or blocked (http on the LAN), the mic stays hidden (NFR16).
 //
-// Chunk 8b: a small state machine (idle → starting → listening → stopping → idle), because Chrome
+// A small state machine (idle → starting → listening → stopping → idle), because Chrome
 // on Android sometimes never sends onend or onerror. Two timers make sure the button always comes
 // back: one for a start that never begins, one for a stop that never ends. Every event is logged
 // as "[voice] …" (see it on a phone through chrome://inspect → Remote devices).
 //
-// Chunk 24: any form with data-voice gets its own mic, so Tell Zalak can be dictated too. The parts
+// Any form with data-voice gets its own mic, so Tell Zalak can be dictated too. The parts
 // are found by data attribute inside that form:
 //   data-voice-field   the text field the words go into          (needed)
 //   data-voice-box     shown once the browser can listen         (needed)

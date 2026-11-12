@@ -167,7 +167,7 @@ class TextInputViewTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class VoiceInputTests(TestCase):
-    """Chunk 7: dictated text goes the same way as typed text, only input_method differs."""
+    """Dictated text goes the same way as typed text, only input_method differs."""
     url = reverse('text_input')
 
     def post(self, **extra):
@@ -211,7 +211,7 @@ NO_FOOD = {'status': 'no_food', 'no_food_reason': 'That looks like a shoe.',
 
 @override_settings(ZALAK_AI_FAKE=False)
 class RecoveryTests(TestCase):
-    """Chunk 6: Try again, Edit the text, and the error / no food pages."""
+    """Try again, Edit the text, and the error / no food pages."""
 
     def make_failed_draft(self):
         with patch('meals.services.ai._ask_model', side_effect=AnalysisError('down')):
@@ -329,7 +329,7 @@ class SeenTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class PhotoInputTests(TestCase):
-    """Chunk 8: photo + note, the photo error pages, Take another photo and Describe it instead."""
+    """Photo + note, the photo error pages, Take another photo and Describe it instead."""
     url = reverse('photo_input')
 
     def setUp(self):
@@ -443,7 +443,7 @@ class PhotoInputTests(TestCase):
 
 
 class PhotoTipsTests(TestCase):
-    """Chunk 8b: the tips open by themselves until "Don't show these tips again"."""
+    """The tips open by themselves until "Don't show these tips again"."""
     page = reverse('photo_input')
     seen = reverse('photo_tips_seen')
 
@@ -459,7 +459,7 @@ class PhotoTipsTests(TestCase):
         self.client.force_login(user)
         self.assertContains(self.client.get(self.page), 'data-auto-open')
 
-        self.client.post(self.seen)   # no Profile yet (the signal comes in chunk 12): it is created
+        self.client.post(self.seen)   # no Profile yet: one is created
         self.assertTrue(Profile.objects.get(user=user).seen_photo_tips)
         self.assertNotContains(self.client.get(self.page), 'data-auto-open')
 
@@ -468,7 +468,7 @@ class PhotoTipsTests(TestCase):
 
 
 class EnvListTests(TestCase):
-    """Chunk 8b: ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS take extra values from .env."""
+    """ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS take extra values from .env."""
 
     def test_defaults_alone(self):
         with patch.dict('os.environ', {}, clear=True):
@@ -506,7 +506,7 @@ def use_temp_media(test):
 
 
 class SignalTests(TestCase):
-    """Chunk 9: the slot from the time, the meals_logged counter and the photo cleanup."""
+    """The slot from the time, the meals_logged counter and the photo cleanup."""
 
     def setUp(self):
         use_temp_media(self)
@@ -580,7 +580,7 @@ class SignalTests(TestCase):
 
 
 class LogTests(TestCase):
-    """Chunk 9: Log, the toast with Undo, and Just checking."""
+    """Log, the toast with Undo, and Just checking."""
 
     def setUp(self):
         use_temp_media(self)
@@ -635,19 +635,19 @@ class LogTests(TestCase):
         self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 0)
 
     def test_undo_of_a_draft_changes_nothing(self):
-        # A second tap on Undo (audit H1): back to the draft's Result, the counter stays at 0
+        # A second tap on Undo: back to the draft's Result, the counter stays at 0
         response = self.client.post(reverse('undo_log', args=[self.meal.id]))
         self.assertRedirects(response, reverse('result', args=[self.meal.id]))
         self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 0)
 
     def test_logging_twice_counts_once(self):
-        # A second tap on Log (audit H1): Home again, not a 404, and still one logged meal
+        # A second tap on Log: Home again, not a 404, and still one logged meal
         self.log(slot='lunch')
         self.assertRedirects(self.log(slot='lunch'), reverse('home'))
         self.assertEqual(Profile.objects.get(user=self.user).meals_logged, 1)
 
     def test_logged_meal_opens_meal_detail_without_log(self):
-        # Chunk 15: the same URL shows Meal detail once the meal is logged
+        # The same URL shows Meal detail once the meal is logged
         self.log(slot='lunch')
         page = self.client.get(reverse('result', args=[self.meal.id]))
         self.assertTemplateUsed(page, 'meals/meal_detail.html')
@@ -684,7 +684,7 @@ class LogTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class GuestLogTests(TestCase):
-    """Chunk 9: a guest can use Just checking. Chunk 13: a guest's Log opens "Keep this meal?"."""
+    """A guest can use Just checking, and a guest's Log opens "Keep this meal?"."""
 
     def setUp(self):
         with patch('meals.services.ai._ask_model', return_value=good_answer()):
@@ -717,7 +717,7 @@ class GuestLogTests(TestCase):
 
 
 class GuestFlowTests(TestCase):
-    """Chunk 13 (T7): a guest checks a meal, taps Log, makes an account or signs in,
+    """A guest checks a meal, taps Log, makes an account or signs in,
     and the same meal is logged, counted once."""
 
     def setUp(self):
@@ -819,7 +819,7 @@ class GuestFlowTests(TestCase):
 
 
 class GuestDraftCleanupTests(TestCase):
-    """Chunk 13: each new draft deletes guest drafts older than 24 h."""
+    """Each new draft deletes guest drafts older than 24 h."""
 
     def backdate(self, meal, hours):
         # created_at is auto_now_add, so only update() can move it
@@ -859,7 +859,7 @@ class GuestDraftCleanupTests(TestCase):
 
 
 class UnitMathsTests(TestCase):
-    """Chunk 10: the grams rule shared by Save changes and portion.js."""
+    """The grams rule shared by Save changes and portion.js."""
 
     def test_same_unit_keeps_the_items_own_grams_per_unit(self):
         # The AI's 2 slices are 80 g, so 3 slices are 120 g, not the table's 90 g
@@ -903,7 +903,7 @@ class UnitMathsTests(TestCase):
 
 
 class EditItemTests(TestCase):
-    """Chunk 10: Edit item. Chicken is 150 g at 150–170 kcal and 28–31 g protein per 100 g."""
+    """Edit item. Chicken is 150 g at 150–170 kcal and 28–31 g protein per 100 g."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -950,7 +950,7 @@ class EditItemTests(TestCase):
         self.assertContains(page, 'data-bs-target="#unitSheet"', count=1)
 
     def test_more_chicken_updates_result(self):
-        # The chunk's test: 150 g -> 200 g, protein follows (T2)
+        # 150 g -> 200 g, and the protein follows (T2)
         response = self.save(amount='200')
         result_url = reverse('result', args=[self.meal.id])
         self.assertRedirects(response, f'{result_url}#item-{self.item.id}', fetch_redirect_response=False)
@@ -1114,7 +1114,7 @@ class UndoRemoveItemTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class EditAIItemTests(TestCase):
-    """Chunk 10: items with an AI answer behind them scale by the AI's grams and can be Reset."""
+    """Items with an AI answer behind them scale by the AI's grams and can be Reset."""
 
     def setUp(self):
         answer = good_answer()
@@ -1166,7 +1166,7 @@ def item_answer(**changes):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class EstimateItemTests(TestCase):
-    """Chunk 11: one small AI call for one item (Add and Re-estimate)."""
+    """One small AI call for one item (Add and Re-estimate)."""
 
     @patch('meals.services.ai._ask_model')
     def test_returns_a_validated_item(self, ask_model):
@@ -1229,7 +1229,7 @@ class AnalyzedMealMixin:
 
 @override_settings(ZALAK_AI_FAKE=False)
 class AddItemTests(AnalyzedMealMixin, TestCase):
-    """Chunk 11: "Add something Zalak missed"."""
+    """"Add something Zalak missed"."""
 
     def add(self, name='coffee with milk', answer=None, error=None, meal=None):
         url = reverse('add_item', args=[(meal or self.meal).id])
@@ -1327,7 +1327,7 @@ class AddItemTests(AnalyzedMealMixin, TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class ReEstimateTests(AnalyzedMealMixin, TestCase):
-    """Chunk 11: "Re-estimate with Zalak" on Edit item (bread: 2 slices, 60 g)."""
+    """"Re-estimate with Zalak" on Edit item (bread: 2 slices, 60 g)."""
 
     def setUp(self):
         super().setUp()
@@ -1407,7 +1407,7 @@ class ReEstimateTests(AnalyzedMealMixin, TestCase):
 
 
 class AnswerQuestionTests(AnalyzedMealMixin, TestCase):
-    """Chunk 11: A little / About that / A lot on the unsure oil (Zalak: 1 tbsp, 10 g, 20–60 kcal)."""
+    """A little / About that / A lot on the unsure oil (Zalak: 1 tbsp, 10 g, 20–60 kcal)."""
 
     def setUp(self):
         with override_settings(ZALAK_AI_FAKE=False):
@@ -1474,7 +1474,7 @@ class AnswerQuestionTests(AnalyzedMealMixin, TestCase):
 
 
 class AccountTests(TestCase):
-    """Chunk 12: Welcome, Create account (2 steps), Sign in and Sign out."""
+    """Welcome, Create account (2 steps), Sign in and Sign out."""
 
     def sign_up(self, **changes):
         data = {'first_name': 'Ana', 'email': 'Ana@Example.com', 'password': 'tavce-gravce-42', 'agree': 'on'}
@@ -1647,7 +1647,7 @@ class AccountTests(TestCase):
 
 
 class HomeTests(TestCase):
-    """Chunk 14: the week strip, the Eaten card, the four slots and the sheets."""
+    """The week strip, the Eaten card, the four slots and the sheets."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password', first_name='Ana')
@@ -1792,7 +1792,7 @@ class HomeTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class PastDayTests(TestCase):
-    """Chunk 14: "+" on a past day on Home logs the meal to that day."""
+    """"+" on a past day on Home logs the meal to that day."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -1842,8 +1842,8 @@ class PastDayTests(TestCase):
 
 
 class MealDetailTests(TestCase):
-    """Chunk 15 and HCI idea 2: Meal detail saves a logged meal's slot, time, name and photo the moment
-    each one changes (one small post per change); delete with Undo."""
+    """Meal detail saves a logged meal's slot, time, name and photo the moment each one changes
+    (one small post per change); delete with Undo."""
 
     def setUp(self):
         use_temp_media(self)
@@ -1860,7 +1860,7 @@ class MealDetailTests(TestCase):
     def test_logged_meal_shows_meal_detail_and_a_draft_shows_result(self):
         page = self.client.get(self.url)
         self.assertTemplateUsed(page, 'meals/meal_detail.html')
-        self.assertNotContains(page, 'Save changes')   # every change saves at once (HCI idea 2)
+        self.assertNotContains(page, 'Save changes')   # every change saves at once
         self.assertContains(page, 'Log again')
         self.assertContains(page, 'Delete meal')
         self.assertContains(page, 'When did you eat it?')
@@ -1984,7 +1984,7 @@ class MealDetailTests(TestCase):
         self.assertEqual(item.grams, 200)
 
     def test_time_sheet_has_no_day_switch(self):
-        # Removed 2 Nov: the sheet only changes the time, on the meal's own day
+        # The sheet only changes the time, on the meal's own day
         page = self.client.get(self.url)
         self.assertNotContains(page, 'name="time_day"')
         self.assertContains(page, 'data-day-label="Today"')
@@ -1995,7 +1995,7 @@ class MealDetailTests(TestCase):
 
 
 class DiaryTests(TestCase):
-    """Chunk 16: the Diary, a page per day; the desktop shows the day before beside it."""
+    """The Diary, a page per day; the desktop shows the day before beside it."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -2062,7 +2062,7 @@ class DiaryTests(TestCase):
         page = self.diary(date=first.isoformat())
         self.assertEqual(page.context['right_page']['kicker'], f'{first:%A} · First page')
         self.assertEqual(page.context['right_page']['count'], '1 meal · your first day with Zalak')
-        # Back still works before it (changed 2 Nov: no "Start"), and the left page is the day before
+        # Back still works before it, and the left page is the day before
         before = first - timedelta(days=1)
         self.assertEqual(page.context['phone_prev']['url'], f'/diary/?date={before.isoformat()}')
         self.assertEqual(page.context['left_page']['date'], before)
@@ -2141,7 +2141,7 @@ class DiaryTests(TestCase):
 
 
 class StatisticsTests(TestCase):
-    """Chunk 17: Statistics for a Mo–Su week or a month. The fixed numbers use last week and last
+    """Statistics for a Mo–Su week or a month. The fixed numbers use last week and last
     month, so they don't depend on today's weekday. Each meal is chicken, 150 g: 230–260 kcal,
     protein 42–47 g, carbs 0 g, fat 5–6 g."""
 
@@ -2288,7 +2288,7 @@ PROFILE_PAGES = ['profile', 'profile_details', 'profile_preferences', 'profile_a
 
 
 class ProfileTests(TestCase):
-    """Chunk 18: the Profile hub, Personal details, Preferences, Change password, Delete account."""
+    """The Profile hub, Personal details, Preferences, Change password, Delete account."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', email='ana@example.com',
@@ -2428,7 +2428,7 @@ class ProfileTests(TestCase):
 
 
 class PassTests(TestCase):
-    """Chunk 19: the failed step after an analysis, the desktop layouts, the style page gone."""
+    """The failed step after an analysis, and the desktop layouts."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -2488,7 +2488,7 @@ class PassTests(TestCase):
 
 
 class DemoFixtureTests(TestCase):
-    """Chunk 20: meals/fixtures/demo.json, Ana's meals from Mon 26 Oct to Tue 3 Nov."""
+    """meals/fixtures/demo.json: Ana and her nine days of meals load and add up."""
     fixtures = ['demo']
 
     def setUp(self):
@@ -2502,7 +2502,9 @@ class DemoFixtureTests(TestCase):
         self.assertEqual(meals.count(), 33)
         self.assertEqual(Profile.objects.get(user=self.ana).meals_logged, 33)
         days = sorted({timezone.localtime(meal.eaten_at).date() for meal in meals})
-        self.assertEqual((days[0].isoformat(), days[-1].isoformat()), ('2026-10-26', '2026-11-03'))
+        # Nine days in a row from a Monday, whatever FIRST_DAY build_demo.py used
+        self.assertEqual(days[0].weekday(), 0)
+        self.assertEqual((days[-1] - days[0]).days, 8)
         self.assertEqual(len(days), 9)
         photos = os.path.join(os.path.dirname(__file__), 'fixtures', 'demo_photos')
         for meal in meals:
@@ -2514,7 +2516,8 @@ class DemoFixtureTests(TestCase):
 
     def test_the_pages_open_with_her_week(self):
         self.client.force_login(self.ana)
-        monday = '2026-10-26'
+        first = min(timezone.localtime(meal.eaten_at).date() for meal in Meal.objects.filter(user=self.ana))
+        monday = first.isoformat()
         self.assertEqual(self.client.get(reverse('home'), {'date': monday}).context['week_chart']['days_logged'], 7)
         self.assertEqual(len(self.client.get(reverse('diary'), {'date': monday}).context['right_page']['meals']), 4)
         stats = self.client.get(reverse('statistics'), {'date': monday}).context['stats']
@@ -2526,7 +2529,7 @@ class DemoFixtureTests(TestCase):
 
 
 class YourMealsTests(TestCase):
-    """Chunk 22: favorites, My meals, Log again (a copy) and Recent in the Add meal sheet."""
+    """Favorites, My meals, Log again (a copy) and Recent in the Add meal sheet."""
 
     def setUp(self):
         use_temp_media(self)
@@ -2679,7 +2682,7 @@ class YourMealsTests(TestCase):
         self.assertContains(self.client.get(reverse('profile')), '2 saved')
 
 
-# ---------- Chunk 24: To finish drafts on Home, reusing a cancelled draft, Tell Zalak ----------
+# ---------- To finish drafts on Home, reusing a cancelled draft, Tell Zalak ----------
 
 class ToFinishTests(TestCase):
     """Home lists the day's drafts in their slot as "To finish" rows, never counted."""
@@ -2893,7 +2896,7 @@ class TellZalakTests(AnalyzedMealMixin, TestCase):
 
 
 class LighterIdeaValidateTests(TestCase):
-    """Chunk 25: validate() keeps a lighter idea only when it is clearly lighter and neutrally named."""
+    """validate() keeps a lighter idea only when it is clearly lighter and neutrally named."""
 
     def idea(self, **changes):
         data = good_answer()   # the meal is 620-810 kcal, a middle of 715
@@ -2929,7 +2932,7 @@ class LighterIdeaValidateTests(TestCase):
 
 @override_settings(ZALAK_AI_FAKE=False)
 class LighterIdeaTests(AnalyzedMealMixin, TestCase):
-    """Chunk 25: the card on a draft's Result, its ×, and the Preferences switch."""
+    """The card on a draft's Result, its ×, and the Preferences switch."""
 
     CARD = 'A lighter idea:'
 
@@ -3006,7 +3009,7 @@ class LighterIdeaTests(AnalyzedMealMixin, TestCase):
         self.assertEqual(profile.uncertainty, 'guess')
 
 
-# ---------- Audit fixes (Phase 2, docs/dev/audit.md) ----------
+# ---------- Robustness: second taps, both inputs, odd input, failures, clean-up ----------
 
 class SecondTapTests(TestCase):
     """H1, M5: a second tap on Log, Just checking, Delete or Undo repeats nothing and ends where
@@ -3360,7 +3363,7 @@ class ErrorPageTests(TestCase):
 
 
 class PhotoUploadEdgeTests(TestCase):
-    """Audit, section 5: the photo checks that had no test."""
+    """The photo checks: too large, turned upright, a random name."""
 
     def setUp(self):
         use_temp_media(self)
@@ -3394,7 +3397,7 @@ class PhotoUploadEdgeTests(TestCase):
 
 
 class RenameSavedTests(TestCase):
-    """Audit, section 5: the Rename sheet of a My meal."""
+    """The Rename sheet of a My meal."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -3423,7 +3426,7 @@ class RenameSavedTests(TestCase):
 
 
 class MidnightTests(TestCase):
-    """Audit, section 5: days are Skopje days. A meal at 23:30 and one at 00:30 are an hour apart
+    """Days are Skopje days. A meal at 23:30 and one at 00:30 are an hour apart
     but belong to two different days on Home and in the Diary."""
 
     def test_meals_around_midnight_land_on_their_own_days(self):
@@ -3454,7 +3457,7 @@ class MidnightTests(TestCase):
 
 
 class SaveAtOnceTests(TestCase):
-    """HCI idea 2 (replaces the M7 warning): with fetch, each change on Meal detail answers without a
+    """With fetch, each change on Meal detail answers without a
     page load, and only the one field changes."""
 
     def setUp(self):
@@ -3504,7 +3507,7 @@ class PrivacyWordsTests(TestCase):
 
 
 class UiRequestTests(TestCase):
-    """12 Nov requests: Use a photo instead is a button, Recent has arrows, no Save a copy on Meal detail."""
+    """Use a photo instead is a button, Recent has arrows, and Meal detail has no Save a copy."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -3528,7 +3531,7 @@ class UiRequestTests(TestCase):
 
 
 class Phase3Tests(TestCase):
-    """Phase 3 clean-up: meals/urls.py, and the small fixes L1, L2, L3, L17 from docs/dev/audit.md."""
+    """meals/urls.py, the only-item note, item Undo after Tell Zalak, the meal's own day, local times."""
 
     def setUp(self):
         self.user = User.objects.create_user('ana@example.com', password='a-long-password')
@@ -3577,8 +3580,8 @@ class Phase3Tests(TestCase):
 
 
 class HciIdeaTests(TestCase):
-    """Phase 5: the guest's chooser (idea 1), typing the amount (3), the Undo that waits (4) and
-    "How to read this" (5). Idea 2 is in MealDetailTests and SaveAtOnceTests."""
+    """The guest's chooser, typing the amount, the Undo that waits and "How to read this".
+    Saving at once on Meal detail is in MealDetailTests and SaveAtOnceTests."""
 
     def test_try_it_opens_a_chooser(self):
         page = self.client.get(reverse('home'))
