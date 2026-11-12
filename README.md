@@ -57,7 +57,7 @@ New-Item -ItemType Directory -Force media\meals\demo | Out-Null
 Copy-Item meals\fixtures\demo_photos\* media\meals\demo\
 ```
 
-The 5-minute demo walkthrough is in [`docs/demo-script.md`](docs/demo-script.md).
+The 5-minute demo walkthrough is in [`docs/dev/demo-script.md`](docs/dev/demo-script.md).
 
 ### Running it like the submission (DEBUG off)
 
@@ -104,7 +104,8 @@ meals/
   tests.py             the tests
 templates/             base.html, the error pages, meals/ (pages and _partials), registration/
 static/                css/zalak.css (the Sage & caramel theme over Bootstrap), js/, fonts, Bootstrap
-docs/                  the HCI design documents 01–06, the Figma export, the build plan and the audit
+docs/                  the HCI design documents 01–06 and the Figma export
+  dev/                 the build plan, the audit, the demo script, the Django exam notes
 reference/             the course's official exam solution (the style followed)
 ```
 

@@ -1,5 +1,7 @@
 # Zalak: build plan
 
+> A record of how the app was built, chunk by chunk (25 Oct – 3 Nov 2026). The data model and decisions below are from that time; `meals/models.py` and `docs/01`–`06` describe the app as it is now. What changed after the demo is in `audit.md`.
+
 Agreed 25 Oct 2026. **Finish by Sun 1 Nov, demo on 4 or 5 Nov**, hard deadline 15 Nov. One chunk at a time, in order. Each chunk is reviewable in ~30–45 min and ends with `python manage.py check` plus a browser test at 390 px and 1440 px. Tick the box when the chunk is committed.
 
 ## Decisions

@@ -48,7 +48,7 @@ For the demo to the professor on 4 or 5 November 2026. Two people in the story:
 | 2:25 | Result | Tap an item's pencil → **Edit item**: + / − on the amount, the kcal follows live → **Save changes** | "Every item can be corrected: rename, portion, unit, remove, add." |
 | 2:45 | | **Log to lunch** → toast *Logged to lunch · Undo* | |
 | 3:00 | Diary, 1440 | Today's page → ‹ back a few days (the open book) → the calendar icon → pick Tue 27 Oct | "The diary is a book: one page per day." |
-| 3:15 | | Open the burek → **Meal detail**: change the time → **Save changes** | "Logged meals stay editable." |
+| 3:15 | | Open the burek → **Meal detail**: change the time → **Done** ("Saved" appears) | "Logged meals stay editable, and every change saves at once." |
 | 3:30 | Statistics | This week → ‹ **last week** (7 of 7 days, the average range, macros, *Most logged*) → **Month** | "Patterns, not judgement." |
 | 4:00 | Profile | **Preferences** → **Best guess** (saves at once) | "Some people don't want questions." |
 | 4:10 | 390 | **+** → Text → *"a piece of homemade pita"* → Analyze | The unsure item shows its reason, with no question. Switch back to **Ask me** afterwards. |

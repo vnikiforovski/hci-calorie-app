@@ -1,6 +1,6 @@
 # Zalak: Competitor Analysis
 
-A short review of 20 calorie and nutrition apps: what they offer, what works, what doesn't, and what Zalak takes from them. The focus is on the calorie-checking flow (input → result → correction); the rest of each app is noted briefly. Screenshots of the parts we liked are in `competitor screenshots`.
+A short review of 20 calorie and nutrition apps: what they offer, what works, what doesn't, and what Zalak takes from them. The focus is on the calorie-checking flow (input → result → correction); the rest of each app is noted briefly. Screenshots of the parts we liked are in `competitor screenshots/`.
 
 ## Apps
 
@@ -129,76 +129,51 @@ A short review of 20 calorie and nutrition apps: what they offer, what works, wh
 - Too many input options; non-editable voice
 - A cartoonish or colorless style
 
-## Design wants
+## Design wants, and what became of them
 
-The direction for Zalak, based on the review. Details are designed in the design phase.
+The direction set after the review, and what the built app does with it.
 
 **General**
-- Simple UI.
-- Works on mobile and desktop; the desktop version shows more detail.
-- Calories and macros come from the AI only; no nutrition database.
-- Logo: the name plus a food item with a bite taken out, since Zalak means "a bite". A cookie is the favorite (decided later); not an apple, which is too close to Apple's logo.
-- Priorities: the checker first; then the home page, sign-up and diary; water, goals, BMI, the book style and customizable statistics last.
+- Simple UI that works on a phone and a laptop, with more detail on the laptop. *Done (390 and 1440 px layouts).*
+- Calories and macros from the AI only; no nutrition database. *Done.*
+- Logo: the name plus a food with a bite taken out ("zalak" means "a bite"). *Done: a golden cookie; it also loses bites on the Analyzing screen.*
 
 **First use and account**
-- No account needed at first: Zalak opens as an AI calorie checker.
-- An account unlocks logging, the diary, custom meals, water and goals. When a guest taps Log, they are asked to sign up, and the meal is then logged.
-- Sign-up with e-mail and password (no Google or Apple), as a short step-by-step form of 4–5 steps, where everything except e-mail and password can be skipped:
-  - name
-  - height, weight, activity level
-  - how Zalak should handle calorie uncertainty (the Amy idea)
-  - a few quick preferences for the AI (e.g. diet, usual cuisine)
+- No account needed at first: Zalak opens as a calorie checker; Log asks a guest to sign up and then logs the meal. *Done: Welcome offers "Try it without an account".*
+- A short step-by-step sign-up with e-mail and password (no Google or Apple), everything else skippable. *Done in 2 steps; the uncertainty preference moved to Profile, and food preferences for the AI were dropped.*
 
 **Home page**
-- Logo and name at the top, with a profile icon that opens the profile.
-- The 7 days of the week at the top; tapping a day changes the dashboards. Arrows change the week, and a small calendar jumps to any date.
-- Dashboards below: calories as the main one, then macros and water.
-- Breakfast, lunch, dinner and snack below the dashboards, each with a "+" for quick input. Meal sections can be renamed, added or removed.
+- Logo and profile icon at the top; the week's 7 days with arrows and a calendar; calorie and macro dashboards; breakfast, lunch, snack and dinner, each with a "+". *Done. Water and renaming slots were left out.*
 
 **Meal input (the checker)**
-- One "+" button with three ways in:
-  - **Text and voice:** one text field with a microphone that fills it; the text can be edited.
-  - **Photo:** always with an optional text field to help the analysis; a tutorial as swipeable cards from the bottom the first time (with "Don't show again"), then a "Tips" button next to the camera.
-  - **Your meals:** favorites and custom meals.
-- Two goals: **just check** the calories and macros, or **log** the meal to breakfast, lunch, dinner or snack.
-- When only checking, Zalak offers a **healthier option** as a small, dismissible card under the result, worded as an idea ("A lighter idea: chicken wrap, ~550 kcal"). Only when a meaningfully lighter option exists; can be turned off. Not a pop-up.
-- Each food item shows the AI's confidence (sure / likely / unsure, with a reason).
+- One "+" with three ways in: Text and voice (one field, editable), Photo (with a note and first-time tips), Your meals. *Done; Recent meals sit under them.*
+- Just check or log. *Done: Just checking and Log to [slot].*
+- A small, dismissible lighter idea when only checking. *Done; it can be turned off.*
+- Confidence per item (sure / likely / unsure, with a reason). *Done.*
 
 **Analysis and editing**
-- A loading animation while the AI works; other animations where they help.
-- When the result arrives you can:
-  - edit the whole meal
-  - open each food item and change it, its portion or its weight, in many different measurements
-  - add and delete items
-- Then log it.
+- A loading animation; edit the whole meal, each item, its portion and unit; add and delete items. *Done, plus "Tell Zalak" to correct the whole meal in your own words.*
 
 **Diary**
-- Looks like a real diary book: swipe between days like pages, with meal photos; tap a meal to see and edit details.
-- A bookmark section for favorite meals and recipes.
-- A quick calendar to jump between days.
-- Fallback if the book is too hard: a normal diary with photos.
+- A real diary book with meal photos, a bookmark section for favorite and own meals, and a quick calendar. *Done: pages turn with arrows (not swipes); "Your meals" is a tab on the edge of the book.*
 
-**Profile**
-- Requires sign-in.
-- Edit personal data and preferences: dashboard style, calorie uncertainty handling.
-- Calculated BMI and recommended daily calories and macros, only if the user wants them (handled carefully to avoid guilt; decided later).
-- Optional goals to follow and track.
-- Custom meals: "Save as my meal" from an analyzed meal, or created in a form.
-- Water intake: tap-to-fill glasses, editable daily amount.
-
-**Statistics**
-- A default design that works well for everyone, customizable per user; macro targets if the user chooses them.
+**Profile and statistics**
+- Personal data and the uncertainty preference. *Done.*
+- Own meals. *Done ("Create your own meal").*
+- BMI, recommended calories and macros, goals, water, customizable statistics. *Not built: Statistics has one default layout for everyone.*
 
 ## Idea parking lot (decisions)
 
-**In**
-- uncertainty preference at sign-up and in the profile
-- personal preferences in the AI prompt
+**In, and built**
+- uncertainty preference (in the profile)
 - usable without an account
 - diary with photos
-- custom meals
+- own meals and favorites
+- a lighter idea when checking
+
+**In, but not built** (time went to the core flow)
+- personal preferences in the AI prompt
 - water intake
-- healthier option when checking
 - optional BMI, recommended calories, macro targets and goals
 - customizable statistics
 
@@ -211,4 +186,4 @@ The direction for Zalak, based on the review. Details are designed in the design
 - structured text input as the main input
 - numbers-free display mode (Zalak is a calorie checker)
 
-**Uncertainty, split in two:** the *preference* ("ask me" or "best guess") is set at sign-up and in the profile; the per-item *confidence* (sure / likely / unsure, with a reason) is always on the result screen.
+**Uncertainty, split in two:** the *preference* ("Ask me" or "Best guess") is set in the profile; the per-item *confidence* (sure / likely / unsure, with a reason) is always on Result.

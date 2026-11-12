@@ -8,16 +8,16 @@ Zalak ("a bite" in Macedonian) is an AI meal calorie checker: the user photograp
 
 I am a student learning Django through this project. I approve every plan and review every chunk.
 
-- **One chunk at a time**, from `docs/build-plan.md`. Never start the next chunk on your own.
+- **One chunk at a time**, from `docs/dev/build-plan.md`. Never start the next chunk on your own.
 - **Plan first.** Before editing, list the files you will touch and what changes in each. Wait for my approval.
 - **Whole chunk at once, after the plan is approved.** Implement all files of the chunk in one go, in Django order (models → admin → forms → views → urls → templates → static).
 - **Check your own work before handing over.** Run `python manage.py check`, `makemigrations --check` when models changed, and `python manage.py test meals`; request the chunk's pages with Django's test client; fix anything that fails. Add or update small tests for the chunk's logic (ownership 404s, signals, scaling maths).
-- **Then explain the chunk**: per file, 2-4 sentences on what it does, why, and which course pattern it uses (point to the matching file in `reference/hospital_exam/` when there is one). End with browser test steps at 390 and 1440 px and a suggested commit message.
+- **Then explain the chunk**: per file, 2-4 sentences on what it does, why, and which course pattern it uses (point to the matching file in `docs/reference` when there is one). End with browser test steps at 390 and 1440 px and a suggested commit message.
 - **Course-minimum Django style.** Function-based views, `ModelForm`, admin customizations (`list_display`, `has_*_permission`, `save_model`, `get_queryset`), signals in `signals.py` imported in `apps.py ready()`, Django templates with `{% extends %}` and Bootstrap. Go beyond this only when the feature needs it, and tell me why first. No class-based views, DRF, React, HTMX or other frameworks unless I agree.
 - **JavaScript only where the interaction needs it** (voice input, live total updates while editing portions, bottom sheets). Plain JS, no build step.
 - **No new packages without asking.** Say what it is for and whether a built-in option exists.
 - **Don't commit or push.** At the end of a chunk, tell me how to test it in the browser and suggest a commit message. I commit myself.
-- **Don't edit `docs/`** except `docs/build-plan.md`, unless I ask.
+- **Don't edit `docs/`** except `docs/dev/build-plan.md`, unless I ask.
 - If something in the docs is unclear or contradicts itself, ask me instead of guessing.
 
 ## Where things are
@@ -30,9 +30,10 @@ I am a student learning Django through this project. I approve every plan and re
 - `docs/06-visual-design-and-prototype.md`: colors, fonts, numbers, spacing, components, prototype screens
 - `docs/figma-prototype.pdf`: export of the final Figma screens
 - Figma file (use the Figma tools to inspect frames): https://www.figma.com/design/TAkknAZ98WZRCS6eSG2ULW/Zalak-Prototype
-- `docs/Django exam pattern + Zalak mapping.md`: the course's Django exam pattern and how it maps to Zalak
-- `reference/hospital_exam/`: an official course exam solution. This is the style and minimum level to follow.
-- `docs/build-plan.md`: the agreed build plan, chunk by chunk (created in the first session)
+- `docs/dev/django-exam-pattern.md`: the course's Django exam pattern and how it maps to Zalak
+- `docs/reference`: an official course exam solution. This is the style and minimum level to follow.
+- `docs/dev/build-plan.md`: the agreed build plan, chunk by chunk (created in the first session)
+- `docs/dev/audit.md`: the audit of 11 Nov 2026 and what was fixed; `docs/dev/demo-script.md`: the demo walkthrough
 
 Read the relevant doc before building a screen. The research docs win over the model sketch in the exam-mapping doc where they differ (e.g. ranges, the confidence words sure/likely/unsure, the statuses draft/logged).
 

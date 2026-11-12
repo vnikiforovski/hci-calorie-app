@@ -1,6 +1,6 @@
 # Zalak: Problem Analysis
 
-Zalak (залак, Macedonian for "a bite") estimates the calories and macronutrients of a meal from a photo, a text description or a voice note, and lets the user correct the estimate. The focus is interaction design, not nutritional accuracy.
+Zalak (залак, Macedonian for "a bite") estimates the calories and macronutrients of a meal from a photo, a text description or a voice note, and lets the user correct the estimate before logging it. The focus is interaction design, not nutritional accuracy.
 
 **The four problems from the assignment**, which every decision is checked against:
 1. **Input:** the easiest way to enter a meal
@@ -27,8 +27,8 @@ A heterogeneous group: people losing or maintaining weight, fitness users, casua
 
 ### Activities
 - **Purpose:** *journal* (after eating) and *check* (before eating, e.g. when ordering). Both follow *capture → estimate → review → save*.
-- **Time:** 3–6 times a day, so it must be extremely simple. Often under time pressure and interrupted, so users need to capture now and finish later. AI takes several seconds, longer than the ~1 s users expect, so immediate feedback is needed.
-- **Cooperation:** mostly individual; shared dishes need a "my share" option.
+- **Time:** 3–6 times a day, so it must be extremely simple. Often under time pressure and interrupted, so users need to capture now and finish later. AI takes a few seconds, longer than the ~1 s users expect, so immediate feedback is needed.
+- **Cooperation:** mostly individual; for shared dishes the user logs their own portion.
 - **Complexity:** logging is well-defined (step by step); correcting is not (users must work out what's wrong), so it needs free editing.
 - **Safety-critical:** carb estimates used for insulin, false allergen safety, and psychological harm from guilt.
 - **Errors:** AI errors (wrong food, portion, hidden oil) and user errors (wrong photo, duplicate, accidental delete) must be fixable in place, with undo.
@@ -41,9 +41,9 @@ A heterogeneous group: people losing or maintaining weight, fitness users, casua
 
 ### Technologies
 - **Platform:** one responsive Django + Bootstrap web app, mobile-first: phone for capture, laptop for looking back.
-- **Input:** camera or upload, text, voice (browser speech recognition; editable text; not in Firefox), touch for portions.
-- **Output:** visual feedback for every action; sound optional and off by default; vibration only on Android, so only an extra.
-- **Communication:** browser → Django → Claude API. The API key stays on the server. Every failure gets a message, a retry and a text fallback.
+- **Input:** camera or upload (drag and drop or paste on a laptop), text, voice (the browser's speech recognition; editable text; not in Firefox), touch for portions.
+- **Output:** visual only. No sound and no vibration (D10).
+- **Communication:** browser → Django → Claude API (Claude Haiku 5.5). The API key stays on the server. Every failure gets a message, a retry and a text fallback.
 
 ## 2. Design implications
 
@@ -53,10 +53,10 @@ A heterogeneous group: people losing or maintaining weight, fitness users, casua
 - **D4** Uncertainty shown honestly: calorie ranges, marked items, a short reason
 - **D5** Correction is a first-class action; totals update instantly
 - **D6** Immediate feedback while the AI works
-- **D7** Calm presentation: no good/bad food, no red/green, no alarms; healthier swaps only as optional ideas
+- **D7** Calm presentation: no good/bad food, no red/green, no alarms; lighter ideas only as optional suggestions
 - **D8** Recognition over recall: recent and favorite meals, photo history
 - **D9** Accessible by default: WCAG 2.1 AA, 44 px touch targets, frequent actions within thumb reach
-- **D10** Discreet by default: sound off, text always available, no social sharing
+- **D10** Discreet by default: silent, text always available, no social sharing
 - **D11** Safe boundaries: no allergen claims; "estimate, not medical advice"
 - **D12** Progressive disclosure: summary first, details on tap
 - **D13** Graceful failure: always a fallback, never a dead end
@@ -65,10 +65,15 @@ A heterogeneous group: people losing or maintaining weight, fitness users, casua
 
 ## 3. Scope
 
-Priorities, in order:
-1. **The checker (non-negotiable):** photo/text/voice input; photo note; range estimates with per-item uncertainty; correction and portions; check or log; healthier option; works without an account.
-2. **The app around it:** home page with week strip and dashboards; short sign-up; diary with photos; favorites and custom meals; drafts; accessibility; responsive layout.
-3. **Last:** water tracking, goals, BMI and recommended calories and macros, the diary "book" style, customizable statistics, Macedonian language.
+**Built** (the core loop and the app around it):
+- the checker: photo + note, text and voice, Analyzing, Result with ranges and per-item confidence, correction (edit, add, remove, re-estimate, "Tell Zalak"), Log or Just checking, error states, the guest checker
+- a lighter idea when only checking
+- accounts with a short sign-up; Home with week strip, dashboards and meal slots; meal detail with edit and delete
+- the Diary as a book, Your meals (favorites and own meals), drafts ("To finish"), Statistics for a week or a month
+- Profile: personal details, uncertainty preference, lighter ideas on/off, password, delete account, help
+- responsive layout (390 px and 1440 px) and an accessibility pass
+
+**Not built** (planned as "last" or "could"; left out to finish the core well): water tracking, goals and targets (BMI, recommended calories, macro targets), "my share" fractions for shared dishes (the user sets the portion instead), food preferences sent to the AI, renaming meal slots, customizable statistics, dark mode, Macedonian language.
 
 **Out of scope:**
 - native apps (one web app is enough)
@@ -84,26 +89,26 @@ Priorities, in order:
 
 **Modality, medium, device.** A message is encoded in a medium, sent through a device and perceived through a modality.
 - **Input:** photo (sight, image, camera); text (sight + touch, text, keyboard); voice (speech, sound → text, microphone); corrections (touch, direct manipulation, touchscreen).
-- **Output:** mainly visual (text, numbers, photos, simple charts on the screen). An optional short sound or vibration for confirmation.
+- **Output:** visual (text, numbers, photos, simple charts on the screen).
 
 **How the modalities are combined.** The value lies in how modalities are combined, not how many there are.
-- **Sequential:** speak, then check and edit the transcript; the AI interprets a photo, then the user corrects by touch.
+- **Sequential:** speak, then check and edit the transcript; the AI interprets a photo, then the user corrects by touch, or by saying what was wrong ("Tell Zalak", typed or spoken).
 - **Complementary:** photo + note (D15). The photo shows what and how much; the note adds what a photo can't show ("cooked in butter", "I ate half").
-- **Redundant:** uncertainty shown with an icon and text, never by color alone.
+- **Redundant:** uncertainty shown with an icon, a word and a three-dot meter, never by color alone.
 - **Simultaneous:** not used; it adds complexity without helping the task.
-- The three inputs are also **alternatives**: any one can log a meal, so users pick what fits the context.
+- The three inputs are also **alternatives**: any one can log a meal, and each input page links to the other ("Use a photo instead", "Type it instead"), so users pick what fits the context.
 
 **Fusion.** Late fusion: the photo and note are sent to the AI together and produce one interpretation, which reduces ambiguity (a white sauce: yogurt or mayonnaise?). Voice becomes text first, so there is one pipeline. Photo and note belong to the same draft until Analyze, so their order doesn't matter (time alignment).
 
 **Challenges.**
 - **Ambiguity:** uncertain items, a clarifying question, easy correction.
-- **Noise:** photo tips, "can't analyze" messages, editable transcript.
-- **Latency:** immediate "analyzing" state.
+- **Noise:** photo tips, a "No food found" page that says what Zalak saw, an editable transcript.
+- **Latency:** an immediate Analyzing screen.
 - **Complexity:** one shared pipeline.
 - **Environment and device:** text is always available.
 
-**Speech.** Useful when the hands are busy, but English speech recognition will likely mishear local dish names ("tavče gravče") and Macedonian accents, and speaking aloud in public is awkward. So voice is never the only way, and the transcript is always editable.
+**Speech.** Useful when the hands are busy, but English speech recognition mishears local dish names ("tavče gravče") and Macedonian accents, and speaking aloud in public is awkward. So voice is never the only way, and the transcript is always editable.
 
-**Output.** Visual output is the main channel. Audio is limited to an optional confirmation sound (an earcon), off by default. No speech output.
+**Output.** Visual output only. An optional confirmation sound was considered and dropped: it adds little and goes against D10.
 
 **Multimodal vs multimedia.** Zalak's inputs are multimodal (interaction); its history of photos, text and numbers is multimedia (presentation).

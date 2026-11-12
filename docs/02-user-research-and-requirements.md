@@ -2,7 +2,7 @@
 
 User research is a systematic process of collecting and analyzing data about users in order to understand them (lecture 003): their **needs**, **goals**, **behavior**, **problems** and **context**.
 
-**Method:** desk research (five published studies) plus six personas built from it and the PACT analysis. The personas and requirements will be checked in usability testing.
+**Method:** desk research (five published studies) plus six personas built from it and the PACT analysis. The Figma prototype was tried informally by friends (docs/06); no formal usability test was run.
 
 ## 1. Desk research
 
@@ -44,96 +44,72 @@ User research is a systematic process of collecting and analyzing data about use
 
 ## 5. Requirements
 
-**Must:** the core loop needs it. **Should:** planned. **Could:** if time allows.
+**MoSCoW:** **Must** (the core loop needs it), **Should** (planned), **Could** (if time allows). Each requirement ends with what was built: **built**, **changed** (built differently, with how) or **not built**.
 
 ### Functional requirements
 
 **Account and profile**
-- **FR1** (Must) Register and log in with e-mail and password.
-- **FR2** (Must) Use the checker without an account. Logging requires an account: a guest who taps Log is asked to sign up, and the meal is then logged.
-- **FR3** (Should) Delete the account and all data.
-- **FR4** (Could) Optional goals and targets: BMI, recommended daily calories and macros, macro targets. Off by default, never shown as red or "over".
-- **FR36** (Should) Short step-by-step sign-up (4–5 steps): e-mail and password, name, height, weight, activity level, uncertainty preference, AI preferences. Everything except e-mail and password can be skipped.
-- **FR37** (Should) Uncertainty preference, "Ask me when unsure" or "Make your best guess", set at sign-up and changeable in the profile; it controls FR16.
-- **FR38** (Should) Optional food preferences (e.g. diet, usual cuisine) included in every AI request. No health data.
+- **FR1** (Must) Register and sign in with e-mail and password. *Built.*
+- **FR2** (Must) Use the checker without an account. Logging requires an account: a guest who taps Log is asked to sign up, and the meal is then logged. *Built: "Keep this meal?" → sign up or sign in → logged, with Undo.*
+- **FR3** (Should) Delete the account and all data. *Built (asks for the password once).*
+- **FR4** (Could) Optional goals and targets: BMI, recommended daily calories and macros. Off by default, never shown as red or "over". *Not built.*
+- **FR36** (Should) Short sign-up; everything except e-mail and password can be skipped. *Changed: 2 steps (name, e-mail, password; then height, weight and activity, skippable). The uncertainty preference lives in Profile.*
+- **FR37** (Should) Uncertainty preference, "Ask me" or "Best guess"; it controls FR16. *Changed: in Profile → Preferences only, default "Ask me".*
+- **FR38** (Should) Optional food preferences included in every AI request. *Not built.*
 
 **Capture**
-- **FR5** (Must) Take a meal photo or upload an image.
-- **FR6** (Must) Describe a meal in free text.
-- **FR7** (Must) Dictate a meal by voice and edit the transcript before sending.
-- **FR8** (Must) The meal slot (breakfast, lunch, dinner, snack) is suggested from the time of day and can be changed. Meal slots can be renamed, added or removed (Should).
-- **FR9** (Should) Save a meal as a draft and finish it later.
-- **FR10** (Should) Re-log a recent, favorite or custom meal ("Your meals") in one tap.
-- **FR39** (Should) Create custom meals: "Save as my meal" from any analyzed meal, or build one in a form.
-- **FR11** (Should) Log only your share of a shared dish (½, ⅓, ¼).
-- **FR35** (Should) Add an optional note to a photo; both are analyzed together.
+- **FR5** (Must) Take a meal photo or upload an image. *Built: live camera on phones, the phone's own camera as fallback, drag, choose or paste on a laptop.*
+- **FR6** (Must) Describe a meal in free text. *Built, with example and detail chips.*
+- **FR7** (Must) Dictate a meal by voice and edit the transcript before sending. *Built (Chrome, Edge, Safari).*
+- **FR8** (Must) The meal slot is suggested from the time of day and can be changed. *Built.* Renaming, adding or removing slots (Should): *not built.*
+- **FR9** (Should) Save a meal as a draft and finish it later. *Built: every input is a draft first; unfinished ones show on Home as "To finish".*
+- **FR10** (Should) Re-log a recent, favorite or own meal ("Your meals") in one tap. *Built: Recent in the Add meal sheet, Log again on Meal detail and Saved meal.*
+- **FR39** (Should) Create own meals. *Built: "Create your own meal" on Your meals runs the normal checker and saves to My meals.*
+- **FR11** (Should) Log only your share of a shared dish (½, ⅓, ¼). *Changed: a "Shared dish" chip on the photo note, and the amount stepper goes down to ¼.*
+- **FR35** (Should) An optional note on a photo; both are analyzed together. *Built.*
 
 **Estimate**
-- **FR12** (Must) A list of recognized foods, each with a portion, a calorie range and macros.
-- **FR13** (Must) The meal total is shown as a range.
-- **FR14** (Must) Uncertain items are marked with a short reason.
-- **FR15** (Should) Each result has a short neutral description next to the numbers (e.g. "a filling lunch with good protein").
-- **FR16** (Should) When very unsure, the system asks one simple question instead of guessing.
-- **FR17** (Should) When the user is only checking, a small dismissible card suggests a lighter idea, e.g. "A lighter idea: chicken wrap, ~550 kcal". It appears only when a meaningfully lighter alternative exists and can be turned off. Never a pop-up.
+- **FR12** (Must) A list of recognized foods, each with a portion, a calorie range and macros. *Built.*
+- **FR13** (Must) The meal total is shown as a range. *Built.*
+- **FR14** (Must) Uncertain items are marked with a short reason. *Built.*
+- **FR15** (Should) Each result has a short neutral description (e.g. "a filling lunch with good protein"). *Built.*
+- **FR16** (Should) When very unsure, the system asks one simple question instead of guessing. *Built: on the unsure item, with A little / About that / A lot.*
+- **FR17** (Should) When only checking, a small dismissible card suggests a lighter idea. Only when a clearly lighter option exists; can be turned off; never a pop-up. *Built (Preferences → Show lighter ideas).*
 
 **Correction**
-- **FR18** (Must) Rename or replace an item.
-- **FR19** (Must) Change a portion: stepper, sizes, household measures (bowl, slice, piece) or grams.
-- **FR20** (Must) Add a missing item.
-- **FR21** (Must) Remove an item.
-- **FR22** (Must) Totals update immediately.
+- **FR18** (Must) Rename or replace an item. *Built, plus "Re-estimate" and "Tell Zalak" for the whole meal.*
+- **FR19** (Must) Change a portion: stepper, household measures (bowl, slice, piece) or grams. *Built: stepper with fractions, a typed amount, and a unit sheet with four groups.*
+- **FR20** (Must) Add a missing item. *Built.*
+- **FR21** (Must) Remove an item. *Built, with Undo.*
+- **FR22** (Must) Totals update immediately. *Built: live on Edit item; saved changes show at once on Result.*
 
 **Journal**
-- **FR23** (Must) Nothing is saved until the user confirms.
-- **FR24** (Must) Home page: the week's days at the top (arrows change the week, a small calendar jumps to any date); calories, macros and water dashboards for the chosen day; meal slots with a "+" each.
-- **FR25** (Must) Edit or delete a saved meal, with undo.
-- **FR26** (Should) A diary of past days with meal photos, a quick calendar, and a bookmark section for favorite and custom meals. A "book" look with page swipes is Could.
-- **FR40** (Could) Water intake: tap-to-fill glasses with an editable daily amount.
-- **FR41** (Could) Customizable statistics, with a default that works for everyone.
-- **FR27** (Should) Mark a meal as a favorite.
-- **FR28** (Could) A simple weekly overview.
+- **FR23** (Must) Nothing is saved until the user confirms. *Built: a draft never counts anywhere until Log.*
+- **FR24** (Must) Home: the week at the top (arrows, a calendar for any date); calories and macros for the chosen day; meal slots with a "+" each. *Built. Water: not built.*
+- **FR25** (Must) Edit or delete a saved meal, with undo. *Built: each change on Meal detail saves at once; delete has Undo.*
+- **FR26** (Should) A diary of past days with meal photos, a quick calendar, and a bookmark for favorite and own meals. *Built, including the "book" look (two pages on a laptop); pages turn with arrows, not swipes.*
+- **FR27** (Should) Mark a meal as a favorite. *Built.*
+- **FR28** (Could) A simple weekly overview. *Built: Statistics for a week or a month.*
+- **FR40** (Could) Water intake. *Not built.*
+- **FR41** (Could) Customizable statistics. *Not built (one default layout).*
 
 **Guidance and errors**
-- **FR29** (Must) If the analysis fails, the input is kept, the problem is explained, and the user can retry or type instead.
-- **FR30** (Must) If a photo can't be analyzed, say why and offer a retake or text.
-- **FR31** (Should) Photo tips as swipeable cards shown automatically the first time, with "Don't show again"; afterwards a "Tips" button next to the camera.
-- **FR32** (Must) Each item on the result screen shows the AI's confidence as sure / likely / unsure, with a reason when unsure.
-- **FR33** (Must) "Estimate, not medical advice" at sign-up and on the result screen.
-- **FR34** (Should) "Just checking": see an estimate and discard it without saving.
+- **FR29** (Must) If the analysis fails, the input is kept, the problem is explained, and the user can retry or type instead. *Built.*
+- **FR30** (Must) If a photo can't be analyzed, say why and offer a retake or text. *Built ("No food found" with what Zalak saw).*
+- **FR31** (Should) Photo tips as swipeable cards, shown automatically the first time, with "Don't show again"; afterwards a "Tips" button. *Built.*
+- **FR32** (Must) Each item shows sure / likely / unsure, with a reason when unsure. *Built: icon, word and a three-dot meter.*
+- **FR33** (Must) "Estimate, not medical advice" at sign-up and on Result. *Built (also on Meal detail and in Help).*
+- **FR34** (Should) "Just checking": see an estimate and discard it. *Built.*
 
 ### Non-functional requirements
 
-- **Performance:**
-  - **NFR1** non-AI actions in under 1 s
-  - **NFR2** "analyzing" shown in under 1 s
-  - **NFR3** 9 of 10 analyses within 10 s (text) or 15 s (photo)
-  - **NFR4** totals update in under 100 ms
-- **Usability:**
-  - **NFR5** first meal within 2 min of registering, in 4 of 5 tests
-  - **NFR6** saving takes ≤3 interactions after capture when the AI is right
-  - **NFR7** changing a portion takes ≤2 taps
-  - **NFR8** re-logging a favorite takes ≤2 taps
-  - **NFR9** 4 of 5 testers understand the value is an estimate
-  - **NFR10** SUS ≥ 75
-- **Accessibility:**
-  - **NFR11** WCAG 2.1 AA
-  - **NFR12** never color alone
-  - **NFR13** 44 × 44 px targets
-  - **NFR14** keyboard use; no WAVE errors
-- **Compatibility:**
-  - **NFR15** major browsers, 360–1440 px
-  - **NFR16** text fallback where voice isn't supported
-- **Security:**
-  - **NFR17** data visible only to its owner
-  - **NFR18** hashed passwords and CSRF protection
-  - **NFR19** API key only on the server
-  - **NFR20** users are told meals go to an AI service
-- **Reliability:**
-  - **NFR21** input saved before analysis
-  - **NFR22** AI output validated against a fixed structure
-- **Tone:**
-  - **NFR23** no "good/bad/cheat/over the limit", no red/green food
-  - **NFR24** terms like kcal and macros explained on first use
+- **Performance:** **NFR1** non-AI actions in under 1 s · **NFR2** "analyzing" shown in under 1 s · **NFR3** 9 of 10 analyses within 10 s (text) or 15 s (photo); the AI call stops after 20 s with a calm error · **NFR4** totals update in under 100 ms
+- **Usability** (targets for a usability test, not run): **NFR5** first meal within 2 min of registering · **NFR6** saving takes ≤3 interactions after capture when the AI is right · **NFR7** changing a portion takes ≤2 taps · **NFR8** re-logging a favorite takes ≤2 taps · **NFR9** testers understand the value is an estimate · **NFR10** SUS ≥ 75
+- **Accessibility:** **NFR11** WCAG 2.1 AA · **NFR12** never color alone · **NFR13** 44 × 44 px targets (exceptions: the phone week strip and the Your meals tab, which meet WCAG 2.2's 24 px) · **NFR14** keyboard use; no automated accessibility errors (checked with axe-core on 32 pages)
+- **Compatibility:** **NFR15** major browsers, 360–1440 px · **NFR16** text fallback where voice isn't supported
+- **Security:** **NFR17** data visible only to its owner · **NFR18** hashed passwords and CSRF protection · **NFR19** API key only on the server · **NFR20** users are told meals go to an AI service (sign-up and Help)
+- **Reliability:** **NFR21** input saved before analysis · **NFR22** AI output validated against a fixed structure and realistic limits
+- **Tone:** **NFR23** no "good/bad/cheat/over the limit" for a food or the user, no red/green for food or days. Describing what a meal contains ("good protein and fibre") is allowed. · **NFR24** terms like kcal and macros explained ("How to read this estimate" under every total, and Help)
 
 ### Traceability to the assignment
 - **Input** → FR5–FR11, FR35
